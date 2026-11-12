@@ -1,0 +1,28 @@
+name: Build Windows App
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ["lib/**", "pubspec.yaml", ".github/workflows/windows-build.yml"]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter create --platforms=windows --project-name my_app_inventory --org com.myapp.inventory .
+      - run: flutter pub get
+      - run: flutter analyze
+      - run: flutter build windows --release
+      - name: Package Windows app
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath my-app-windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: my-app-windows
+          path: my-app-windows.zip
+          if-no-files-found: error
+          retention-days: 14
