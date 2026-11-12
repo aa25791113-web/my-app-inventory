@@ -1,6 +1,6 @@
 name: Build Android APK
 concurrency:
-  group: android-release-${{ github.ref }}
+  group: android-release-v3-${{ github.ref }}
   cancel-in-progress: true
 on:
   workflow_dispatch:
