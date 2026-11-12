@@ -598,11 +598,11 @@ class _AssistantPageState extends State<AssistantPage> {
     await showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
       title:Text(e['name'].toString()),
       content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('الكود: \${e['sku']}'),Text('الكمية: \${e['qty']} \${e['unit']}'),
-        Text('سعر الشراء: \${money(e['buy'])}'),Text('سعر البيع: \${money(e['sell'])}'),
-        Text('التصنيف: \${e['category']}'),Text('الماركة: \${e['brand']}'),
-        Text('رقم القطعة: \${e['part_no']}'),Text('الأسماء البديلة: \${e['alt_names']}'),
-        Text('المواصفات: \${e['specs']}'),
+        Text('الكود: ${e['sku']}'),Text('الكمية: ${e['qty']} ${e['unit']}'),
+        Text('سعر الشراء: ${money(e['buy'])}'),Text('سعر البيع: ${money(e['sell'])}'),
+        Text('التصنيف: ${e['category']}'),Text('الماركة: ${e['brand']}'),
+        Text('رقم القطعة: ${e['part_no']}'),Text('الأسماء البديلة: ${e['alt_names']}'),
+        Text('المواصفات: ${e['specs']}'),
       ]),
       actions:[
         TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق')),
@@ -637,9 +637,9 @@ class _AssistantPageState extends State<AssistantPage> {
       } else {
         final query=clean(command);
         final found=await StoreDb.instance.products(query);
-        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت \${found.length} نتيجة في قاعدة بيانات جهازك.';});
+        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت ${found.length} نتيجة في قاعدة بيانات جهازك.';});
       }
-    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: \${e.toString().replaceFirst('Exception: ','')}');}
+    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: ${e.toString().replaceFirst('Exception: ','')}');}
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
@@ -651,7 +651,7 @@ class _AssistantPageState extends State<AssistantPage> {
     TextField(controller:input,minLines:2,maxLines:5,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'ابحث عن اسم مشابه لفلتر تويوتا\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60 ماركة تويوتا رقم القطعة ABC123',border:OutlineInputBorder())),
     const SizedBox(height:10),FilledButton.icon(onPressed:busy?null:runCommand,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send),label:const Text('تنفيذ الطلب')),
     const SizedBox(height:14),if(results.isNotEmpty)const Text('نتائج البحث',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    ...results.map((e)=>Card(child:ListTile(onTap:()=>openProduct(e),leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: \${e['sku']} • البدائل: \${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
+    ...results.map((e)=>Card(child:ListTile(onTap:()=>openProduct(e),leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: ${e['sku']} • البدائل: ${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
   ]);
 }
 
