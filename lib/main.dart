@@ -164,7 +164,7 @@ class _DashboardState extends State<Dashboard> {
   @override void initState(){super.initState();load();}
   Future<void> load() async {
     final d=await StoreDb.instance.summary(); final p=await StoreDb.instance.products();
-    if(mounted)setState(()=>{data=d,low=p.where((e)=>(e['qty'] as int)<=(e['min_qty'] as int)).toList()});
+    if(mounted) setState(() { data=d; low=p.where((e)=>(e['qty'] as int)<=(e['min_qty'] as int)).toList(); });
   }
   Widget stat(String label,String value,IconData icon)=>Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
     Icon(icon),const SizedBox(height:5),Text(value,style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),
@@ -318,7 +318,7 @@ class _ReportsPageState extends State<ReportsPage> {
   Map<String,Object?> data={};List<Map<String,Object?>> products=[];List<Map<String,Object?>> ops=[];
   @override void initState(){super.initState();load();}
   Future<void> load() async {final d=await StoreDb.instance.summary();final p=await StoreDb.instance.products();final o=await StoreDb.instance.movements();
-    if(mounted)setState(()=>{data=d,products=p,ops=o});}
+    if(mounted) setState(() { data=d; products=p; ops=o; });}
   Widget tile(String title,String value,IconData icon)=>Card(child:ListTile(leading:Icon(icon),title:Text(title),trailing:Text(value,style:const TextStyle(fontWeight:FontWeight.bold))));
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
     const Text('التقارير والجرد',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
