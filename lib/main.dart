@@ -505,6 +505,7 @@ class _ProductsPageState extends State<ProductsPage> {
     try{await StoreDb.instance.removeProduct(row['id'] as int);await load();widget.changed();}
     catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}
   }
+  Future<void> favorite(Map<String,Object?> row) async {final id=row['id'] as int;final current=await StoreDb.instance.isFavorite(id);await StoreDb.instance.toggleFavorite(id,!current);if(mounted)toast(context,current?'تمت إزالة المنتج من المفضلة':'تمت إضافة المنتج للمفضلة');}
   Future<void> history(Map<String,Object?> row) async {
     final items=await StoreDb.instance.priceHistory(row['id'] as int);if(!mounted)return;
     showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('سجل أسعار ${row['name']}'),content:SizedBox(width:420,height:360,child:items.isEmpty?const Center(child:Text('لا توجد تغييرات مسجلة بعد')):ListView(children:items.map((x)=>ListTile(title:Text('بيع: ${money(x['old_sell'])} ← ${money(x['new_sell'])}'),subtitle:Text('شراء: ${money(x['old_buy'])} ← ${money(x['new_buy'])}\\n${x['created_at']}'))).toList())),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))])));
@@ -521,10 +522,10 @@ class _ProductsPageState extends State<ProductsPage> {
     Expanded(child:rows.isEmpty?const Center(child:Text('لا توجد منتجات. اضغط + لإضافة منتج.'))
       :ListView.builder(padding:const EdgeInsets.only(bottom:20),itemCount:rows.length,itemBuilder:(c,i){
         final e=rows[i];final low=(e['qty'] as int)<=(e['min_qty'] as int);
-        return Card(child:ListTile(leading:CircleAvatar(child:Icon(low?Icons.warning_amber:Icons.inventory_2)),
+        return Card(child:ListTile(leading:(e['image_path']??'').toString().isNotEmpty&&File(e['image_path'] as String).existsSync()?ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(e['image_path'] as String),width:48,height:48,fit:BoxFit.cover)):CircleAvatar(child:Icon(low?Icons.warning_amber:Icons.inventory_2)),
           title:Text(e['name'] as String),subtitle:Text('الكود: ${e['sku']??'—'} • '+e['category'].toString()+' • الكمية: '+e['qty'].toString()+' • سعر البيع: '+money(e['sell'])),
-          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else if(v=='history'){history(e);}else{remove(e);}},
-            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'history',child:Text('سجل الأسعار')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
+          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else if(v=='history'){history(e);}else if(v=='qr'){showQr(context,e['sku'].toString(),e['name'].toString());}else if(v=='favorite'){favorite(e);}else{remove(e);}},
+            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'history',child:Text('سجل الأسعار')),PopupMenuItem(value:'qr',child:Text('عرض QR')),PopupMenuItem(value:'favorite',child:Text('إضافة / إزالة من المفضلة')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
       })),
   ]);
 }
