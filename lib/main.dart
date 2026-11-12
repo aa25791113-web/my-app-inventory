@@ -4,6 +4,7 @@ import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:mobile_scanner/mobile_scanner.dart';
+import 'package:csv/csv.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -261,11 +262,37 @@ class StoreDb {
     final bytes=Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(data)));
     return FilePicker.platform.saveFile(dialogTitle:'حفظ النسخة الاحتياطية',fileName:'MYAPP_Backup.json',type:FileType.custom,allowedExtensions:['json'],bytes:bytes);
   }
+
+  Future<int> importProductsCsv() async {
+    final picked=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['csv'],withData:true);
+    if(picked==null||picked.files.isEmpty||picked.files.first.bytes==null)return 0;
+    final content=utf8.decode(picked.files.first.bytes!,allowMalformed:true).replaceFirst('\uFEFF','');
+    final rows=const CsvToListConverter(shouldParseNumbers:false).convert(content);
+    if(rows.length<2)throw Exception('ملف CSV لا يحتوي على أصناف.');
+    final headers=rows.first.map((e)=>e.toString().trim().toLowerCase()).toList();
+    int index(List<String> names)=>headers.indexWhere((h)=>names.contains(h));
+    String val(List<dynamic> row,List<String> names){final i=index(names);return i<0||i>=row.length?'':row[i].toString().trim();}
+    double number(List<dynamic> row,List<String> names)=>double.tryParse(val(row,names).replaceAll(',','.'))??0;
+    int whole(List<dynamic> row,List<String> names)=>int.tryParse(val(row,names))??0;
+    var added=0;
+    await database!.transaction((txn) async {
+      for(final row in rows.skip(1)){
+        final name=val(row,['product','name','اسم المنتج','الاسم']);if(name.isEmpty)continue;
+        var sku=val(row,['sku','code','الكود']).toUpperCase();
+        if(sku.isNotEmpty){final exists=await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1);if(exists.isNotEmpty)sku='';}
+        if(sku.isEmpty){do{sku=_newSku();final exists=await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1);if(exists.isNotEmpty)sku='';}while(sku.isEmpty);}
+        await txn.insert('products',{'name':name,'category':val(row,['category','التصنيف']),'qty':whole(row,['quantity','qty','الكمية']),'min_qty':whole(row,['minimum','min_qty','حد التنبيه']),'buy':number(row,['purchase price','buy','سعر الشراء']),'sell':number(row,['selling price','sell','سعر البيع']),'sku':sku,'manufacturer':val(row,['manufacturer','الشركة المصنعة']),'part_no':val(row,['part_no','رقم القطعة']),'alt_part_no':val(row,['alt_part_no','رقم القطعة البديل']),'location':val(row,['location','الموقع','مكان التخزين']),'description':val(row,['description','الوصف']),'wholesale':number(row,['wholesale','سعر الجملة']),'brand':val(row,['brand','الماركة']),'unit':val(row,['unit','الوحدة']).isEmpty?'قطعة':val(row,['unit','الوحدة']),'country':val(row,['country','بلد المنشأ']),'alt_names':val(row,['alt_names','أسماء أخرى']),'specs':val(row,['specs','المواصفات']),'image_path':'','archived':0});
+        added++;
+      }
+      await txn.insert('activity_log',{'action':'استيراد أصناف CSV','details':'تم استيراد '+added.toString()+' صنف','created_at':DateTime.now().toIso8601String()});
+    });
+    return added;
+  }
   Future<String?> exportInventoryCsv() async {
     final rows=await database!.query('products',orderBy:'name');
     String cell(Object? v)=>'"'+(v??'').toString().replaceAll('"','""')+'"';
-    final lines=<String>['ID,Product,Category,Quantity,Minimum,Purchase Price,Selling Price'];
-    for(final r in rows){lines.add([r['id'],r['name'],r['category'],r['qty'],r['min_qty'],r['buy'],r['sell']].map(cell).join(','));}
+    final lines=<String>['ID,SKU,Product,Category,Quantity,Minimum,Purchase Price,Selling Price,Wholesale,Manufacturer,Brand,Part Number,Alternative Part Number,Unit,Country,Location,Alternative Names,Description,Specifications'];
+    for(final r in rows){lines.add([r['id'],r['sku'],r['name'],r['category'],r['qty'],r['min_qty'],r['buy'],r['sell'],r['wholesale'],r['manufacturer'],r['brand'],r['part_no'],r['alt_part_no'],r['unit'],r['country'],r['location'],r['alt_names'],r['description'],r['specs']].map(cell).join(','));}
     final bytes=Uint8List.fromList(utf8.encode('\uFEFF'+lines.join('\r\n')));
     return FilePicker.platform.saveFile(dialogTitle:'تصدير جرد المنتجات CSV',fileName:'MYAPP_Inventory.csv',type:FileType.custom,allowedExtensions:['csv'],bytes:bytes);
   }
