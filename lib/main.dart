@@ -154,13 +154,13 @@ class StoreDb {
   }
   Future<String> backup() async {
     final dir = await getApplicationDocumentsDirectory();
-    final data = {'format':'MYAPP_BACKUP_2','products':await database!.query('products'),'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments')};
+    final data = {'format':'MYAPP_BACKUP_2','products':await database!.query('products'),'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments'),'price_history':await database!.query('price_history')};
     final file = File(p.join(dir.path,'my_app_backup.json'));
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
     return file.path;
   }
   Future<String?> exportBackup() async {
-    final data = {'format':'MYAPP_BACKUP_2','products':await database!.query('products'),'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments')};
+    final data = {'format':'MYAPP_BACKUP_2','products':await database!.query('products'),'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments'),'price_history':await database!.query('price_history')};
     final bytes=Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(data)));
     return FilePicker.platform.saveFile(dialogTitle:'حفظ النسخة الاحتياطية',fileName:'MYAPP_Backup.json',type:FileType.custom,allowedExtensions:['json'],bytes:bytes);
   }
@@ -178,10 +178,10 @@ class StoreDb {
     final data=jsonDecode(utf8.decode(result.files.first.bytes!)) as Map<String,dynamic>;
     if(data['format']!='MYAPP_BACKUP_1'&&data['format']!='MYAPP_BACKUP_2')throw Exception('ملف النسخة الاحتياطية غير صالح.');
     await database!.transaction((txn) async {
-      for(final t in ['stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
+      for(final t in ['price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
       for(final row in data['products'] as List){await txn.insert('products',Map<String,Object?>.from(row as Map));}
       for(final row in data['operations'] as List){final m=Map<String,Object?>.from(row as Map);m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);await txn.insert('operations',m);}
-      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
+      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','price_history']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');if((wh.first['c'] as int? ?? 0)==0)await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
     });
   }
@@ -192,7 +192,7 @@ class StoreDb {
     final data = jsonDecode(await file.readAsString()) as Map<String,dynamic>;
     if (data['format'] != 'MYAPP_BACKUP_1' && data['format'] != 'MYAPP_BACKUP_2') throw Exception('ملف النسخة الاحتياطية غير صالح.');
     await database!.transaction((txn) async {
-      for(final t in ['stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
+      for(final t in ['price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
       for (final row in data['products'] as List) {
         await txn.insert('products',Map<String,Object?>.from(row as Map));
       }
@@ -201,7 +201,7 @@ class StoreDb {
         m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);
         await txn.insert('operations',m);
       }
-      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments']) {
+      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','price_history']) {
         for(final row in (data[table] as List? ?? [])) { await txn.insert(table,Map<String,Object?>.from(row as Map)); }
       }
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
