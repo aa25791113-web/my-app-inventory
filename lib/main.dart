@@ -163,7 +163,14 @@ class StoreDb {
       await txn.insert('activity_log',{'action':'تسوية مخزون','details':product['name'].toString()+' | '+old.toString()+' ← '+newQty.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});
     });
   }
-  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'archived=0 AND (name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ? OR brand LIKE ? OR manufacturer LIKE ? OR alt_names LIKE ? OR location LIKE ? OR specs LIKE ?)',whereArgs:query.trim().isEmpty?null:List.filled(10,'%'+query.trim()+'%'),orderBy:'name');
+  Future<List<Map<String,Object?>>> products([String query = '']) async {
+    final q=query.trim();if(q.isEmpty)return database!.query('products',where:'archived=0',orderBy:'name');
+    final tokens=q.split(RegExp(r'\\s+')).where((v)=>v.isNotEmpty).toList();
+    const fields=['name','category','sku','part_no','alt_part_no','brand','manufacturer','alt_names','location','specs'];
+    final clauses=tokens.map((_)=>'('+fields.map((f)=>f+' LIKE ?').join(' OR ')+')').join(' AND ');
+    final args=tokens.expand((token)=>fields.map((_)=>'%'+token+'%')).toList();
+    return database!.query('products',where:'archived=0 AND '+clauses,whereArgs:args,orderBy:'name');
+  }
   Future<List<Map<String,Object?>>> priceHistory([int? id])=>database!.query('price_history',where:id==null?null:'product_id=?',whereArgs:id==null?null:[id],orderBy:'id DESC');
   Future<List<Map<String,Object?>>> similarProducts(Uint8List queryBytes) async {
     final source=img.decodeImage(queryBytes);if(source==null)return [];
