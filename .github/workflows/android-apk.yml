@@ -19,7 +19,13 @@ jobs:
           java-version: "17"
       - run: flutter create --platforms=android --project-name my_app_inventory --org com.myapp.inventory .
       - run: rm -rf test
+      - name: Generate launcher icon and app label
+        run: |
+          python -m pip install --quiet pillow
+          python tool/generate_icon.py
+          sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
       - run: flutter pub get
+      - run: dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos
       - run: flutter build apk --release
       - uses: actions/upload-artifact@v4
