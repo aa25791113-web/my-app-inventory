@@ -123,6 +123,8 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> recentSearches()=>database!.query('recent_searches',orderBy:'id DESC',limit:100);
   Future<List<Map<String,Object?>>> activity()=>database!.query('activity_log',orderBy:'id DESC',limit:300);
+  Future<void> saveProductNote(int productId,String title,String body) async {await database!.insert('product_notes',{'product_id':productId,'title':title,'body':body,'created_at':DateTime.now().toIso8601String()});await log('إضافة ملاحظة منتج',title);}
+  Future<List<Map<String,Object?>>> productNotes(int productId)=>database!.query('product_notes',where:'product_id=?',whereArgs:[productId],orderBy:'id DESC');
   Future<void> saveTask(String title) async {if(title.trim().isNotEmpty)await database!.insert('tasks',{'title':title.trim(),'done':0,'created_at':DateTime.now().toIso8601String()});}
   Future<List<Map<String,Object?>>> tasks()=>database!.query('tasks',orderBy:'done, id DESC');
   Future<void> toggleTask(int id,bool done) async {await database!.update('tasks',{'done':done?1:0},where:'id=?',whereArgs:[id]);}
@@ -443,6 +445,8 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
     if(!Platform.isAndroid&&!Platform.isIOS){toast(context,'مسح الكاميرا متاح على الهاتف فقط.');return;}
     await showDialog(context:context,builder:(ctx)=>Dialog(child:SizedBox(width:360,height:460,child:Column(children:[const Padding(padding:EdgeInsets.all(12),child:Text('وجّه الكاميرا نحو QR أو الباركود')),Expanded(child:MobileScanner(onDetect:(capture){final value=capture.barcodes.isEmpty?null:capture.barcodes.first.rawValue;if(value==null||value.isEmpty)return;Navigator.pop(ctx);controller.text=value;search(value);})),TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))]))));
   }
+  Future<void> addProductNote(Map<String,Object?> p) async {final title=TextEditingController();final body=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('ملاحظة للمنتج'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:title,decoration:const InputDecoration(labelText:'عنوان الملاحظة')),TextField(controller:body,maxLines:4,decoration:const InputDecoration(labelText:'التفاصيل'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,title.text.trim().isNotEmpty||body.text.trim().isNotEmpty),child:const Text('حفظ'))])));if(ok==true){await StoreDb.instance.saveProductNote(p['id'] as int,title.text.trim(),body.text.trim());if(mounted)toast(context,'تم حفظ الملاحظة محليًا.');}title.dispose();body.dispose();}
+  Future<void> viewProductNotes(Map<String,Object?> p) async {final rows=await StoreDb.instance.productNotes(p['id'] as int);if(!mounted)return;showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('ملاحظات '+p['name'].toString()),content:SizedBox(width:380,height:300,child:rows.isEmpty?const Center(child:Text('لا توجد ملاحظات.')):ListView(children:rows.map((e)=>ListTile(title:Text(e['title'].toString()),subtitle:Text(e['body'].toString()+'\\n'+e['created_at'].toString()))).toList())),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))])));}
   void details(Map<String,Object?> p) {
     showModalBottomSheet(context:context,isScrollControlled:true,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:Padding(padding:const EdgeInsets.all(18),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       if((p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync())ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.file(File(p['image_path'] as String),height:170,fit:BoxFit.contain)),
@@ -457,7 +461,9 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
       Wrap(spacing:8,children:[
         OutlinedButton.icon(onPressed:(){Clipboard.setData(ClipboardData(text:p['sku'].toString()));toast(ctx,'تم نسخ الكود');},icon:const Icon(Icons.copy),label:const Text('نسخ الكود')),
         FilledButton.icon(onPressed:(){Clipboard.setData(ClipboardData(text:money(p['sell'])));toast(ctx,'تم نسخ السعر');},icon:const Icon(Icons.price_check),label:const Text('نسخ السعر')),
-        OutlinedButton.icon(onPressed:()=>showQr(ctx,p['sku'].toString(),p['name'].toString()),icon:const Icon(Icons.qr_code),label:const Text('QR'))
+        OutlinedButton.icon(onPressed:()=>showQr(ctx,p['sku'].toString(),p['name'].toString()),icon:const Icon(Icons.qr_code),label:const Text('QR')),
+        OutlinedButton.icon(onPressed:()=>addProductNote(p),icon:const Icon(Icons.note_add),label:const Text('إضافة ملاحظة')),
+        OutlinedButton.icon(onPressed:()=>viewProductNotes(p),icon:const Icon(Icons.notes),label:const Text('عرض الملاحظات'))
       ])
     ])))));
   }
