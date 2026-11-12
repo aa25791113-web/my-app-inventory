@@ -27,7 +27,8 @@ class StoreDb {
     database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 3,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0)');
-        await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
+        await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,cost_price REAL NOT NULL DEFAULT 0,party_id INTEGER,party_name TEXT NOT NULL DEFAULT "",warehouse_id INTEGER NOT NULL DEFAULT 1)');
+        await _createExtendedTables(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -180,11 +181,15 @@ class _HomePageState extends State<HomePage> {
       ProductsPage(key:ValueKey('p'+refreshId.toString()),changed:refresh),
       MovementPage(key:ValueKey('s'+refreshId.toString()),kind:'sale',changed:refresh),
       MovementPage(key:ValueKey('b'+refreshId.toString()),kind:'purchase',changed:refresh),
+      PartyPage(key:ValueKey('sup'+refreshId.toString()),table:'suppliers',title:'الموردون',changed:refresh),
+      PartyPage(key:ValueKey('cus'+refreshId.toString()),table:'customers',title:'العملاء',changed:refresh),
+      WarehousePage(key:ValueKey('wh'+refreshId.toString()),changed:refresh),
+      ExpensePage(key:ValueKey('ex'+refreshId.toString()),changed:refresh),
       ReportsPage(key:ValueKey('r'+refreshId.toString())),
       SettingsPage(dark:widget.dark,toggle:widget.toggle),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','التقارير','الإعدادات'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.analytics_outlined,Icons.settings_outlined];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       appBar:AppBar(title:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text('MY APP',style:TextStyle(fontWeight:FontWeight.w900)),
@@ -354,6 +359,68 @@ class _MovementDialogState extends State<MovementDialog> {
   }
 }
 
+class PartyPage extends StatefulWidget {
+  const PartyPage({super.key,required this.table,required this.title,required this.changed});
+  final String table,title; final VoidCallback changed;
+  @override State<PartyPage> createState()=>_PartyPageState();
+}
+class _PartyPageState extends State<PartyPage> {
+  List<Map<String,Object?>> rows=[]; final search=TextEditingController();
+  @override void initState(){super.initState();load();}
+  @override void dispose(){search.dispose();super.dispose();}
+  Future<void> load() async {final r=await StoreDb.instance.parties(widget.table,search.text);if(mounted)setState(()=>rows=r);}
+  Future<void> edit([Map<String,Object?>? item]) async {
+    final name=TextEditingController(text:item?['name'] as String? ?? '');
+    final phone=TextEditingController(text:item?['phone'] as String? ?? '');
+    final email=TextEditingController(text:item?['email'] as String? ?? '');
+    final address=TextEditingController(text:item?['address'] as String? ?? '');
+    final notes=TextEditingController(text:item?['notes'] as String? ?? '');
+    final balance=TextEditingController(text:(item?['balance']??0).toString());
+    final ok=await showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+      title:Text(item==null?'إضافة '+widget.title:'تعديل '+widget.title),
+      content:SizedBox(width:420,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+        TextField(controller:name,decoration:const InputDecoration(labelText:'الاسم *')),
+        TextField(controller:phone,decoration:const InputDecoration(labelText:'الهاتف')),
+        TextField(controller:email,decoration:const InputDecoration(labelText:'البريد الإلكتروني')),
+        TextField(controller:address,decoration:const InputDecoration(labelText:'العنوان')),
+        TextField(controller:notes,decoration:const InputDecoration(labelText:'ملاحظات')),
+        TextField(controller:balance,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'الرصيد الافتتاحي')),
+      ]))),
+      actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,name.text.trim().isNotEmpty),child:const Text('حفظ'))])));
+    if(ok==true){await StoreDb.instance.saveParty(widget.table,{'name':name.text.trim(),'phone':phone.text.trim(),'email':email.text.trim(),'address':address.text.trim(),'notes':notes.text.trim(),'balance':double.tryParse(balance.text)??0},item?['id'] as int?);await load();widget.changed();}
+    name.dispose();phone.dispose();email.dispose();address.dispose();notes.dispose();balance.dispose();
+  }
+  Future<void> remove(Map<String,Object?> e) async {if(await ask(context,'حذف','هل تريد حذف '+e['name'].toString()+'؟')==true){await StoreDb.instance.deleteParty(widget.table,e['id'] as int);await load();}}
+  @override Widget build(BuildContext context)=>Column(children:[
+    Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:TextField(controller:search,onChanged:(_)=>load(),decoration:InputDecoration(prefixIcon:const Icon(Icons.search),hintText:'بحث'))),IconButton.filled(onPressed:()=>edit(),icon:const Icon(Icons.add))])),
+    Expanded(child:rows.isEmpty?Center(child:Text('لا توجد بيانات في '+widget.title)):ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];return Card(child:ListTile(title:Text(e['name'] as String),subtitle:Text((e['phone']??'').toString()+' • '+(e['address']??'').toString()),leading:const Icon(Icons.person_outline),trailing:PopupMenuButton<String>(onSelected:(v)=>v=='edit'?edit(e):remove(e),itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'delete',child:Text('حذف'))])));}))
+  ]);
+}
+class WarehousePage extends StatefulWidget {const WarehousePage({super.key,required this.changed});final VoidCallback changed;@override State<WarehousePage> createState()=>_WarehousePageState();}
+class _WarehousePageState extends State<WarehousePage> {
+  List<Map<String,Object?>> rows=[];
+  @override void initState(){super.initState();load();}
+  Future<void> load() async {final r=await StoreDb.instance.parties('warehouses');if(mounted)setState(()=>rows=r);}
+  Future<void> edit([Map<String,Object?>? e]) async {
+    final name=TextEditingController(text:e?['name'] as String? ?? '');final loc=TextEditingController(text:e?['location'] as String? ?? '');
+    final ok=await showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('بيانات المخزن'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'اسم المخزن')),TextField(controller:loc,decoration:const InputDecoration(labelText:'الموقع'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,name.text.trim().isNotEmpty),child:const Text('حفظ'))])));
+    if(ok==true){await StoreDb.instance.saveParty('warehouses',{'name':name.text.trim(),'location':loc.text.trim(),'notes':''},e?['id'] as int?);await load();widget.changed();}name.dispose();loc.dispose();
+  }
+  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(12),children:[Row(children:[const Expanded(child:Text('إدارة المخازن',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold))),IconButton.filled(onPressed:()=>edit(),icon:const Icon(Icons.add))]),...rows.map((e)=>Card(child:ListTile(leading:const Icon(Icons.warehouse_outlined),title:Text(e['name'] as String),subtitle:Text(e['location'] as String? ?? ''),trailing:IconButton(onPressed:()=>edit(e),icon:const Icon(Icons.edit_outlined)))))]);
+}
+class ExpensePage extends StatefulWidget {const ExpensePage({super.key,required this.changed});final VoidCallback changed;@override State<ExpensePage> createState()=>_ExpensePageState();}
+class _ExpensePageState extends State<ExpensePage> {
+  List<Map<String,Object?>> rows=[];
+  @override void initState(){super.initState();load();}
+  Future<void> load() async {final r=await StoreDb.instance.expenses();if(mounted)setState(()=>rows=r);}
+  Future<void> add() async {
+    final title=TextEditingController(),cat=TextEditingController(text:'عام'),amount=TextEditingController(),note=TextEditingController();
+    final ok=await showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('تسجيل مصروف'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:title,decoration:const InputDecoration(labelText:'البيان')),TextField(controller:cat,decoration:const InputDecoration(labelText:'التصنيف')),TextField(controller:amount,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ')),TextField(controller:note,decoration:const InputDecoration(labelText:'ملاحظات'))])),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('حفظ'))])));
+    if(ok==true){try{await StoreDb.instance.addExpense(title.text,cat.text,double.tryParse(amount.text)??0,note.text);await load();widget.changed();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
+    title.dispose();cat.dispose();amount.dispose();note.dispose();
+  }
+  @override Widget build(BuildContext context)=>Column(children:[Card(child:ListTile(title:const Text('إجمالي المصروفات'),trailing:Text(money(rows.fold<double>(0,(a,e)=>a+(e['amount'] as num).toDouble())),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold)))),Expanded(child:rows.isEmpty?const Center(child:Text('لا توجد مصروفات')):ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];return Card(child:ListTile(title:Text(e['title'] as String),subtitle:Text((e['category']??'').toString()+' • '+(e['notes']??'').toString()),trailing:Text(money(e['amount']))));})),Padding(padding:const EdgeInsets.all(12),child:FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:const Text('إضافة مصروف')))]);
+}
 class ReportsPage extends StatefulWidget {const ReportsPage({super.key});@override State<ReportsPage> createState()=>_ReportsPageState();}
 class _ReportsPageState extends State<ReportsPage> {
   Map<String,Object?> data={};List<Map<String,Object?>> products=[];List<Map<String,Object?>> ops=[];
