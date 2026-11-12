@@ -85,7 +85,7 @@ class StoreDb {
     if (count > 0) throw Exception('لا يمكن حذف منتج مرتبط بحركات سابقة.');
     await database!.delete('products',where:'id=?',whereArgs:[id]);
   }
-  Future<void> addMovement(String kind, Map<String,Object?> product, int qty, double price, String note) async {
+  Future<void> addMovement(String kind, Map<String,Object?> product, int qty, double price, String note, [Map<String,Object?>? party]) async {
     if (qty <= 0 || price < 0) throw Exception('تحقق من الكمية والسعر.');
     await database!.transaction((txn) async {
       final current = product['qty'] as int;
@@ -97,7 +97,7 @@ class StoreDb {
         'qty':qty,'unit_price':price,'total':qty*price,'note':note,
         'created_at':DateTime.now().toIso8601String(),
         'cost_price':(product['buy'] as num).toDouble(),
-        'party_id':null,'party_name':'','warehouse_id':1,
+        'party_id':party?['id'],'party_name':party?['name'] ?? '','warehouse_id':1,
       });
     });
   }
@@ -384,7 +384,7 @@ class _MovementPageState extends State<MovementPage> {
       Expanded(child:rows.isEmpty?Center(child:Text(sale?'لا توجد مبيعات مسجلة':'لا توجد مشتريات مسجلة'))
         :ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];final dt=DateTime.tryParse(e['created_at'] as String? ?? '');
           return Card(child:ListTile(leading:CircleAvatar(child:Icon(sale?Icons.south_west:Icons.north_east)),
-            title:Text(e['product_name'] as String),subtitle:Text(e['qty'].toString()+' × '+money(e['unit_price'])+' • '+(dt?.toLocal().toString().substring(0,16)??'')+'\n'+e['note'].toString()),
+            title:Text(e['product_name'] as String),subtitle:Text(e['qty'].toString()+' × '+money(e['unit_price'])+' • '+(dt?.toLocal().toString().substring(0,16)??'')+'\n'+(e['party_name']??'').toString()+' • '+e['note'].toString()),
             isThreeLine:true,trailing:Text(money(e['total']),style:const TextStyle(fontWeight:FontWeight.bold))));
         })),
     ]);
@@ -397,8 +397,10 @@ class MovementDialog extends StatefulWidget {
 }
 class _MovementDialogState extends State<MovementDialog> {
   late Map<String,Object?> selected;late final TextEditingController qty,price,note;final form=GlobalKey<FormState>();
+  List<Map<String,Object?>> parties=[]; Map<String,Object?>? selectedParty;
   @override void initState(){super.initState();selected=widget.products.first;qty=TextEditingController(text:'1');
-    price=TextEditingController(text:(widget.kind=='sale'?selected['sell']:selected['buy']).toString());note=TextEditingController();}
+    price=TextEditingController(text:(widget.kind=='sale'?selected['sell']:selected['buy']).toString());note=TextEditingController();loadParties();}
+  Future<void> loadParties() async {final r=await StoreDb.instance.parties(widget.kind=='sale'?'customers':'suppliers');if(mounted)setState(()=>parties=r);}
   @override void dispose(){qty.dispose();price.dispose();note.dispose();super.dispose();}
   @override Widget build(BuildContext context) {
     final sale=widget.kind=='sale';
@@ -407,6 +409,7 @@ class _MovementDialogState extends State<MovementDialog> {
         DropdownButtonFormField<int>(value:selected['id'] as int,decoration:const InputDecoration(labelText:'المنتج'),
           items:widget.products.map((e)=>DropdownMenuItem<int>(value:e['id'] as int,child:Text(e['name'].toString()+' (المتاح '+e['qty'].toString()+')'))).toList(),
           onChanged:(id){final x=widget.products.firstWhere((e)=>e['id']==id);setState((){selected=x;price.text=(sale?x['sell']:x['buy']).toString();});}),
+        if(parties.isNotEmpty) Padding(padding:const EdgeInsets.only(top:10),child:DropdownButtonFormField<int?>(value:selectedParty?['id'] as int?,decoration:InputDecoration(labelText:sale?'العميل (اختياري)':'المورد (اختياري)'),items:[const DropdownMenuItem<int?>(value:null,child:Text('بدون تحديد')), ...parties.map((e)=>DropdownMenuItem<int?>(value:e['id'] as int,child:Text(e['name'].toString())))],onChanged:(id)=>setState(()=>selectedParty=id==null?null:parties.firstWhere((e)=>e['id']==id)))),
         const SizedBox(height:10),TextFormField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الكمية'),
           validator:(v)=>int.tryParse(v??'')==null||int.parse(v!)<=0?'أدخل كمية صحيحة':null),
         const SizedBox(height:10),TextFormField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'سعر الوحدة'),
@@ -416,7 +419,7 @@ class _MovementDialogState extends State<MovementDialog> {
       ]))),
       actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('إلغاء')),FilledButton(onPressed:() async {
         if(!form.currentState!.validate())return;
-        try{await StoreDb.instance.addMovement(widget.kind,selected,int.parse(qty.text),double.parse(price.text),note.text.trim());
+        try{await StoreDb.instance.addMovement(widget.kind,selected,int.parse(qty.text),double.parse(price.text),note.text.trim(),selectedParty);
           if(context.mounted)Navigator.pop(context,true);}
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}
       },child:const Text('تأكيد'))]));
