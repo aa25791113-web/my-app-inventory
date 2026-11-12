@@ -48,6 +48,16 @@ jobs:
           python -m pip install --quiet pillow
           python tool/generate_icon.py
           sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
+          python - <<'PY'
+          from pathlib import Path
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          source = manifest.read_text()
+          permission = '<uses-permission android:name="android.permission.CAMERA" />'
+          if permission not in source:
+              source = source.replace("<manifest ", "<manifest " + permission + "\n    ", 1)
+              manifest.write_text(source)
+          print("Verified Android camera permission in manifest")
+          PY
       - run: flutter pub get
       - name: Align Android plugin compile SDK versions
         shell: bash
