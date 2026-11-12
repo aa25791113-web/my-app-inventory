@@ -308,7 +308,7 @@ class HomePage extends StatefulWidget {
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
-  int tab=0, refreshId=0;
+  int tab=10, refreshId=0;
   void refresh()=>setState(()=>refreshId++);
   @override Widget build(BuildContext context) {
     final pages=[
@@ -322,9 +322,12 @@ class _HomePageState extends State<HomePage> {
       ExpensePage(key:ValueKey('ex'+refreshId.toString()),changed:refresh),
       ReportsPage(key:ValueKey('r'+refreshId.toString())),
       SettingsPage(dark:widget.dark,toggle:widget.toggle,seedColor:widget.seedColor,changeSeed:widget.changeSeed,appName:widget.appName,changeAppName:widget.changeAppName,logoPath:widget.logoPath,changeLogo:widget.changeLogo,backgroundPath:widget.backgroundPath,changeBackground:widget.changeBackground,clearBackground:widget.clearBackground),
+      QuickSearchPage(key:ValueKey('q'+refreshId.toString())),
+      CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
+      SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
@@ -345,13 +348,13 @@ class _HomePageState extends State<HomePage> {
         if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Image.file(File(widget.backgroundPath!),fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
         IndexedStack(index:tab,children:pages)
       ]),
-      bottomNavigationBar:NavigationBar(selectedIndex:tab==8?4:(tab<4?tab:0),onDestinationSelected:(v)=>setState(()=>tab=v==4?8:v),
+      bottomNavigationBar:NavigationBar(selectedIndex:tab==10?0:tab==1?1:tab==0?2:tab==8?3:tab==12?4:0,onDestinationSelected:(v)=>setState(()=>tab=[10,1,0,8,12][v]),
         destinations:const [
-          NavigationDestination(icon:Icon(Icons.dashboard_outlined),label:'الرئيسية'),
+          NavigationDestination(icon:Icon(Icons.search),label:'بحث الأسعار'),
           NavigationDestination(icon:Icon(Icons.inventory_2_outlined),label:'المنتجات'),
-          NavigationDestination(icon:Icon(Icons.point_of_sale),label:'المبيعات'),
-          NavigationDestination(icon:Icon(Icons.shopping_cart_outlined),label:'المشتريات'),
+          NavigationDestination(icon:Icon(Icons.dashboard_outlined),label:'الرئيسية'),
           NavigationDestination(icon:Icon(Icons.analytics_outlined),label:'التقارير'),
+          NavigationDestination(icon:Icon(Icons.auto_awesome),label:'الأدوات'),
         ]),
     ));
   }
