@@ -207,7 +207,7 @@ class _MyAppState extends State<MyApp> {
   Future<void> changeAppName(String value) async { final v=value.trim().isEmpty?'MY APP':value.trim(); final prefs=await SharedPreferences.getInstance(); await prefs.setString('appName',v); if(mounted)setState(()=>appName=v); }
   Future<void> changeLogo() async { final picked=await FilePicker.platform.pickFiles(type:FileType.image); if(picked==null||picked.files.isEmpty||picked.files.first.path==null)return; final source=File(picked.files.first.path!); final dir=await getApplicationSupportDirectory(); final ext=p.extension(source.path); final target=File(p.join(dir.path,'my_app_logo'+(ext.isEmpty?'.png':ext))); await source.copy(target.path); final prefs=await SharedPreferences.getInstance(); await prefs.setString('logoPath',target.path); if(mounted)setState(()=>logoPath=target.path); }
   ThemeData makeTheme(Brightness b)=>ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b));
-  @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:'MY APP',
+  @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:appName,
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
     home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo));
 }
@@ -248,9 +248,9 @@ class _HomePageState extends State<HomePage> {
         const Padding(padding:EdgeInsets.all(12),child:Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)))
       ]))),
       appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer())),
-        title:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text(widget.appName,style:TextStyle(fontWeight:FontWeight.w900)),
-        Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
+        title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(widget.appName,style:const TextStyle(fontWeight:FontWeight.w900)),
+        const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
       body:IndexedStack(index:tab,children:pages),
       bottomNavigationBar:NavigationBar(selectedIndex:tab==8?4:(tab<4?tab:0),onDestinationSelected:(v)=>setState(()=>tab=v==4?8:v),
         destinations:const [
