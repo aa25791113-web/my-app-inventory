@@ -20,8 +20,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
+String currencyLabel='ج.م';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  final preferences=await SharedPreferences.getInstance();currencyLabel=preferences.getString('currencyLabel')??'ج.م';
   if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
@@ -829,6 +831,7 @@ class SettingsPage extends StatelessWidget {
       const Text('اسم النشاط التجاري / اسم الواجهة داخل التطبيق',style:TextStyle(fontWeight:FontWeight.bold)),
       const SizedBox(height:8),
       TextFormField(initialValue:appName,onFieldSubmitted:changeAppName,decoration:const InputDecoration(hintText:'اكتب الاسم ثم اضغط تم')),
+      TextFormField(initialValue:currencyLabel,onFieldSubmitted:(v)async{await saveCurrency(v);if(context.mounted)toast(context,'تم حفظ العملة.');},decoration:const InputDecoration(labelText:'رمز العملة')),
       const Text('اسم وأيقونة المشغّل الخارجيان ثابتان في ملف التثبيت؛ تغييرهما يتطلب بناء نسخة جديدة.',style:TextStyle(fontSize:11,color:Colors.grey)),
       ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image_outlined),title:const Text('تغيير الشعار داخل البرنامج'),subtitle:Text(logoPath==null?'لم يتم اختيار شعار بعد':'تم حفظ شعار مخصص على هذا الجهاز'),onTap:changeLogo)
     ]))),
@@ -905,7 +908,8 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
   }
 }
 
-String money(Object? value)=>((value as num?)??0).toStringAsFixed(2)+' ج.م';
+Future<void> saveCurrency(String value) async {final v=value.trim().isEmpty?'ج.م':value.trim();final prefs=await SharedPreferences.getInstance();await prefs.setString('currencyLabel',v);currencyLabel=v;}
+String money(Object? value)=>((value as num?)??0).toStringAsFixed(2)+' '+currencyLabel;
 Future<bool?> ask(BuildContext context,String title,String body)=>showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,
   child:AlertDialog(title:Text(title),content:Text(body),actions:[
     TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),
