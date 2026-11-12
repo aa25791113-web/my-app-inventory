@@ -177,10 +177,11 @@ class MyApp extends StatefulWidget {
 }
 class _MyAppState extends State<MyApp> {
   ThemeMode mode = ThemeMode.light;
+  Color seedColor = const Color(0xFF087F68);
   @override void initState(){super.initState();load();}
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() => mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light);
+    if (mounted) setState(() { mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light; seedColor = Color(prefs.getInt('seedColor') ?? 0xFF087F68); });
   }
   Future<void> toggle() async {
     final dark = mode != ThemeMode.dark;
@@ -188,15 +189,16 @@ class _MyAppState extends State<MyApp> {
     await prefs.setBool('dark',dark);
     if (mounted) setState(() => mode = dark ? ThemeMode.dark : ThemeMode.light);
   }
-  ThemeData makeTheme(Brightness b)=>ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xFF087F68),brightness:b));
+  Future<void> changeSeed(int value) async { final prefs=await SharedPreferences.getInstance(); await prefs.setInt('seedColor',value); if(mounted)setState(()=>seedColor=Color(value)); }
+  ThemeData makeTheme(Brightness b)=>ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b));
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:'MY APP',
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
-    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle));
+    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed));
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key,required this.dark,required this.toggle});
-  final bool dark; final VoidCallback toggle;
+  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed});
+  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed;
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
@@ -213,7 +215,7 @@ class _HomePageState extends State<HomePage> {
       WarehousePage(key:ValueKey('wh'+refreshId.toString()),changed:refresh),
       ExpensePage(key:ValueKey('ex'+refreshId.toString()),changed:refresh),
       ReportsPage(key:ValueKey('r'+refreshId.toString())),
-      SettingsPage(dark:widget.dark,toggle:widget.toggle),
+      SettingsPage(dark:widget.dark,toggle:widget.toggle,seedColor:widget.seedColor,changeSeed:widget.changeSeed),
     ];
     const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات'];
     const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined];
@@ -499,10 +501,18 @@ class _ReportsPageState extends State<ReportsPage> {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key,required this.dark,required this.toggle});final bool dark;final VoidCallback toggle;
+  const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     const Text('الإعدادات',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
+    Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      const Text('لون واجهة البرنامج',style:TextStyle(fontWeight:FontWeight.bold)),
+      const SizedBox(height:10),
+      Wrap(spacing:10,runSpacing:8,children:[
+        for(final c in [0xFF087F68,0xFF1565C0,0xFF6A1B9A,0xFFAD1457,0xFFEF6C00,0xFF455A64,0xFF3949AB])
+          InkWell(onTap:()=>changeSeed(c),child:CircleAvatar(backgroundColor:Color(c),child:seedColor.value==c?const Icon(Icons.check,color:Colors.white):null))
+      ])
+    ]))),
     Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('تصدير نسخة احتياطية إلى ملف'),
       subtitle:const Text('حفظ جميع البيانات بصيغة JSON في المكان الذي تختاره'),
       onTap:() async {try{final path=await StoreDb.instance.exportBackup();if(context.mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم تصدير النسخة بنجاح.');}
