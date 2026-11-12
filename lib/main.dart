@@ -39,7 +39,7 @@ class StoreDb {
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
-    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 8,
+    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 9,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0,sku TEXT NOT NULL DEFAULT "",manufacturer TEXT NOT NULL DEFAULT "",part_no TEXT NOT NULL DEFAULT "",alt_part_no TEXT NOT NULL DEFAULT "",location TEXT NOT NULL DEFAULT "",description TEXT NOT NULL DEFAULT "",archived INTEGER NOT NULL DEFAULT 0,wholesale REAL NOT NULL DEFAULT 0,brand TEXT NOT NULL DEFAULT "",unit TEXT NOT NULL DEFAULT "قطعة",country TEXT NOT NULL DEFAULT "",alt_names TEXT NOT NULL DEFAULT "",specs TEXT NOT NULL DEFAULT "",image_path TEXT NOT NULL DEFAULT "",supplier_id INTEGER,compatibility TEXT NOT NULL DEFAULT "",dimensions TEXT NOT NULL DEFAULT "",weight TEXT NOT NULL DEFAULT "")');
         await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,cost_price REAL NOT NULL DEFAULT 0,party_id INTEGER,party_name TEXT NOT NULL DEFAULT "",warehouse_id INTEGER NOT NULL DEFAULT 1)');
@@ -71,7 +71,7 @@ class StoreDb {
           await _createProductHistory(db);
           await _backfillProductCodes(db);
         }
-        if(oldVersion<8){await _upgradeProductColumns(db);await _createSmartTables(db);}
+        if(oldVersion<8){await _upgradeProductColumns(db);await _createSmartTables(db);} if(oldVersion<9){await _createSmartTables(db);}
       });
   }
 
@@ -95,6 +95,8 @@ class StoreDb {
     await db.execute('CREATE TABLE IF NOT EXISTS product_notes(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER,title TEXT NOT NULL,body TEXT NOT NULL,created_at TEXT NOT NULL)');
     await db.execute('CREATE TABLE IF NOT EXISTS product_images(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,path TEXT NOT NULL,is_primary INTEGER NOT NULL DEFAULT 0)');
     await _upgradeProductColumns(db);
+    await db.execute('CREATE TABLE IF NOT EXISTS invoices(id INTEGER PRIMARY KEY AUTOINCREMENT,invoice_no TEXT NOT NULL UNIQUE,customer_id INTEGER,customer_name TEXT NOT NULL DEFAULT "",subtotal REAL NOT NULL,discount_value REAL NOT NULL DEFAULT 0,discount_mode TEXT NOT NULL DEFAULT "amount",discount_amount REAL NOT NULL DEFAULT 0,total REAL NOT NULL,paid REAL NOT NULL DEFAULT 0,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS invoice_items(id INTEGER PRIMARY KEY AUTOINCREMENT,invoice_id INTEGER NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL)');
   }
   Future<void> log(String action,String details) async {
     await database!.insert('activity_log',{'action':action,'details':details,'created_at':DateTime.now().toIso8601String()});
@@ -247,6 +249,35 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> movements([String? kind]) => database!.query('operations',
     where:kind == null ? null : 'kind=?',whereArgs:kind == null ? null : [kind],orderBy:'id DESC');
+
+  Future<List<Map<String,Object?>>> invoices({bool pendingOnly=false})=>database!.query('invoices',where:pendingOnly?'total>paid':null,orderBy:'id DESC');
+  Future<List<Map<String,Object?>>> invoiceItems(int id)=>database!.query('invoice_items',where:'invoice_id=?',whereArgs:[id],orderBy:'id');
+  Future<void> createInvoice({required String customerName,required int? customerId,required List<Map<String,Object?>> items,required double discountValue,required bool discountPercent,required double paid,required String note}) async {
+    if(items.isEmpty)throw Exception('أضف صنفاً واحداً على الأقل.');
+    await database!.transaction((txn) async {
+      final now=DateTime.now().toIso8601String();double subtotal=0;
+      for(final item in items){final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();if(q<=0||price<0)throw Exception('راجع كمية وسعر الأصناف.');subtotal+=q*price;}
+      final discount=discountPercent?subtotal*discountValue/100:discountValue;
+      if(discount<0||discount>subtotal)throw Exception('قيمة الخصم غير صحيحة.');
+      final total=subtotal-discount;if(paid<0||paid>total)throw Exception('المبلغ المدفوع يجب ألا يتجاوز إجمالي الفاتورة.');
+      for(final item in items){final id=item['product_id'] as int;final q=item['qty'] as int;final found=await txn.query('products',where:'id=?',whereArgs:[id],limit:1);if(found.isEmpty)throw Exception('أحد المنتجات لم يعد موجوداً.');if((found.first['qty'] as int)<q)throw Exception('الكمية غير كافية للمنتج: ${item['product_name']}');}
+      final count=Sqflite.firstIntValue(await txn.rawQuery('SELECT COUNT(*) FROM invoices'))??0;
+      final invoiceNo='INV-${DateTime.now().year}-${(count+1).toString().padLeft(5,'0')}';
+      final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':customerId,'customer_name':customerName,'subtotal':subtotal,'discount_value':discountValue,'discount_mode':discountPercent?'percent':'amount','discount_amount':discount,'total':total,'paid':paid,'note':note,'created_at':now});
+      for(final item in items){final id=item['product_id'] as int;final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();final line=q*price;
+        final current=(await txn.query('products',columns:['qty'],where:'id=?',whereArgs:[id])).first['qty'] as int;
+        await txn.update('products',{'qty':current-q},where:'id=?',whereArgs:[id]);
+        await txn.insert('invoice_items',{'invoice_id':invoiceId,'product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':line});
+        await txn.insert('operations',{'kind':'sale','product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':line,'note':'فاتورة '+invoiceNo,'created_at':now,'cost_price':item['cost_price']??0,'party_id':customerId,'party_name':customerName,'warehouse_id':1});
+      }
+      await txn.insert('activity_log',{'action':'إصدار فاتورة','details':invoiceNo+' | '+customerName+' | '+total.toString(),'created_at':now});
+    });
+  }
+  Future<void> addInvoicePayment(int id,double amount) async {
+    if(amount<=0)throw Exception('أدخل مبلغاً صحيحاً.');
+    await database!.transaction((txn) async {final rows=await txn.query('invoices',where:'id=?',whereArgs:[id],limit:1);if(rows.isEmpty)throw Exception('الفاتورة غير موجودة.');final row=rows.first;final due=(row['total'] as num).toDouble()-(row['paid'] as num).toDouble();if(amount>due)throw Exception('المبلغ أكبر من المتبقي.');await txn.update('invoices',{'paid':(row['paid'] as num).toDouble()+amount},where:'id=?',whereArgs:[id]);await txn.insert('activity_log',{'action':'تحصيل دفعة فاتورة','details':row['invoice_no'].toString()+' | '+amount.toString(),'created_at':DateTime.now().toIso8601String()});});
+  }
+
   Future<Map<String,Object?>> summary() async {
     final products = await database!.query('products',where:'archived=0');
     final sales = await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS total FROM operations WHERE kind='sale'");
@@ -423,6 +454,8 @@ class _HomePageState extends State<HomePage> {
       MovementPage(key:ValueKey('b'+refreshId.toString()),kind:'purchase',changed:refresh),
       PartyPage(key:ValueKey('sup'+refreshId.toString()),table:'suppliers',title:'الموردون',changed:refresh),
       PartyPage(key:ValueKey('cus'+refreshId.toString()),table:'customers',title:'العملاء',changed:refresh),
+      InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh),
+      InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       WarehousePage(key:ValueKey('wh'+refreshId.toString()),changed:refresh),
       ExpensePage(key:ValueKey('ex'+refreshId.toString()),changed:refresh),
       ReportsPage(key:ValueKey('r'+refreshId.toString())),
@@ -432,8 +465,8 @@ class _HomePageState extends State<HomePage> {
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
       AssistantPage(key:ValueKey('assistant'+refreshId.toString()),changed:refresh,go:(v)=>setState(()=>tab=v)),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','مساعد البرنامج'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.support_agent];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','الفواتير','انتظار الدفع','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','مساعد البرنامج'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.receipt_long,Icons.pending_actions,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.support_agent];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
@@ -832,6 +865,36 @@ class _DashboardState extends State<Dashboard> {
   ]));
 }
 
+class InvoicePage extends StatefulWidget {
+  const InvoicePage({super.key,required this.changed,this.pendingOnly=false});
+  final VoidCallback changed; final bool pendingOnly;
+  @override State<InvoicePage> createState()=>_InvoicePageState();
+}
+class _InvoicePageState extends State<InvoicePage>{
+  List<Map<String,Object?>> rows=[];
+  @override void initState(){super.initState();load();}
+  Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);if(mounted)setState(()=>rows=r);}
+  Future<void> create()async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');if(!mounted)return;if(products.isEmpty){toast(context,'أضف منتجات أولاً.');return;}final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers));if(result==true){await load();widget.changed();}}
+  Future<void> pay(Map<String,Object?> invoice)async{final c=TextEditingController();final due=(invoice['total'] as num).toDouble()-(invoice['paid'] as num).toDouble();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('تحصيل دفعة • ${invoice['invoice_no']}'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'المبلغ المتبقي: ${money(due)}')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تأكيد التحصيل'))])));if(ok==true){try{await StoreDb.instance.addInvoicePayment(invoice['id'] as int,double.parse(c.text));await load();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}c.dispose();}
+  Future<void> details(Map<String,Object?> e)async{final items=await StoreDb.instance.invoiceItems(e['id'] as int);if(!mounted)return;final total=(e['total'] as num).toDouble(),paid=(e['paid'] as num).toDouble();await showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('فاتورة ${e['invoice_no']}'),content:SizedBox(width:460,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Text('العميل: ${e['customer_name']}'),Text('التاريخ: ${e['created_at']}'),const Divider(),...items.map((x)=>ListTile(dense:true,title:Text(x['product_name'].toString()),subtitle:Text('${x['qty']} × ${money(x['unit_price'])}'),trailing:Text(money(x['total'])))),const Divider(),Text('الإجمالي: ${money(total)}'),Text('المدفوع: ${money(paid)}'),Text('المتبقي: ${money(total-paid)}',style:const TextStyle(fontWeight:FontWeight.bold)),if((e['note']??'').toString().isNotEmpty)Text('ملاحظات: ${e['note']}')]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق')),FilledButton.icon(onPressed:()=>printTextReport(context,'فاتورة بيع • ${e['invoice_no']}', ['MY APP — فاتورة بيع','رقم الفاتورة: ${e['invoice_no']}','العميل: ${e['customer_name']}','التاريخ: ${e['created_at']}','--------------------------------',...items.map((x)=>'${x['product_name']} | ${x['qty']} × ${money(x['unit_price'])} = ${money(x['total'])}'),'الإجمالي قبل الخصم: ${money(e['subtotal'])}','الخصم: ${money(e['discount_amount'])}','الإجمالي النهائي: ${money(total)}','المدفوع: ${money(paid)}','المتبقي: ${money(total-paid)}','ملاحظات: ${e['note']}','شكراً لتعاملكم معنا']),icon:const Icon(Icons.picture_as_pdf),label:const Text('طباعة / PDF'))])));}
+  @override Widget build(BuildContext context)=>Column(children:[Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:Text(widget.pendingOnly?'الفواتير المستحقة':'فواتير البيع',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))),IconButton(onPressed:load,icon:const Icon(Icons.refresh)),if(!widget.pendingOnly)FilledButton.icon(onPressed:create,icon:const Icon(Icons.add),label:const Text('فاتورة جديدة'))])),Expanded(child:rows.isEmpty?Center(child:Text(widget.pendingOnly?'لا توجد مبالغ مستحقة حالياً.':'لا توجد فواتير بعد.')):ListView.builder(itemCount:rows.length,itemBuilder:(ctx,i){final e=rows[i];final total=(e['total'] as num).toDouble(),paid=(e['paid'] as num).toDouble(),due=total-paid;return Card(child:ListTile(leading:CircleAvatar(child:Icon(due>0?Icons.pending_actions:Icons.receipt_long)),title:Text('${e['invoice_no']} • ${e['customer_name']}'),subtitle:Text('الإجمالي: ${money(total)} • المدفوع: ${money(paid)} • المتبقي: ${money(due)}\n${e['created_at']}'),isThreeLine:true,onTap:()=>details(e),trailing:PopupMenuButton<String>(onSelected:(v){if(v=='pay')pay(e);else details(e);},itemBuilder:(_)=>[const PopupMenuItem(value:'details',child:Text('تفاصيل وطباعة')),if(due>0)const PopupMenuItem(value:'pay',child:Text('تسجيل دفعة'))])));} ))]);
+}
+class InvoiceEditor extends StatefulWidget{
+  const InvoiceEditor({super.key,required this.products,required this.customers});
+  final List<Map<String,Object?>> products,customers;
+  @override State<InvoiceEditor> createState()=>_InvoiceEditorState();
+}
+class _InvoiceEditorState extends State<InvoiceEditor>{
+  final List<Map<String,Object?>> items=[];final discount=TextEditingController(text:'0'),paid=TextEditingController(text:'0'),note=TextEditingController();Map<String,Object?>? customer;bool percent=false;
+  double get subtotal=>items.fold<double>(0,(s,e)=>s+(e['qty'] as int)*(e['unit_price'] as num).toDouble());
+  double get discountAmount{final v=double.tryParse(discount.text)??0;return percent?subtotal*v/100:v;}
+  double get total=>(subtotal-discountAmount).clamp(0,double.infinity);
+  @override void dispose(){discount.dispose();paid.dispose();note.dispose();super.dispose();}
+  Future<void> addItem()async{final available=widget.products.where((p)=>(p['qty'] as int)>0).toList();if(available.isEmpty){toast(context,'لا توجد كميات متاحة للبيع.');return;}Map<String,Object?> selected=available.first;final q=TextEditingController(text:'1');final price=TextEditingController(text:((selected['sell'] as num).toDouble()/math.max(1,(selected['package_size'] as int? ?? 1))).toStringAsFixed(2));final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,refresh)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('إضافة صنف للفاتورة'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[DropdownButtonFormField<int>(value:selected['id'] as int,decoration:const InputDecoration(labelText:'المنتج'),items:available.map((p)=>DropdownMenuItem<int>(value:p['id'] as int,child:Text('${p['name']} • متاح ${p['qty']} قطعة'))).toList(),onChanged:(id){selected=available.firstWhere((p)=>p['id']==id);price.text=((selected['sell'] as num).toDouble()/math.max(1,(selected['package_size'] as int? ?? 1))).toStringAsFixed(2);refresh((){});}),TextField(controller:q,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الكمية بالقطعة')),TextField(controller:price,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'سعر بيع القطعة')),Text('سعر القطعة محسوب تلقائياً من سعر العبوة وعدد قطعها.',style:const TextStyle(fontSize:12))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إضافة'))]))));if(ok==true){final qty=int.tryParse(q.text)??0,unitPrice=double.tryParse(price.text)??-1;if(qty<=0||unitPrice<0){toast(context,'راجع الكمية والسعر.');}else if(qty>(selected['qty'] as int)){toast(context,'الكمية المطلوبة أكبر من المتاح.');}else{setState(()=>items.add({'product_id':selected['id'],'product_name':selected['name'],'qty':qty,'unit_price':unitPrice,'cost_price':selected['buy']}));}}q.dispose();price.dispose();}
+  Future<void> save()async{final p=double.tryParse(paid.text)??-1;if(p<0||p>total){toast(context,'راجع المبلغ المدفوع.');return;}try{await StoreDb.instance.createInvoice(customerName:customer?['name'] as String? ?? 'عميل نقدي',customerId:customer?['id'] as int?,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:p,note:note.text);if(mounted)Navigator.pop(context,true);}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
+  @override Widget build(BuildContext context)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('فاتورة بيع جديدة'),content:SizedBox(width:520,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[DropdownButtonFormField<int?>(value:customer?['id'] as int?,decoration:const InputDecoration(labelText:'العميل (اختياري)'),items:[const DropdownMenuItem<int?>(value:null,child:Text('عميل نقدي / بدون تحديد')),...widget.customers.map((e)=>DropdownMenuItem<int?>(value:e['id'] as int,child:Text(e['name'].toString())))],onChanged:(id)=>setState(()=>customer=id==null?null:widget.customers.firstWhere((e)=>e['id']==id))),const SizedBox(height:10),FilledButton.icon(onPressed:addItem,icon:const Icon(Icons.add_shopping_cart),label:const Text('إضافة منتج للفاتورة')),...items.asMap().entries.map((entry){final i=entry.key,e=entry.value;return Card(child:ListTile(title:Text(e['product_name'].toString()),subtitle:Text('${e['qty']} × ${money(e['unit_price'])}'),trailing:Row(mainAxisSize:MainAxisSize.min,children:[Text(money((e['qty'] as int)*(e['unit_price'] as num).toDouble())),IconButton(onPressed:()=>setState(()=>items.removeAt(i)),icon:const Icon(Icons.delete_outline,color:Colors.red))])));}),const Divider(),SegmentedButton<bool>(segments:const [ButtonSegment(value:false,label:Text('خصم مبلغ')),ButtonSegment(value:true,label:Text('خصم نسبة'))],selected:{percent},onSelectionChanged:(v)=>setState(()=>percent=v.first)),TextField(controller:discount,onChanged:(_)=>setState((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'قيمة الخصم')),TextField(controller:paid,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المدفوع')),TextField(controller:note,maxLines:2,decoration:const InputDecoration(labelText:'ملاحظات الفاتورة')),const SizedBox(height:8),Text('المجموع قبل الخصم: ${money(subtotal)}'),Text('قيمة الخصم: ${money(discountAmount)}'),Text('الإجمالي النهائي: ${money(total)}',style:const TextStyle(fontWeight:FontWeight.bold,fontSize:18)),Text('المتبقي: ${money(total-(double.tryParse(paid.text)??0))}',style:const TextStyle(color:Colors.deepOrange,fontWeight:FontWeight.bold))]))),actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('إلغاء')),FilledButton(onPressed:save,child:const Text('حفظ وإصدار الفاتورة'))]));
+}
+
 class ProductsPage extends StatefulWidget {
   const ProductsPage({super.key,required this.changed}); final VoidCallback changed;
   @override State<ProductsPage> createState()=>_ProductsPageState();
@@ -904,7 +967,7 @@ class _ProductDialogState extends State<ProductDialog> {
   String? integer(String? v)=>int.tryParse(v??'')==null||int.parse(v!)<0?'أدخل عدداً صحيحاً':null;
   String? decimal(String? v)=>double.tryParse(v??'')==null||double.parse(v!)<0?'أدخل سعراً صحيحاً':null;
   Widget field(int i,String label,{String? Function(String?)? validator,TextInputType? type})=>Padding(padding:const EdgeInsets.only(bottom:9),
-    child:TextFormField(controller:c[i],validator:validator,keyboardType:type,decoration:InputDecoration(labelText:label)));
+    child:TextFormField(controller:c[i],validator:validator,keyboardType:type,maxLines:2,minLines:1,decoration:InputDecoration(labelText:label,alignLabelWithHint:true)));
   Future<void> pickImage(ImageSource source) async {
     try{final picked=await ImagePicker().pickImage(source:source,imageQuality:82,maxWidth:1600);if(picked==null)return;final dir=await getApplicationSupportDirectory();final ext=p.extension(picked.path);final target=File(p.join(dir.path,'product_'+DateTime.now().microsecondsSinceEpoch.toString()+(ext.isEmpty?'.jpg':ext)));await File(picked.path).copy(target.path);if(mounted)setState(()=>imagePath=target.path);}catch(e){if(mounted)toast(context,'تعذر اختيار الصورة: $e');}
   }
