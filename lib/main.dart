@@ -178,10 +178,12 @@ class MyApp extends StatefulWidget {
 class _MyAppState extends State<MyApp> {
   ThemeMode mode = ThemeMode.light;
   Color seedColor = const Color(0xFF087F68);
+  String appName = 'MY APP';
+  String? logoPath;
   @override void initState(){super.initState();load();}
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() { mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light; seedColor = Color(prefs.getInt('seedColor') ?? 0xFF087F68); });
+    if (mounted) setState(() { mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light; seedColor = Color(prefs.getInt('seedColor') ?? 0xFF087F68); appName=prefs.getString('appName') ?? 'MY APP'; logoPath=prefs.getString('logoPath'); });
   }
   Future<void> toggle() async {
     final dark = mode != ThemeMode.dark;
@@ -190,15 +192,17 @@ class _MyAppState extends State<MyApp> {
     if (mounted) setState(() => mode = dark ? ThemeMode.dark : ThemeMode.light);
   }
   Future<void> changeSeed(int value) async { final prefs=await SharedPreferences.getInstance(); await prefs.setInt('seedColor',value); if(mounted)setState(()=>seedColor=Color(value)); }
+  Future<void> changeAppName(String value) async { final v=value.trim().isEmpty?'MY APP':value.trim(); final prefs=await SharedPreferences.getInstance(); await prefs.setString('appName',v); if(mounted)setState(()=>appName=v); }
+  Future<void> changeLogo() async { final picked=await FilePicker.platform.pickFiles(type:FileType.image); if(picked==null||picked.files.isEmpty||picked.files.first.path==null)return; final source=File(picked.files.first.path!); final dir=await getApplicationSupportDirectory(); final ext=p.extension(source.path); final target=File(p.join(dir.path,'my_app_logo'+(ext.isEmpty?'.png':ext))); await source.copy(target.path); final prefs=await SharedPreferences.getInstance(); await prefs.setString('logoPath',target.path); if(mounted)setState(()=>logoPath=target.path); }
   ThemeData makeTheme(Brightness b)=>ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b));
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:'MY APP',
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
-    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed));
+    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo));
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed});
-  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed;
+  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo});
+  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo;
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
@@ -215,21 +219,21 @@ class _HomePageState extends State<HomePage> {
       WarehousePage(key:ValueKey('wh'+refreshId.toString()),changed:refresh),
       ExpensePage(key:ValueKey('ex'+refreshId.toString()),changed:refresh),
       ReportsPage(key:ValueKey('r'+refreshId.toString())),
-      SettingsPage(dark:widget.dark,toggle:widget.toggle,seedColor:widget.seedColor,changeSeed:widget.changeSeed),
+      SettingsPage(dark:widget.dark,toggle:widget.toggle,seedColor:widget.seedColor,changeSeed:widget.changeSeed,appName:widget.appName,changeAppName:widget.changeAppName,logoPath:widget.logoPath,changeLogo:widget.changeLogo),
     ];
     const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات'];
     const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
-          child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('MY APP',style:TextStyle(fontSize:25,fontWeight:FontWeight.w900)),Text('نظام إدارة المخزون والمبيعات')])),
+          child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.appName,style:TextStyle(fontSize:25,fontWeight:FontWeight.w900)),Text('نظام إدارة المخزون والمبيعات')])),
         Expanded(child:ListView.builder(itemCount:labels.length,itemBuilder:(c,i)=>ListTile(selected:tab==i,leading:Icon(icons[i]),title:Text(labels[i]),
           onTap:(){Navigator.pop(context);setState(()=>tab=i);}))),
         const Padding(padding:EdgeInsets.all(12),child:Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)))
       ]))),
       appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer())),
         title:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('MY APP',style:TextStyle(fontWeight:FontWeight.w900)),
+        Text(widget.appName,style:TextStyle(fontWeight:FontWeight.w900)),
         Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
       body:IndexedStack(index:tab,children:pages),
       bottomNavigationBar:NavigationBar(selectedIndex:tab==8?4:(tab<4?tab:0),onDestinationSelected:(v)=>setState(()=>tab=v==4?8:v),
@@ -501,9 +505,15 @@ class _ReportsPageState extends State<ReportsPage> {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;
+  const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;final String appName;final ValueChanged<String> changeAppName;final String? logoPath;final VoidCallback changeLogo;
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     const Text('الإعدادات',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
+    Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      const Text('اسم النشاط التجاري / عنوان البرنامج',style:TextStyle(fontWeight:FontWeight.bold)),
+      const SizedBox(height:8),
+      TextFormField(initialValue:appName,onFieldSubmitted:changeAppName,decoration:const InputDecoration(hintText:'اكتب اسم المتجر ثم اضغط تم')),
+      ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image_outlined),title:const Text('تغيير شعار البرنامج'),subtitle:Text(logoPath==null?'لم يتم اختيار شعار بعد':'تم حفظ شعار مخصص على هذا الجهاز'),onTap:changeLogo)
+    ]))),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
     Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       const Text('لون واجهة البرنامج',style:TextStyle(fontWeight:FontWeight.bold)),
