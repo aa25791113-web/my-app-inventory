@@ -6,6 +6,12 @@
 AppId={{A8C6B17E-91D1-4EAA-94C5-2C21A6A12B37}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
+UsePreviousAppDir=yes
+Uninstallable=yes
+UninstallDisplayName={#MyAppName}
+UninstallDisplayIcon={app}\\{#MyAppExeName}
+CloseApplications=yes
+RestartApplications=no
 DefaultDirName={autopf}\MY APP
 DefaultGroupName={#MyAppName}
 OutputDir=Output
@@ -14,6 +20,7 @@ Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
 PrivilegesRequired=lowest
+DisableProgramGroupPage=yes
 ArchitecturesInstallIn64BitMode=x64
 
 [Files]
