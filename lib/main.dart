@@ -232,7 +232,7 @@ class _HomePageState extends State<HomePage> {
         Text('MY APP',style:TextStyle(fontWeight:FontWeight.w900)),
         Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
       body:IndexedStack(index:tab,children:pages),
-      bottomNavigationBar:NavigationBar(selectedIndex:tab<5?tab:4,onDestinationSelected:(v)=>setState(()=>tab=v),
+      bottomNavigationBar:NavigationBar(selectedIndex:tab==8?4:(tab<4?tab:0),onDestinationSelected:(v)=>setState(()=>tab=v==4?8:v),
         destinations:const [
           NavigationDestination(icon:Icon(Icons.dashboard_outlined),label:'الرئيسية'),
           NavigationDestination(icon:Icon(Icons.inventory_2_outlined),label:'المنتجات'),
