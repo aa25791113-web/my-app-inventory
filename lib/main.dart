@@ -103,6 +103,11 @@ class StoreDb {
   }
   Future<bool> isFavorite(int id) async => (await database!.query('favorites',where:'product_id=?',whereArgs:[id],limit:1)).isNotEmpty;
   Future<List<Map<String,Object?>>> favoriteProducts() async => database!.rawQuery('SELECT p.* FROM products p INNER JOIN favorites f ON f.product_id=p.id ORDER BY f.created_at DESC');
+  Future<List<Map<String,Object?>>> archivedProducts()=>database!.query('products',where:'archived=1',orderBy:'name');
+  Future<void> setArchived(int id,bool value) async {await database!.update('products',{'archived':value?1:0},where:'id=?',whereArgs:[id]);await log(value?'أرشفة منتج':'استعادة منتج','رقم المنتج '+id.toString());}
+  Future<List<Map<String,Object?>>> productsWithoutImages()=>database!.query('products',where:'archived=0 AND (image_path IS NULL OR image_path="")');
+  Future<List<Map<String,Object?>>> productsWithoutPrices()=>database!.query('products',where:'archived=0 AND sell<=0');
+  Future<List<Map<String,Object?>>> possibleDuplicates()=>database!.rawQuery('SELECT name,COUNT(*) AS amount FROM products WHERE archived=0 GROUP BY lower(trim(name)) HAVING COUNT(*)>1');
   Future<void> saveSearch(String query) async {
     if(query.trim().isEmpty)return;
     await database!.insert('recent_searches',{'query':query.trim(),'created_at':DateTime.now().toIso8601String()});
@@ -536,8 +541,8 @@ class _ProductsPageState extends State<ProductsPage> {
         final e=rows[i];final low=(e['qty'] as int)<=(e['min_qty'] as int);
         return Card(child:ListTile(leading:(e['image_path']??'').toString().isNotEmpty&&File(e['image_path'] as String).existsSync()?ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(e['image_path'] as String),width:48,height:48,fit:BoxFit.cover)):CircleAvatar(child:Icon(low?Icons.warning_amber:Icons.inventory_2)),
           title:Text(e['name'] as String),subtitle:Text('الكود: ${e['sku']??'—'} • '+e['category'].toString()+' • الكمية: '+e['qty'].toString()+' • سعر البيع: '+money(e['sell'])),
-          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else if(v=='history'){history(e);}else if(v=='qr'){showQr(context,e['sku'].toString(),e['name'].toString());}else if(v=='favorite'){favorite(e);}else{remove(e);}},
-            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'history',child:Text('سجل الأسعار')),PopupMenuItem(value:'qr',child:Text('عرض QR')),PopupMenuItem(value:'favorite',child:Text('إضافة / إزالة من المفضلة')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
+          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else if(v=='history'){history(e);}else if(v=='qr'){showQr(context,e['sku'].toString(),e['name'].toString());}else if(v=='favorite'){favorite(e);}else if(v=='archive'){StoreDb.instance.setArchived(e['id'] as int,true).then((_){load();});}else{remove(e);}},
+            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'history',child:Text('سجل الأسعار')),PopupMenuItem(value:'qr',child:Text('عرض QR')),PopupMenuItem(value:'favorite',child:Text('إضافة / إزالة من المفضلة')),PopupMenuItem(value:'archive',child:Text('أرشفة المنتج')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
       })),
   ]);
 }
