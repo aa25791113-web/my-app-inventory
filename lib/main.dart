@@ -226,7 +226,11 @@ class _HomePageState extends State<HomePage> {
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
-          child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.appName,style:TextStyle(fontSize:25,fontWeight:FontWeight.w900)),Text('نظام إدارة المخزون والمبيعات')])),
+          child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+            if(widget.logoPath!=null&&File(widget.logoPath!).existsSync()) Padding(padding:const EdgeInsets.only(bottom:8),child:Image.file(File(widget.logoPath!),height:58,fit:BoxFit.contain,errorBuilder:(c,e,st)=>const Icon(Icons.store,size:42))),
+            Text(widget.appName,style:const TextStyle(fontSize:25,fontWeight:FontWeight.w900)),
+            const Text('نظام إدارة المخزون والمبيعات')
+          ])),
         Expanded(child:ListView.builder(itemCount:labels.length,itemBuilder:(c,i)=>ListTile(selected:tab==i,leading:Icon(icons[i]),title:Text(labels[i]),
           onTap:(){Navigator.pop(context);setState(()=>tab=i);}))),
         const Padding(padding:EdgeInsets.all(12),child:Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)))
