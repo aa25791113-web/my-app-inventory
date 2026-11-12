@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
@@ -30,11 +31,13 @@ class StoreDb {
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
-    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 3,
+    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 4,
       onCreate: (db, version) async {
-        await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0)');
+        await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0,sku TEXT NOT NULL DEFAULT "",manufacturer TEXT NOT NULL DEFAULT "",part_no TEXT NOT NULL DEFAULT "",alt_part_no TEXT NOT NULL DEFAULT "",location TEXT NOT NULL DEFAULT "",description TEXT NOT NULL DEFAULT "",archived INTEGER NOT NULL DEFAULT 0)');
         await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,cost_price REAL NOT NULL DEFAULT 0,party_id INTEGER,party_name TEXT NOT NULL DEFAULT "",warehouse_id INTEGER NOT NULL DEFAULT 1)');
         await _createExtendedTables(db);
+        await _createProductHistory(db);
+        await _backfillProductCodes(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -50,7 +53,29 @@ class StoreDb {
           await _createExtendedTables(db);
           await db.execute('UPDATE operations SET cost_price=COALESCE((SELECT buy FROM products WHERE products.id=operations.product_id),0) WHERE cost_price=0');
         }
+        if (oldVersion < 4) {
+          final cols=await db.rawQuery('PRAGMA table_info(products)');
+          final names=cols.map((e)=>e['name']).toSet();
+          for(final e in <String,String>{'sku':'TEXT NOT NULL DEFAULT ""','manufacturer':'TEXT NOT NULL DEFAULT ""','part_no':'TEXT NOT NULL DEFAULT ""','alt_part_no':'TEXT NOT NULL DEFAULT ""','location':'TEXT NOT NULL DEFAULT ""','description':'TEXT NOT NULL DEFAULT ""','archived':'INTEGER NOT NULL DEFAULT 0'}.entries){
+            if(!names.contains(e.key))await db.execute('ALTER TABLE products ADD COLUMN ${e.key} ${e.value}');
+          }
+          await _createProductHistory(db);
+          await _backfillProductCodes(db);
+        }
       });
+  }
+  Future<void> _createProductHistory(DatabaseExecutor db) async {
+    await db.execute('CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,old_buy REAL NOT NULL,new_buy REAL NOT NULL,old_sell REAL NOT NULL,new_sell REAL NOT NULL,reason TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
+  }
+  String _newSku(){const chars='ABCDEFGHIJKLMNOPQRSTUVWXYZ';final r=math.Random.secure();return '${chars[r.nextInt(26)]}${List.generate(5,(_)=>r.nextInt(10)).join()}';}
+  Future<String> generateUniqueSku() async {
+    for(var i=0;i<10000;i++){final s=_newSku();final x=await database!.query('products',columns:['id'],where:'sku=?',whereArgs:[s],limit:1);if(x.isEmpty)return s;}
+    throw Exception('تعذر إنشاء كود فريد.');
+  }
+  Future<void> _backfillProductCodes(DatabaseExecutor db) async {
+    final rows=await db.query('products',where:'sku IS NULL OR sku=""');
+    for(final row in rows){String s;do{s=_newSku();final x=await db.query('products',columns:['id'],where:'sku=?',whereArgs:[s],limit:1);if(x.isNotEmpty)s='';}while(s.isEmpty);await db.update('products',{'sku':s},where:'id=?',whereArgs:[row['id']]);}
+    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_products_sku ON products(sku)');
   }
   Future<void> _createExtendedTables(DatabaseExecutor db) async {
     await db.execute('CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,phone TEXT NOT NULL DEFAULT "",email TEXT NOT NULL DEFAULT "",address TEXT NOT NULL DEFAULT "",notes TEXT NOT NULL DEFAULT "",balance REAL NOT NULL DEFAULT 0)');
@@ -77,12 +102,15 @@ class StoreDb {
       await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
     });
   }
-  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',
-    where: query.trim().isEmpty ? null : 'name LIKE ? OR category LIKE ?',
-    whereArgs: query.trim().isEmpty ? null : ['%' + query + '%','%' + query + '%'], orderBy: 'name');
+  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ?',whereArgs:query.trim().isEmpty?null:List.filled(5,'%'+query.trim()+'%'),orderBy:'name');
+  Future<List<Map<String,Object?>>> priceHistory([int? id])=>database!.query('price_history',where:id==null?null:'product_id=?',whereArgs:id==null?null:[id],orderBy:'id DESC');
   Future<void> saveProduct(Map<String,Object?> data, int? id) async {
-    if (id == null) { await database!.insert('products', data); }
-    else { await database!.update('products', data, where: 'id=?', whereArgs: [id]); }
+    final v=Map<String,Object?>.from(data);
+    if(id==null){v['sku']=await generateUniqueSku();await database!.insert('products',v);return;}
+    final rows=await database!.query('products',where:'id=?',whereArgs:[id],limit:1);if(rows.isEmpty)throw Exception('المنتج غير موجود.');
+    final old=rows.first;final ob=(old['buy'] as num).toDouble(),os=(old['sell'] as num).toDouble(),nb=(v['buy'] as num).toDouble(),ns=(v['sell'] as num).toDouble();
+    if(ob!=nb||os!=ns)await database!.insert('price_history',{'product_id':id,'product_name':old['name'],'old_buy':ob,'new_buy':nb,'old_sell':os,'new_sell':ns,'reason':'تعديل السعر','created_at':DateTime.now().toIso8601String()});
+    await database!.update('products',v,where:'id=?',whereArgs:[id]);
   }
   Future<void> removeProduct(int id) async {
     final count = Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM operations WHERE product_id=?',[id])) ?? 0;
