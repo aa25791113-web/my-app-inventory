@@ -631,9 +631,14 @@ class _ProductDialogState extends State<ProductDialog> {
   }
   Future<void> save() async {
     if(!form.currentState!.validate())return;
-    await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim(),'wholesale':double.parse(c[11].text),'brand':c[12].text.trim(),'unit':c[13].text.trim(),'country':c[14].text.trim(),'alt_names':c[15].text.trim(),'specs':c[16].text.trim(),'image_path':imagePath??'','sku':c[17].text.trim(),'supplier_id':supplierId},widget.item?['id'] as int?);
-    await StoreDb.instance.log(widget.item==null?'إضافة منتج':'تعديل منتج',c[0].text.trim());
-    if(mounted)Navigator.pop(context,true);
+    try{
+      final existing=await StoreDb.instance.products(c[0].text.trim());
+      final duplicate=existing.any((e)=>e['name'].toString().trim().toLowerCase()==c[0].text.trim().toLowerCase()&&e['id']!=widget.item?['id']);
+      if(duplicate&&await ask(context,'تنبيه تشابه','يوجد منتج مسجل بالاسم نفسه. هل تريد المتابعة وإضافة الصنف على أي حال؟')!=true)return;
+      await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim(),'wholesale':double.parse(c[11].text),'brand':c[12].text.trim(),'unit':c[13].text.trim(),'country':c[14].text.trim(),'alt_names':c[15].text.trim(),'specs':c[16].text.trim(),'image_path':imagePath??'','sku':c[17].text.trim(),'supplier_id':supplierId},widget.item?['id'] as int?);
+      await StoreDb.instance.log(widget.item==null?'إضافة منتج':'تعديل منتج',c[0].text.trim());
+      if(mounted)Navigator.pop(context,true);
+    }catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}
   }
   @override Widget build(BuildContext context)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
     title:Text(widget.item==null?'إضافة منتج':'تعديل منتج'),
