@@ -847,6 +847,7 @@ class SettingsPage extends StatelessWidget {
       onTap:() async {try{final path=await StoreDb.instance.exportBackup();if(context.mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم تصدير النسخة بنجاح.');}
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     Card(child:ListTile(leading:const Icon(Icons.table_view_outlined),title:const Text('تصدير جرد المنتجات CSV'),subtitle:const Text('ملف يمكن فتحه في Excel أو برامج الجداول'),onTap:() async {try{final path=await StoreDb.instance.exportInventoryCsv();if(context.mounted)toast(context,path==null?'تم إلغاء التصدير.':'تم تصدير ملف الجرد.');}catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
+    Card(child:ListTile(leading:const Icon(Icons.playlist_add_outlined),title:const Text('استيراد أصناف من CSV'),subtitle:const Text('إضافة مجموعة أصناف من ملف Excel محفوظ بصيغة CSV دون حذف الموجود'),onTap:() async {try{final count=await StoreDb.instance.importProductsCsv();if(context.mounted)toast(context,count==0?'لم تتم إضافة أصناف.':'تم استيراد '+count.toString()+' صنف.');}catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     Card(child:ListTile(leading:const Icon(Icons.file_open_outlined),title:const Text('استيراد نسخة احتياطية من ملف'),
       subtitle:const Text('استعادة المنتجات والحركات والموردين والعملاء والمخازن والمصروفات'),
       onTap:() async {if(await ask(context,'استيراد البيانات','سيتم استبدال البيانات الحالية بمحتويات الملف. متابعة؟')!=true)return;
