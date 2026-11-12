@@ -42,6 +42,7 @@ class StoreDb {
           if (!names.contains('party_name')) await db.execute('ALTER TABLE operations ADD COLUMN party_name TEXT NOT NULL DEFAULT ""');
           if (!names.contains('warehouse_id')) await db.execute('ALTER TABLE operations ADD COLUMN warehouse_id INTEGER NOT NULL DEFAULT 1');
           await _createExtendedTables(db);
+          await db.execute('UPDATE operations SET cost_price=COALESCE((SELECT buy FROM products WHERE products.id=operations.product_id),0) WHERE cost_price=0');
         }
       });
   }
@@ -204,7 +205,7 @@ class _HomePageState extends State<HomePage> {
           onTap:(){Navigator.pop(context);setState(()=>tab=i);}))),
         const Padding(padding:EdgeInsets.all(12),child:Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)))
       ]))),
-      appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer()),
+      appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer())),
         title:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text('MY APP',style:TextStyle(fontWeight:FontWeight.w900)),
         Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
