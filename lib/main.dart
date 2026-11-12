@@ -200,14 +200,33 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> priceHistory([int? id])=>database!.query('price_history',where:id==null?null:'product_id=?',whereArgs:id==null?null:[id],orderBy:'id DESC');
   Future<List<Map<String,Object?>>> similarProducts(Uint8List queryBytes) async {
-    final source=img.decodeImage(queryBytes);if(source==null)return [];
-    final query=img.grayscale(img.copyResize(source,width:8,height:8));
-    final qValues=<double>[];for(var y=0;y<8;y++){for(var x=0;x<8;x++){qValues.add(query.getPixel(x,y).r.toDouble());}}
-    final avg=qValues.reduce((a,b)=>a+b)/qValues.length;final qBits=qValues.map((v)=>v>=avg).toList();
-    final rows=await database!.query('products',where:'image_path<>"" AND archived=0');
+    final source=img.decodeImage(queryBytes);
+    if(source==null)throw Exception('الصورة غير مدعومة أو تالفة.');
+    List<bool> fingerprint(img.Image image){
+      final tiny=img.grayscale(img.copyResize(image,width:9,height:8));
+      final bits=<bool>[];
+      for(var y=0;y<8;y++){for(var x=0;x<8;x++){bits.add(tiny.getPixel(x,y).r>tiny.getPixel(x+1,y).r);}}
+      return bits;
+    }
+    final queryBits=fingerprint(source);
+    final rows=await database!.query('products',where:'image_path<>? AND archived=0',whereArgs:['']);
     final ranked=<Map<String,Object?>>[];
-    for(final row in rows){try{final path=row['image_path'] as String;final file=File(path);if(!await file.exists())continue;final decoded=img.decodeImage(await file.readAsBytes());if(decoded==null)continue;final tiny=img.grayscale(img.copyResize(decoded,width:8,height:8));final values=<double>[];for(var y=0;y<8;y++){for(var x=0;x<8;x++){values.add(tiny.getPixel(x,y).r.toDouble());}}final threshold=values.reduce((a,b)=>a+b)/values.length;var distance=0;for(var i=0;i<64;i++){if((values[i]>=threshold)!=qBits[i])distance++;}ranked.add({...row,'similarity':(64-distance)/64});}catch(_){continue;}}
-    ranked.sort((a,b)=>(b['similarity'] as double).compareTo(a['similarity'] as double));return ranked.take(12).toList();
+    for(final row in rows){
+      try{
+        final path=(row['image_path']??'').toString();
+        final file=File(path);
+        if(!await file.exists())continue;
+        final decoded=img.decodeImage(await file.readAsBytes());
+        if(decoded==null)continue;
+        final bits=fingerprint(decoded);
+        var distance=0;
+        for(var i=0;i<64;i++){if(bits[i]!=queryBits[i])distance++;}
+        final similarity=(64-distance)/64;
+        if(similarity>=0.57)ranked.add({...row,'similarity':similarity});
+      }catch(_){continue;}
+    }
+    ranked.sort((a,b)=>(b['similarity'] as double).compareTo(a['similarity'] as double));
+    return ranked.take(8).toList();
   }
 
   Future<void> saveProduct(Map<String,Object?> data, int? id) async {
@@ -508,30 +527,77 @@ class QuickSearchPage extends StatefulWidget {const QuickSearchPage({super.key})
 class _QuickSearchPageState extends State<QuickSearchPage>{
   final controller=TextEditingController();final picker=ImagePicker();List<Map<String,Object?>> rows=[];bool searchingImage=false;
   @override void dispose(){controller.dispose();super.dispose();}
-  Future<void> search(String value) async {final r=await StoreDb.instance.products(value);if(mounted)setState(()=>rows=r);}
+  Future<void> search(String value) async {
+    final q=value.trim();
+    if(q.isEmpty){if(mounted)setState(()=>rows=[]);return;}
+    final r=await StoreDb.instance.products(q);
+    if(mounted)setState(()=>rows=r);
+  }
   Future<void> imageSearch(ImageSource source) async {
-    try{final file=await picker.pickImage(source:source,imageQuality:80,maxWidth:1200);if(file==null)return;setState(()=>searchingImage=true);final matches=await StoreDb.instance.similarProducts(await File(file.path).readAsBytes());if(mounted)setState(()=>rows=matches);if(mounted&&matches.isEmpty)toast(context,'لم نعثر على صور منتجات محفوظة للمقارنة.');}
-    catch(e){if(mounted)toast(context,'تعذر تنفيذ البحث بالصورة: $e');}finally{if(mounted)setState(()=>searchingImage=false);}
+    if(searchingImage)return;
+    try{
+      setState(()=>searchingImage=true);
+      final file=await picker.pickImage(source:source,imageQuality:90,maxWidth:1800,maxHeight:1800);
+      if(file==null)return;
+      final bytes=await File(file.path).readAsBytes();
+      final matches=await StoreDb.instance.similarProducts(bytes);
+      if(!mounted)return;
+      setState(()=>rows=matches);
+      if(matches.isEmpty)toast(context,'مفيش صورة قريبة كفاية في كتالوج منتجاتك. أضف صور واضحة للمنتجات الأول، أو ابحث بالكود/الاسم.');
+      else toast(context,'لقيت '+matches.length.toString()+' منتجات محتملة. راجع نسبة التشابه قبل الاختيار.');
+    }catch(e){
+      if(mounted)toast(context,'تعذر البحث بالصورة: '+e.toString().replaceFirst('Exception: ',''));
+    }finally{if(mounted)setState(()=>searchingImage=false);}
+  }
+  Future<void> _acceptScannedCode(String value) async {
+    final code=value.trim();
+    if(code.isEmpty)return;
+    controller.text=code;
+    await search(code);
+    if(!mounted)return;
+    if(rows.isEmpty)toast(context,'الكود اتقري بنجاح، لكن مفيش منتج مسجل بنفس الكود: '+code);
+  }
+  Future<void> scanImageCode() async {
+    if(!Platform.isAndroid&&!Platform.isIOS){toast(context,'قراءة الأكواد من الصور متاحة على Android وiPhone فقط.');return;}
+    try{
+      final file=await picker.pickImage(source:ImageSource.gallery,imageQuality:100);
+      if(file==null)return;
+      final scanner=MobileScannerController(formats:const [BarcodeFormat.qrCode,BarcodeFormat.ean8,BarcodeFormat.ean13,BarcodeFormat.upcA,BarcodeFormat.upcE,BarcodeFormat.code128,BarcodeFormat.code39,BarcodeFormat.code93,BarcodeFormat.itf,BarcodeFormat.dataMatrix,BarcodeFormat.pdf417]);
+      try{
+        final capture=await scanner.analyzeImage(file.path);
+        final value=capture?.barcodes.map((b)=>b.rawValue).firstWhere((v)=>v!=null&&v.trim().isNotEmpty,orElse:()=>null);
+        if(value==null){if(mounted)toast(context,'الصورة دي مفيهاش QR أو باركود واضح. جرّب صورة أقرب وأوضح.');return;}
+        await _acceptScannedCode(value);
+      }finally{await scanner.dispose();}
+    }catch(e){if(mounted)toast(context,'فشل قراءة الكود من الصورة: '+e.toString().replaceFirst('Exception: ',''));}
   }
   Future<void> scanCode() async {
-    if(!Platform.isAndroid&&!Platform.isIOS){toast(context,'مسح الكاميرا متاح على الهاتف فقط.');return;}
-    final scanner=MobileScannerController(detectionSpeed:DetectionSpeed.noDuplicates,returnImage:false);
+    if(!Platform.isAndroid&&!Platform.isIOS){toast(context,'مسح الكاميرا المباشر متاح على Android وiPhone فقط. استخدم البحث بالكود على الكمبيوتر.');return;}
+    final scanner=MobileScannerController(
+      detectionSpeed:DetectionSpeed.noDuplicates,
+      returnImage:false,
+      formats:const [BarcodeFormat.qrCode,BarcodeFormat.ean8,BarcodeFormat.ean13,BarcodeFormat.upcA,BarcodeFormat.upcE,BarcodeFormat.code128,BarcodeFormat.code39,BarcodeFormat.code93,BarcodeFormat.itf,BarcodeFormat.dataMatrix,BarcodeFormat.pdf417],
+    );
     var captured=false;
     try {
-      await showDialog(context:context,builder:(ctx)=>Dialog(child:SizedBox(width:360,height:460,child:Column(children:[
-        const Padding(padding:EdgeInsets.all(12),child:Text('ثبّت الكود أمام الكاميرا حتى تتم قراءته مرة واحدة')),
-        Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(14),child:MobileScanner(controller:scanner,onDetect:(capture) async {
-          if(captured)return;
-          final value=capture.barcodes.map((b)=>b.rawValue).firstWhere((v)=>v!=null&&v.trim().isNotEmpty,orElse:()=>null);
-          if(value==null)return;
-          captured=true;await scanner.stop();
-          if(ctx.mounted)Navigator.of(ctx).pop();
-          if(!mounted)return;controller.text=value.trim();await search(value.trim());
-          if(mounted&&rows.isEmpty)toast(context,'تمت قراءة الكود، لكن لا يوجد منتج مسجل بهذا الكود.');
-        }))),
+      await showDialog(context:context,builder:(ctx)=>Dialog(child:SizedBox(width:360,height:490,child:Column(children:[
+        const Padding(padding:EdgeInsets.all(12),child:Text('وجّه الكاميرا ناحية QR أو الباركود وخليه داخل الإطار')),
+        Expanded(child:ClipRRect(borderRadius:BorderRadius.circular(14),child:MobileScanner(
+          controller:scanner,
+          onDetect:(capture) async {
+            if(captured)return;
+            final value=capture.barcodes.map((b)=>b.rawValue).firstWhere((v)=>v!=null&&v.trim().isNotEmpty,orElse:()=>null);
+            if(value==null)return;
+            captured=true;
+            try{await scanner.stop();}catch(_){}
+            if(ctx.mounted)Navigator.of(ctx).pop();
+            if(mounted)await _acceptScannedCode(value);
+          },
+        ))),
         TextButton(onPressed:()=>Navigator.of(ctx).pop(),child:const Text('إغلاق'))
       ]))));
-    } finally {await scanner.dispose();}
+    }catch(e){if(mounted)toast(context,'مش قادر أشغل الكاميرا. راجع إذن الكاميرا واقفل أي تطبيق بيستخدمها. التفاصيل: '+e.toString());}
+    finally{await scanner.dispose();}
   }
   Future<void> addProductNote(Map<String,Object?> p) async {final title=TextEditingController();final body=TextEditingController();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('ملاحظة للمنتج'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:title,decoration:const InputDecoration(labelText:'عنوان الملاحظة')),TextField(controller:body,maxLines:4,decoration:const InputDecoration(labelText:'التفاصيل'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,title.text.trim().isNotEmpty||body.text.trim().isNotEmpty),child:const Text('حفظ'))])));if(ok==true){await StoreDb.instance.saveProductNote(p['id'] as int,title.text.trim(),body.text.trim());if(mounted)toast(context,'تم حفظ الملاحظة محليًا.');}title.dispose();body.dispose();}
   Future<void> viewProductNotes(Map<String,Object?> p) async {
@@ -575,14 +641,14 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
       TextField(controller:controller,onChanged:search,onSubmitted:(v)=>StoreDb.instance.saveSearch(v),autofocus:false,decoration:InputDecoration(filled:true,hintText:'اكتب اسم المنتج أو الكود...',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:(){controller.clear();search('');},icon:const Icon(Icons.close)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16)))),
       const SizedBox(height:8),
       Wrap(spacing:8,children:[
-        OutlinedButton.icon(onPressed:scanCode,icon:const Icon(Icons.qr_code_scanner),label:const Text('مسح كود')),
+        OutlinedButton.icon(onPressed:scanCode,icon:const Icon(Icons.qr_code_scanner),label:const Text('مسح بالكاميرا')),\n        OutlinedButton.icon(onPressed:scanImageCode,icon:const Icon(Icons.document_scanner_outlined),label:const Text('قراءة كود من صورة')),
         OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.gallery),icon:const Icon(Icons.image_search),label:const Text('بحث بصورة')),
         OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.camera),icon:const Icon(Icons.camera_alt),label:const Text('تصوير')),
       ]),
-      if(searchingImage)const LinearProgressIndicator()
+      if(searchingImage)const LinearProgressIndicator(),\n      const Padding(padding:EdgeInsets.only(top:6),child:Text('البحث بالصورة يقارن بصور المنتجات المحفوظة داخل جهازك، ولا يبحث تلقائياً في الإنترنت.',style:TextStyle(fontSize:11,color:Colors.grey)))
     ]))),
     if(rows.isEmpty)const Padding(padding:EdgeInsets.all(28),child:Center(child:Text('ابدأ بكتابة اسم المنتج أو كوده للعثور على سعره.')))
-    else ...rows.map((p)=>Card(child:ListTile(onTap:()=>details(p),leading:(p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync()?ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(p['image_path'] as String),width:54,height:54,fit:BoxFit.cover)):const CircleAvatar(child:Icon(Icons.inventory_2)),title:Text(p['name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('الكود: '+p['sku'].toString()+' • المتاح: '+p['qty'].toString()),trailing:Text(money(p['sell']),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:16))))),
+    else ...rows.map((p)=>Card(child:ListTile(onTap:()=>details(p),leading:(p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync()?ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(p['image_path'] as String),width:54,height:54,fit:BoxFit.cover)):const CircleAvatar(child:Icon(Icons.inventory_2)),title:Text(p['name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('الكود: '+p['sku'].toString()+' • المتاح: '+p['qty'].toString()),trailing:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.end,mainAxisAlignment:MainAxisAlignment.center,children:[Text(money(p['sell']),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:16)),if(p['similarity']!=null)Text('تشابه '+(((p['similarity'] as num).toDouble()*100).round()).toString()+'%',style:const TextStyle(fontSize:10,color:Colors.grey))])))),
   ]);
 }
 
@@ -615,15 +681,33 @@ class _CategoriesPageState extends State<CategoriesPage>{
  Future<void> edit([Map<String,Object?>? e])async{final name=TextEditingController(text:e?['name'] as String? ?? '');final desc=TextEditingController(text:e?['description'] as String? ?? '');final ok=await showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text(e==null?'تصنيف جديد':'تعديل التصنيف'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'اسم التصنيف')),TextField(controller:desc,decoration:const InputDecoration(labelText:'الوصف'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,name.text.trim().isNotEmpty),child:const Text('حفظ'))])));if(ok==true){await StoreDb.instance.saveCategory({'name':name.text.trim(),'description':desc.text.trim(),'color':0,'parent_id':null},e?['id'] as int?);await load();}name.dispose();desc.dispose();}
  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(12),children:[Row(children:[const Expanded(child:Text('تصنيفات الأصناف',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold))),IconButton.filled(onPressed:()=>edit(),icon:const Icon(Icons.add))]),if(rows.isEmpty)const Text('لم تتم إضافة تصنيفات بعد.')else ...rows.map((e)=>Card(child:ListTile(leading:const Icon(Icons.category_outlined),title:Text(e['name'].toString()),subtitle:Text(e['description'].toString()),trailing:PopupMenuButton<String>(onSelected:(v)async{if(v=='edit'){await edit(e);}else if(await ask(context,'حذف التصنيف','حذف التصنيف؟')==true){await StoreDb.instance.deleteCategory(e['id'] as int);await load();}},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'delete',child:Text('حذف'))]))))]);}
  
-class SmartToolsPage extends StatefulWidget {const SmartToolsPage({super.key});@override State<SmartToolsPage> createState()=>_SmartToolsPageState();}
+class SimpleCalculator {
+  static double evaluate(String expression){
+    final parser=_ExpressionParser(expression.replaceAll('×','*').replaceAll('÷','/').replaceAll('−','-').replaceAll('٫','.'));
+    final value=parser.parse();
+    if(!value.isFinite)throw const FormatException('الناتج غير صالح.');
+    return value;
+  }
+}
+class _ExpressionParser {
+  _ExpressionParser(this.source);
+  final String source;int index=0;
+  void spaces(){while(index<source.length&&source[index].trim().isEmpty)index++;}
+  bool take(String c){spaces();if(index<source.length&&source[index]==c){index++;return true;}return false;}
+  double parse(){final v=expression();spaces();if(index!=source.length)throw const FormatException('راجع صيغة العملية الحسابية.');return v;}
+  double expression(){var v=term();while(true){if(take('+'))v+=term();else if(take('-'))v-=term();else return v;}}
+  double term(){var v=factor();while(true){if(take('*'))v*=factor();else if(take('/')){final d=factor();if(d==0)throw const FormatException('مينفعش القسمة على صفر.');v/=d;}else if(take('%')){final d=factor();if(d==0)throw const FormatException('مينفعش باقي القسمة على صفر.');v%=d;}else return v;}}
+  double factor(){spaces();if(take('+'))return factor();if(take('-'))return -factor();if(take('(')){final v=expression();if(!take(')'))throw const FormatException('في قوس ناقص.');return v;}final m=RegExp(r'^\\d+(?:\\.\\d+)?|^\\.\\d+').firstMatch(source.substring(index));if(m==null)throw const FormatException('اكتب أرقام وعلامات حسابية صحيحة.');index+=m.group(0)!.length;return double.parse(m.group(0)!);}
+}
+\nclass SmartToolsPage extends StatefulWidget {const SmartToolsPage({super.key});@override State<SmartToolsPage> createState()=>_SmartToolsPageState();}
 class _SmartToolsPageState extends State<SmartToolsPage>{
- int section=0;List<Map<String,Object?>> rows=[];final task=TextEditingController();final bulkValue=TextEditingController();bool bulkPercent=true;
- @override void initState(){super.initState();load();}@override void dispose(){task.dispose();bulkValue.dispose();super.dispose();}
+ int section=0;List<Map<String,Object?>> rows=[];final task=TextEditingController();final bulkValue=TextEditingController();final calculator=TextEditingController();bool bulkPercent=true;String calculatorResult='الناتج هيظهر هنا';
+ @override void initState(){super.initState();load();}@override void dispose(){task.dispose();bulkValue.dispose();calculator.dispose();super.dispose();}
  Future<void> load()async{List<Map<String,Object?>> r=[];if(section==0)r=await StoreDb.instance.favoriteProducts();if(section==1)r=await StoreDb.instance.tasks();if(section==2)r=await StoreDb.instance.activity();if(section==3)r=await StoreDb.instance.recentSearches();if(section==4)r=await StoreDb.instance.archivedProducts();if(section==5)r=await StoreDb.instance.productsWithoutImages();if(section==6)r=await StoreDb.instance.productsWithoutPrices();if(section==7)r=await StoreDb.instance.possibleDuplicates();if(mounted)setState(()=>rows=r);}
  @override Widget build(BuildContext context)=>Column(children:[
-  Padding(padding:const EdgeInsets.all(10),child:Wrap(spacing:6,children:[ChoiceChip(label:const Text('المفضلة'),selected:section==0,onSelected:(_){setState(()=>section=0);load();}),ChoiceChip(label:const Text('المهام'),selected:section==1,onSelected:(_){setState(()=>section=1);load();}),ChoiceChip(label:const Text('النشاط'),selected:section==2,onSelected:(_){setState(()=>section=2);load();}),ChoiceChip(label:const Text('عمليات البحث'),selected:section==3,onSelected:(_){setState(()=>section=3);load();}),ChoiceChip(label:const Text('الأرشيف'),selected:section==4,onSelected:(_){setState(()=>section=4);load();}),ChoiceChip(label:const Text('بدون صور'),selected:section==5,onSelected:(_){setState(()=>section=5);load();}),ChoiceChip(label:const Text('بدون سعر'),selected:section==6,onSelected:(_){setState(()=>section=6);load();}),ChoiceChip(label:const Text('التكرارات'),selected:section==7,onSelected:(_){setState(()=>section=7);load();}),ChoiceChip(label:const Text('تعديل أسعار جماعي'),selected:section==8,onSelected:(_){setState(()=>section=8);load();})])),
+  Padding(padding:const EdgeInsets.all(10),child:Wrap(spacing:6,children:[ChoiceChip(label:const Text('المفضلة'),selected:section==0,onSelected:(_){setState(()=>section=0);load();}),ChoiceChip(label:const Text('المهام'),selected:section==1,onSelected:(_){setState(()=>section=1);load();}),ChoiceChip(label:const Text('النشاط'),selected:section==2,onSelected:(_){setState(()=>section=2);load();}),ChoiceChip(label:const Text('عمليات البحث'),selected:section==3,onSelected:(_){setState(()=>section=3);load();}),ChoiceChip(label:const Text('الأرشيف'),selected:section==4,onSelected:(_){setState(()=>section=4);load();}),ChoiceChip(label:const Text('بدون صور'),selected:section==5,onSelected:(_){setState(()=>section=5);load();}),ChoiceChip(label:const Text('بدون سعر'),selected:section==6,onSelected:(_){setState(()=>section=6);load();}),ChoiceChip(label:const Text('التكرارات'),selected:section==7,onSelected:(_){setState(()=>section=7);load();}),ChoiceChip(label:const Text('تعديل أسعار جماعي'),selected:section==8,onSelected:(_){setState(()=>section=8);load();}),ChoiceChip(label:const Text('آلة حاسبة'),selected:section==9,onSelected:(_){setState(()=>section=9);load();})])),
   if(section==1)Padding(padding:const EdgeInsets.symmetric(horizontal:12),child:Row(children:[Expanded(child:TextField(controller:task,decoration:const InputDecoration(hintText:'مهمة جديدة'))),IconButton.filled(onPressed:()async{await StoreDb.instance.saveTask(task.text);task.clear();await load();},icon:const Icon(Icons.add))])),
-  Expanded(child:section==8?ListView(padding:const EdgeInsets.all(14),children:[const Text('تعديل سعر البيع لمجموعة المنتجات',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const SizedBox(height:12),SegmentedButton<bool>(segments:const [ButtonSegment(value:true,label:Text('نسبة مئوية')),ButtonSegment(value:false,label:Text('مبلغ ثابت'))],selected:{bulkPercent},onSelectionChanged:(v)=>setState(()=>bulkPercent=v.first)),TextField(controller:bulkValue,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'قيمة الزيادة',hintText:'مثال: 5')),const SizedBox(height:12),FilledButton.icon(onPressed:()async{final v=double.tryParse(bulkValue.text);if(v==null||v<0){toast(context,'أدخل قيمة صحيحة.');return;}await StoreDb.instance.bulkAdjustSellingPrices(v,bulkPercent,'تعديل جماعي من الأدوات');bulkValue.clear();toast(context,'تم تحديث الأسعار وتسجيل السعر السابق لكل منتج.');await load();},icon:const Icon(Icons.price_change),label:const Text('تطبيق على جميع المنتجات'))]):rows.isEmpty?const Center(child:Text('لا توجد بيانات هنا بعد.')):ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];if(section==0)return Card(child:ListTile(title:Text(e['name'].toString()),subtitle:Text('الكود: '+e['sku'].toString()+' • '+money(e['sell'])),trailing:IconButton(tooltip:'إزالة من المفضلة',icon:const Icon(Icons.star_outline),onPressed:()async{await StoreDb.instance.toggleFavorite(e['id'] as int,false);await load();})));if(section==1)return Card(child:ListTile(leading:Checkbox(value:e['done']==1,onChanged:(v)async{await StoreDb.instance.toggleTask(e['id'] as int,v==true);await load();}),title:Text(e['title'].toString()),trailing:IconButton(tooltip:'حذف المهمة',icon:const Icon(Icons.delete_outline),onPressed:()async{if(await ask(context,'حذف المهمة','هل تريد حذف هذه المهمة؟')==true){await StoreDb.instance.deleteTask(e['id'] as int);await load();}})));if(section==2)return ListTile(leading:const Icon(Icons.history),title:Text(e['action'].toString()),subtitle:Text(e['details'].toString()),trailing:IconButton(tooltip:'حذف السجل',icon:const Icon(Icons.delete_outline),onPressed:()async{if(await ask(context,'حذف السجل','حذف هذا السجل؟')==true){await StoreDb.instance.deleteActivity(e['id'] as int);await load();}}));if(section==3)return ListTile(leading:const Icon(Icons.search),title:Text(e['query'].toString()),subtitle:Text((e['created_at']??'').toString()),trailing:IconButton(tooltip:'حذف البحث',icon:const Icon(Icons.delete_outline),onPressed:()async{await StoreDb.instance.deleteRecentSearch(e['id'] as int);await load();}));if(section==7)return ListTile(leading:const Icon(Icons.copy_all),title:Text(e['name'].toString()),trailing:Text('عدد النسخ: '+e['amount'].toString()));return ListTile(leading:Icon(section==4?Icons.archive:section==5?Icons.image_not_supported:Icons.price_change),title:Text(e['name'].toString()),subtitle:Text('الكود: '+(e['sku']??'').toString()+' • السعر: '+money(e['sell'])),trailing:section==4?IconButton(tooltip:'استعادة',icon:const Icon(Icons.unarchive),onPressed:()async{await StoreDb.instance.setArchived(e['id'] as int,false);await load();}):null);}))
+  Expanded(child:section==9?ListView(padding:const EdgeInsets.all(14),children:[const Text('آلة حاسبة سريعة',style:TextStyle(fontSize:20,fontWeight:FontWeight.bold)),const Text('عمليات الجمع والطرح والضرب والقسمة وباقي القسمة والأقواس.'),TextField(controller:calculator,keyboardType:const TextInputType.numberWithOptions(decimal:true,signed:true),decoration:const InputDecoration(labelText:'اكتب العملية',hintText:'مثال: (125 * 3) + 40 / 2')),const SizedBox(height:10),FilledButton.icon(onPressed:(){try{final result=SimpleCalculator.evaluate(calculator.text);setState(()=>calculatorResult=result.toStringAsFixed(2));}catch(e){setState(()=>calculatorResult=e.toString().replaceFirst('FormatException: ',''));}},icon:const Icon(Icons.calculate_outlined),label:const Text('احسب')),Card(child:ListTile(title:const Text('النتيجة'),trailing:Text(calculatorResult,style:const TextStyle(fontWeight:FontWeight.bold,fontSize:18)))),TextButton.icon(onPressed:(){calculator.clear();setState(()=>calculatorResult='الناتج هيظهر هنا');},icon:const Icon(Icons.backspace_outlined),label:const Text('مسح'))]):section==8?ListView(padding:const EdgeInsets.all(14),children:[const Text('تعديل سعر البيع لمجموعة المنتجات',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),const SizedBox(height:12),SegmentedButton<bool>(segments:const [ButtonSegment(value:true,label:Text('نسبة مئوية')),ButtonSegment(value:false,label:Text('مبلغ ثابت'))],selected:{bulkPercent},onSelectionChanged:(v)=>setState(()=>bulkPercent=v.first)),TextField(controller:bulkValue,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'قيمة الزيادة',hintText:'مثال: 5')),const SizedBox(height:12),FilledButton.icon(onPressed:()async{final v=double.tryParse(bulkValue.text);if(v==null||v<0){toast(context,'أدخل قيمة صحيحة.');return;}await StoreDb.instance.bulkAdjustSellingPrices(v,bulkPercent,'تعديل جماعي من الأدوات');bulkValue.clear();toast(context,'تم تحديث الأسعار وتسجيل السعر السابق لكل منتج.');await load();},icon:const Icon(Icons.price_change),label:const Text('تطبيق على جميع المنتجات'))]):rows.isEmpty?const Center(child:Text('لا توجد بيانات هنا بعد.')):ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];if(section==0)return Card(child:ListTile(title:Text(e['name'].toString()),subtitle:Text('الكود: '+e['sku'].toString()+' • '+money(e['sell'])),trailing:IconButton(tooltip:'إزالة من المفضلة',icon:const Icon(Icons.star_outline),onPressed:()async{await StoreDb.instance.toggleFavorite(e['id'] as int,false);await load();})));if(section==1)return Card(child:ListTile(leading:Checkbox(value:e['done']==1,onChanged:(v)async{await StoreDb.instance.toggleTask(e['id'] as int,v==true);await load();}),title:Text(e['title'].toString()),trailing:IconButton(tooltip:'حذف المهمة',icon:const Icon(Icons.delete_outline),onPressed:()async{if(await ask(context,'حذف المهمة','هل تريد حذف هذه المهمة؟')==true){await StoreDb.instance.deleteTask(e['id'] as int);await load();}})));if(section==2)return ListTile(leading:const Icon(Icons.history),title:Text(e['action'].toString()),subtitle:Text(e['details'].toString()),trailing:IconButton(tooltip:'حذف السجل',icon:const Icon(Icons.delete_outline),onPressed:()async{if(await ask(context,'حذف السجل','حذف هذا السجل؟')==true){await StoreDb.instance.deleteActivity(e['id'] as int);await load();}}));if(section==3)return ListTile(leading:const Icon(Icons.search),title:Text(e['query'].toString()),subtitle:Text((e['created_at']??'').toString()),trailing:IconButton(tooltip:'حذف البحث',icon:const Icon(Icons.delete_outline),onPressed:()async{await StoreDb.instance.deleteRecentSearch(e['id'] as int);await load();}));if(section==7)return ListTile(leading:const Icon(Icons.copy_all),title:Text(e['name'].toString()),trailing:Text('عدد النسخ: '+e['amount'].toString()));return ListTile(leading:Icon(section==4?Icons.archive:section==5?Icons.image_not_supported:Icons.price_change),title:Text(e['name'].toString()),subtitle:Text('الكود: '+(e['sku']??'').toString()+' • السعر: '+money(e['sell'])),trailing:section==4?IconButton(tooltip:'استعادة',icon:const Icon(Icons.unarchive),onPressed:()async{await StoreDb.instance.setArchived(e['id'] as int,false);await load();}):null);}))
  ]);
 }
 
@@ -642,13 +726,13 @@ class _AssistantPageState extends State<AssistantPage> {
   String understand(String raw){
     var v=raw.trim().replaceAll(RegExp(r'[؟?!،,.]+$'),'').replaceAll(RegExp(r'\s+'),' ');
     final low=v.toLowerCase();
-    if(RegExp(r'^(اهلا|أهلا|السلام عليكم|صباح الخير|مساء الخير|هاي|هلو|ازيك|إزيك|عامل ايه|عامل إيه|اخبارك|أخبارك)').hasMatch(low))return 'تحية';
+    if(RegExp(r'^(اهلا|أهلا|السلام عليكم|وعليكم السلام|صباح الخير|صباح النور|مساء الخير|مساء النور|هاي|هلو|ازيك|إزيك|عامل ايه|عامل إيه|عامل ايه يا|اخبارك|أخبارك|يا شات|يا شاتو)').hasMatch(low))return 'تحية';
     v=v.replaceFirst(RegExp(r'^(يا مساعد|يا شات|ممكن|لو سمحت|من فضلك|بعد اذنك|بعد إذنك)\s*'),'');
     v=v.replaceFirst(RegExp(r'^(عايز|عاوز|محتاج)\s+(افتح|أفتح|اشوف|أشوف|اعرض|وريني|تفتحلي|تفتح لي)'),'افتح');
     v=v.replaceFirst(RegExp(r'^(عايزك|عاوزك|ممكن)\s+(تشرحلي|تشرح|تفهمني)\s*'),'اشرح ');
     v=v.replaceFirst(RegExp(r'^(ضيفلي|زودلي|ضيف|اضيف|أضيف)\s+'),'ضيف ');
     v=v.replaceFirst(RegExp(r'^(سجللي|سجلي|اعمللي|اعملي)\s+'),'سجل ');
-    v=v.replaceAll('الاصناف','المنتجات').replaceAll('الصنف','المنتج');
+    v=v.replaceAll('الاصناف','المنتجات').replaceAll('الأصناف','المنتجات').replaceAll('الصنف','المنتج').replaceAll('البضاعة','المنتجات').replaceAll('الحاجات','المنتجات').replaceAll('الكام','الكمية').replaceAll('بكام','السعر كم').replaceAll('الفلوس','المبلغ').replaceAll('المخزنات','المخازن');
     return v.trim();
   }
   String clean(String value)=>value
@@ -681,7 +765,7 @@ class _AssistantPageState extends State<AssistantPage> {
       ]
     )));
   }
-  String? helpAnswer(String q) {
+  String? chatAnswer(String q){\n    final v=q.toLowerCase();\n    if(q=='تحية')return 'أهلاً بيك يا صاحبي! عامل إيه؟ 😄 قولّي محتاج تعمل إيه في البرنامج وأنا أساعدك خطوة بخطوة.';\n    if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';\n    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';\n    if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';\n    if(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;\n  }\n  String? helpAnswer(String q) {
     final v=q.toLowerCase();
     if(RegExp(r'(مساعدة|بتعمل ايه|تقدر تعمل|اوامر|أوامر|شرح البرنامج|اشرح البرنامج)').hasMatch(v))return 'أقدر أشرح صفحات البرنامج، أفتح لك الصفحة المطلوبة، أبحث عن المنتجات، أضيف منتجًا أو مهمة أو مصروفًا، أسجل بيعًا أو شراءً، أعدّل كمية أو سعرًا، وأؤرشف منتجًا. قبل أي إضافة أو حركة مالية أو تعديل مؤثر أعرض عليك التفاصيل وأطلب موافقتك. اكتب: أمثلة للأوامر.';
     if(v.contains('أمثلة')||v.contains('امثلة'))return 'جرّب: افتح التقارير • اشرح المخازن • ابحث عن فلتر تويوتا • ضيف مهمة مراجعة المخزون • ضيف مصروف نقل مبلغ 150 تصنيف تشغيل • سجل بيع فلتر زيت كمية 2 سعر 80 • عدل كمية فلتر الزيت إلى 10 • غير سعر بيع فلتر الزيت إلى 95.';
@@ -698,7 +782,7 @@ class _AssistantPageState extends State<AssistantPage> {
     if(v.contains('الانترنت')||v.contains('إنترنت')||v.contains('اوفلاين')||v.contains('دون اتصال'))return 'قاعدة البيانات والبحث والعمليات الأساسية محلية على الجهاز، لذلك لا تحتاج إنترنت بعد التثبيت. لا يوجد تزامن تلقائي بين جهازين؛ استخدم النسخ الاحتياطي لنقل البيانات.';
     if(v.contains('الطباعة'))return 'يمكن طباعة تقارير المخزون وحركات البيع والشراء والتقارير المالية وقوائم العملاء والموردين والمخازن والمصروفات وملصق المنتج، حسب دعم الجهاز والطابعة.';
     if(v.contains('الإعدادات')||v.contains('الاعدادات'))return 'الإعدادات تسمح بتغيير اسم النشاط وشعاره والعملة والخلفية والوضع الليلي ومظهر الألوان، مع خيارات النسخ الاحتياطي والاستعادة.';
-    if(v.contains('خارج')||v.contains('معلومة عامة')||v.contains('سؤال عام'))return 'أقدر أساعدك بمعلومات عامة ثابتة ومختصرة موجودة ضمن معرفتي المدمجة، لكن هذا الإصدار يعمل دون إنترنت ولا يملك بحثًا مباشرًا في الأخبار أو الأسعار أو المواقع الحديثة. اسألني سؤالًا محددًا.';
+    if(v.contains('خارج')||v.contains('معلومة عامة')||v.contains('سؤال عام'))return 'أقدر أجاوب على شوية معلومات عامة ثابتة ومختصرة من الردود المدمجة، لكن النسخة دي محلية ومش متصلة بنموذج ذكاء اصطناعي أو محرك بحث. مش هقدر أضمن إجابة صحيحة لأي سؤال خارجي أو أستخرج تفاصيل منتج من صورة من الإنترنت. لو عايز تحليل صور ومنتجات ومعلومات حديثة بمستوى متقدم، ده محتاج وضع أونلاين وربط خدمة ذكاء اصطناعي بمفتاح API؛ وده مش متوفر في النسخة الحالية.';
     return null;
   }
   int? pageFor(String q) {
@@ -723,7 +807,7 @@ class _AssistantPageState extends State<AssistantPage> {
     final raw=input.text.trim();if(raw.isEmpty)return;final command=understand(raw);
     setState(()=>busy=true);
     try {
-      final page=pageFor(command);
+      final conversational=chatAnswer(command);\n      if(conversational!=null){setState(()=>reply=conversational);return;}\n      final page=pageFor(command);
       if(page!=null&&RegExp(r'^(افتح|روح|انتقل|اذهب|اعرض)').hasMatch(command)){
         widget.go(page);setState(()=>reply='فتحت لك الصفحة المطلوبة.');return;
       }
@@ -828,14 +912,14 @@ class _AssistantPageState extends State<AssistantPage> {
   }
   Future<void> contactSupport()async{
     const phone='584263545601';
-    final message=Uri.encodeComponent('مرحباً فريق دعم MY APP 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.4.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
+    final message=Uri.encodeComponent('مرحباً فريق دعم MY APP 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.5.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
     final uri=Uri.parse('https://wa.me/$phone?text=$message');
     if(!await launchUrl(uri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح واتساب. تأكد من تثبيته أو افتح الرابط من المتصفح.');
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Row(children:[const CircleAvatar(child:Icon(Icons.support_agent)),const SizedBox(width:10),const Expanded(child:Text('مساعد MY APP',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)))]),
-      const SizedBox(height:8),const Text('مساعد محلي دون إنترنت: يشرح صفحات البرنامج، يفتحها، يبحث عن المنتجات وينفذ أوامر المخزون والمبيعات والمشتريات والمصروفات والمهام بعد موافقتك.'),
+      const SizedBox(height:8),const Text('مساعد محلي بالمصري: يشرح صفحات البرنامج، يفتحها، يبحث عن المنتجات وينفذ أوامر المخزون والمبيعات والمشتريات والمصروفات والمهام بعد موافقتك. لا يحتاج إنترنت للوظائف المحلية، لكنه ليس نموذجاً عاماً مفتوحاً ولا يبحث في الويب.'),
       const SizedBox(height:12),Text(reply),
     ]))),
     TextField(controller:input,minLines:2,maxLines:5,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب سؤالك أو أمرك',hintText:'مثال: اشرح التقارير\nأو: افتح المنتجات\nأو: سجل بيع فلتر زيت كمية 2 سعر 80',border:OutlineInputBorder())),
@@ -1243,8 +1327,8 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.3.0'),
-      subtitle:Text('بحث بالاسم والكود والصورة، أكواد فريدة، صور محلية، QR، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.5.0'),
+      subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
 
