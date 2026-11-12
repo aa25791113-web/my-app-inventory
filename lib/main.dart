@@ -156,10 +156,10 @@ class StoreDb {
     final source=img.decodeImage(queryBytes);if(source==null)return [];
     final query=img.grayscale(img.copyResize(source,width:8,height:8));
     final qValues=<double>[];for(var y=0;y<8;y++){for(var x=0;x<8;x++){qValues.add(query.getPixel(x,y).r.toDouble());}}
-    final avg=qValues.reduce((a,b)=>a+b)/qValues.length;
+    final avg=qValues.reduce((a,b)=>a+b)/qValues.length;final qBits=qValues.map((v)=>v>=avg).toList();
     final rows=await database!.query('products',where:'image_path<>"" AND archived=0');
     final ranked=<Map<String,Object?>>[];
-    for(final row in rows){try{final path=row['image_path'] as String;final file=File(path);if(!await file.exists())continue;final decoded=img.decodeImage(await file.readAsBytes());if(decoded==null)continue;final tiny=img.grayscale(img.copyResize(decoded,width:8,height:8));var distance=0;for(var y=0;y<8;y++){for(var x=0;x<8;x++){final v=tiny.getPixel(x,y).r.toDouble();if((v>=avg)!=(v>=qValues[y*8+x]))distance++;}}ranked.add({...row,'similarity':(64-distance)/64});}catch(_){continue;}}
+    for(final row in rows){try{final path=row['image_path'] as String;final file=File(path);if(!await file.exists())continue;final decoded=img.decodeImage(await file.readAsBytes());if(decoded==null)continue;final tiny=img.grayscale(img.copyResize(decoded,width:8,height:8));final values=<double>[];for(var y=0;y<8;y++){for(var x=0;x<8;x++){values.add(tiny.getPixel(x,y).r.toDouble());}}final threshold=values.reduce((a,b)=>a+b)/values.length;var distance=0;for(var i=0;i<64;i++){if((values[i]>=threshold)!=qBits[i])distance++;}ranked.add({...row,'similarity':(64-distance)/64});}catch(_){continue;}}
     ranked.sort((a,b)=>(b['similarity'] as double).compareTo(a['similarity'] as double));return ranked.take(12).toList();
   }
 
