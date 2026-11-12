@@ -451,8 +451,26 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
   ]);
 }
 
+
+Future<void> printProductLabel(BuildContext context,String code,String name) async {
+  try {
+    final recorder=ui.PictureRecorder();final canvas=ui.Canvas(recorder);
+    canvas.drawRect(const ui.Rect.fromLTWH(0,0,900,180),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
+    final painter=TextPainter(text:TextSpan(text:name,style:const TextStyle(fontSize:54,fontWeight:FontWeight.bold,color:Color(0xFF111111))),textDirection:TextDirection.rtl,textAlign:TextAlign.center,maxLines:2);
+    painter.layout(maxWidth:860);painter.paint(canvas,Offset((900-painter.width)/2,20));
+    final image=await recorder.endRecording().toImage(900,180);final data=await image.toByteData(format:ui.ImageByteFormat.png);image.dispose();
+    final doc=pw.Document();
+    doc.addPage(pw.Page(pageFormat:const pdf.PdfPageFormat(80*pdf.PdfPageFormat.mm,60*pdf.PdfPageFormat.mm),margin:const pw.EdgeInsets.all(5),build:(_)=>pw.Column(mainAxisAlignment:pw.MainAxisAlignment.center,children:[
+      if(data!=null)pw.Image(pw.MemoryImage(data.buffer.asUint8List()),height:22*pdf.PdfPageFormat.mm,fit:pw.BoxFit.contain),
+      pw.BarcodeWidget(barcode:pw.Barcode.qrCode(),data:code,width:28*pdf.PdfPageFormat.mm,height:28*pdf.PdfPageFormat.mm),
+      pw.Text(code,style:pw.TextStyle(fontSize:12,fontWeight:pw.FontWeight.bold))
+    ])));
+    await Printing.layoutPdf(name:'Product_Label_$code.pdf',onLayout:(_)=>doc.save());
+  }catch(e){if(context.mounted)toast(context,'تعذرت طباعة الملصق: $e');}
+}
+
 void showQr(BuildContext context,String code,String name){
-  showDialog(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('رمز المنتج: '+name),content:SizedBox(width:230,height:260,child:Column(children:[QrImageView(data:code,size:190),Text(code,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('إغلاق'))])));
+  showDialog(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('رمز المنتج: '+name),content:SizedBox(width:230,height:260,child:Column(children:[QrImageView(data:code,size:190),Text(code,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('إغلاق')),FilledButton.icon(onPressed:()=>printProductLabel(context,code,name),icon:const Icon(Icons.print),label:const Text('طباعة ملصق'))])));
 }
 
 class CategoriesPage extends StatefulWidget {const CategoriesPage({super.key});@override State<CategoriesPage> createState()=>_CategoriesPageState();}
