@@ -308,7 +308,7 @@ class StoreDb {
     final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
       for(final t in ['product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
-      for(final row in data['products'] as List){final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];await txn.insert('products',product);}
+      for(final row in data['products'] as List){final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];var sku=(product['sku']??'').toString();if(sku.isEmpty||(await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty){do{sku=_newSku();}while((await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty);product['sku']=sku;}await txn.insert('products',product);}
       for(final row in data['operations'] as List){final m=Map<String,Object?>.from(row as Map);m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);await txn.insert('operations',m);}
       for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');if((wh.first['c'] as int? ?? 0)==0)await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
@@ -324,7 +324,7 @@ class StoreDb {
     await database!.transaction((txn) async {
       for(final t in ['product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
       for (final row in data['products'] as List) {
-        final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];await txn.insert('products',product);
+        final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];var sku=(product['sku']??'').toString();if(sku.isEmpty||(await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty){do{sku=_newSku();}while((await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty);product['sku']=sku;}await txn.insert('products',product);
       }
       for (final row in data['operations'] as List) {
         final m=Map<String,Object?>.from(row as Map);
