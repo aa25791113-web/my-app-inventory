@@ -1,5 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -124,6 +126,24 @@ class StoreDb {
     final file = File(p.join(dir.path,'my_app_backup.json'));
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
     return file.path;
+  }
+  Future<String?> exportBackup() async {
+    final data = {'format':'MYAPP_BACKUP_2','products':await database!.query('products'),'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments')};
+    final bytes=Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(data)));
+    return FilePicker.platform.saveFile(dialogTitle:'حفظ النسخة الاحتياطية',fileName:'MYAPP_Backup.json',type:FileType.custom,allowedExtensions:['json'],bytes:bytes);
+  }
+  Future<void> importBackup() async {
+    final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['json'],withData:true);
+    if(result==null||result.files.isEmpty||result.files.first.bytes==null)return;
+    final data=jsonDecode(utf8.decode(result.files.first.bytes!)) as Map<String,dynamic>;
+    if(data['format']!='MYAPP_BACKUP_1'&&data['format']!='MYAPP_BACKUP_2')throw Exception('ملف النسخة الاحتياطية غير صالح.');
+    await database!.transaction((txn) async {
+      for(final t in ['stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
+      for(final row in data['products'] as List){await txn.insert('products',Map<String,Object?>.from(row as Map));}
+      for(final row in data['operations'] as List){final m=Map<String,Object?>.from(row as Map);m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);await txn.insert('operations',m);}
+      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
+      final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');if((wh.first['c'] as int? ?? 0)==0)await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
+    });
   }
   Future<String> restore() async {
     final dir = await getApplicationDocumentsDirectory();
@@ -483,14 +503,14 @@ class SettingsPage extends StatelessWidget {
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     const Text('الإعدادات',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
-    Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('إنشاء نسخة احتياطية محلية'),
-      subtitle:const Text('حفظ المنتجات والمبيعات والمشتريات في ملف JSON'),
-      onTap:() async {try{final path=await StoreDb.instance.backup();if(context.mounted)toast(context,'تم حفظ النسخة على الجهاز: '+path);}
-        catch(e){if(context.mounted)toast(context,e.toString());}})),
-    Card(child:ListTile(leading:const Icon(Icons.settings_backup_restore),title:const Text('استعادة آخر نسخة احتياطية'),
-      subtitle:const Text('سيتم استبدال البيانات الحالية بمحتويات النسخة'),
-      onTap:() async {if(await ask(context,'استعادة البيانات','سيتم استبدال البيانات الحالية. متابعة؟')!=true)return;
-        try{final path=await StoreDb.instance.restore();if(context.mounted)toast(context,'تمت الاستعادة: '+path);}
+    Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('تصدير نسخة احتياطية إلى ملف'),
+      subtitle:const Text('حفظ جميع البيانات بصيغة JSON في المكان الذي تختاره'),
+      onTap:() async {try{final path=await StoreDb.instance.exportBackup();if(context.mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم تصدير النسخة بنجاح.');}
+        catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
+    Card(child:ListTile(leading:const Icon(Icons.file_open_outlined),title:const Text('استيراد نسخة احتياطية من ملف'),
+      subtitle:const Text('استعادة المنتجات والحركات والموردين والعملاء والمخازن والمصروفات'),
+      onTap:() async {if(await ask(context,'استيراد البيانات','سيتم استبدال البيانات الحالية بمحتويات الملف. متابعة؟')!=true)return;
+        try{await StoreDb.instance.importBackup();if(context.mounted)toast(context,'تم استيراد النسخة بنجاح. أعد فتح الصفحات لتحديث البيانات.');}
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
