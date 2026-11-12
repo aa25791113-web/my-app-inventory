@@ -430,7 +430,7 @@ class _HomePageState extends State<HomePage> {
       QuickSearchPage(key:ValueKey('q'+refreshId.toString())),
       CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
-      AssistantPage(key:ValueKey('assistant'+refreshId.toString()),changed:refresh),
+      AssistantPage(key:ValueKey('assistant'+refreshId.toString()),changed:refresh,go:(v)=>setState(()=>tab=v)),
     ];
     const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','مساعد البرنامج'];
     const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.support_agent];
@@ -592,80 +592,202 @@ class _SmartToolsPageState extends State<SmartToolsPage>{
 }
 
 class AssistantPage extends StatefulWidget {
-  const AssistantPage({super.key,required this.changed});
+  const AssistantPage({super.key,required this.changed,required this.go});
   final VoidCallback changed;
+  final ValueChanged<int> go;
   @override State<AssistantPage> createState()=>_AssistantPageState();
 }
 class _AssistantPageState extends State<AssistantPage> {
   final input=TextEditingController();
   List<Map<String,Object?>> results=[];
   bool busy=false;
-  String reply='أهلاً بك. أقدر أبحث لك بالاسم والكود والأسماء البديلة، وأضيف منتجًا بمواصفاته بعد تأكيدك.';
+  String reply='أنا مساعد MY APP. اسألني عن أي صفحة أو اطلب تنفيذ مهمة داخل البرنامج.';
   @override void dispose(){input.dispose();super.dispose();}
-  String clean(String value)=>value.replaceFirst(RegExp(r'^(يا مساعد|مساعد|ابحثلي عن|ابحث عن|ابحث|دور على|دورلي على|دور|هات|فين|عايز|عاوز|من فضلك)\s*'),'').replaceFirst(RegExp(r'^(اسم مشابه|اسم شبيه|منتج مشابه|شبيه بـ|مشابه لـ|منتج اسمه|الصنف اسمه|منتج)\s*(?:لـ|ل)?'),'').trim();
-  Future<void> openProduct(Map<String,Object?> e) async {
+  String clean(String value)=>value
+    .replaceFirst(RegExp(r'^(يا مساعد|مساعد|ابحثلي عن|ابحث عن|ابحث|دور على|دورلي على|دور|هات|فين|عايز|عاوز|من فضلك)\s*'),'')
+    .replaceFirst(RegExp(r'^(اسم مشابه|اسم شبيه|منتج مشابه|شبيه بـ|مشابه لـ|منتج اسمه|الصنف اسمه|منتج)\s*(?:لـ|ل)?'),'').trim();
+  String textField(String command,String key) {
+    final stop=r'(?:كمية|شراء|بيع|سعر|مبلغ|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|إلى|الى|سبب)';
+    final pattern=RegExp(RegExp.escape(key)+r'\s*[:=]?\s*(.*?)(?=\s+'+stop+r'\s*|$)',caseSensitive:false);
+    return pattern.firstMatch(command)?.group(1)?.trim()??'';
+  }
+  String numberField(String command,String key) {
+    final pattern=RegExp(RegExp.escape(key)+r'\s*[:=]?\s*([0-9]+(?:[.,][0-9]+)?)',caseSensitive:false);
+    return pattern.firstMatch(command)?.group(1)?.replaceAll(',','.')??'';
+  }
+  Future<bool> confirm(String title,String message) async => await ask(context,title,message)==true;
+  Future<void> showProduct(Map<String,Object?> e) async {
+    if(!mounted)return;
     await showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
-      title:Text(e['name'].toString()),
-      content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
-        Text('الكود: ${e['sku']}'),Text('الكمية: ${e['qty']} ${e['unit']}'),
-        Text('سعر الشراء: ${money(e['buy'])}'),Text('سعر البيع: ${money(e['sell'])}'),
-        Text('التصنيف: ${e['category']}'),Text('الماركة: ${e['brand']}'),
-        Text('رقم القطعة: ${e['part_no']}'),Text('الأسماء البديلة: ${e['alt_names']}'),
-        Text('المواصفات: ${e['specs']}'),
-      ]),
+      title:Text((e['name']??'').toString()),
+      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text('الكود: '+(e['sku']??'').toString()),Text('الكمية: '+(e['qty']??0).toString()+' '+(e['unit']??'').toString()),
+        Text('سعر الشراء: '+money(e['buy'])),Text('سعر البيع: '+money(e['sell'])),
+        Text('التصنيف: '+(e['category']??'').toString()),Text('الماركة: '+(e['brand']??'').toString()),
+        Text('رقم القطعة: '+(e['part_no']??'').toString()),Text('الأسماء البديلة: '+(e['alt_names']??'').toString()),
+        Text('المواصفات: '+(e['specs']??'').toString()),
+      ])),
       actions:[
         TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق')),
-        FilledButton(onPressed:()async{Navigator.pop(ctx);final saved=await showDialog<bool>(context:context,builder:(_)=>ProductDialog(item:e));if(saved==true)widget.changed();},child:const Text('تعديل المنتج'))
+        FilledButton(onPressed:()async{Navigator.pop(ctx);final saved=await showDialog<bool>(context:context,builder:(_)=>ProductDialog(item:e));if(saved==true)widget.changed();},child:const Text('تعديل المنتج')),
       ]
     )));
+  }
+  String? helpAnswer(String q) {
+    final v=q.toLowerCase();
+    if(RegExp(r'(مساعدة|بتعمل ايه|تقدر تعمل|اوامر|أوامر|شرح البرنامج|اشرح البرنامج)').hasMatch(v))return 'أقدر أشرح صفحات البرنامج، أفتح لك الصفحة المطلوبة، أبحث عن المنتجات، أضيف منتجًا أو مهمة أو مصروفًا، أسجل بيعًا أو شراءً، أعدّل كمية أو سعرًا، وأؤرشف منتجًا. قبل أي إضافة أو حركة مالية أو تعديل مؤثر أعرض عليك التفاصيل وأطلب موافقتك. اكتب: أمثلة للأوامر.';
+    if(v.contains('أمثلة')||v.contains('امثلة'))return 'جرّب: افتح التقارير • اشرح المخازن • ابحث عن فلتر تويوتا • ضيف مهمة مراجعة المخزون • ضيف مصروف نقل مبلغ 150 تصنيف تشغيل • سجل بيع فلتر زيت كمية 2 سعر 80 • عدل كمية فلتر الزيت إلى 10 • غير سعر بيع فلتر الزيت إلى 95.';
+    if(v.contains('المنتج')||v.contains('الأصناف')||v.contains('الاصناف'))return 'صفحة المنتجات هي سجل الأصناف. تقدر تحفظ الاسم والتصنيف والكود والكمية وحد التنبيه وسعر الشراء والبيع والجملة والشركة والماركة وأرقام القطع والموقع والوحدة والمنشأ والأسماء البديلة والمواصفات والموديلات المتوافقة والأبعاد والوزن والمورد والصورة. الكود يتولد تلقائيًا لو تركته فارغًا.';
+    if(v.contains('البيع')||v.contains('مبيعات'))return 'صفحة المبيعات تسجل خروج الكمية من المخزون. اختر المنتج والكمية وسعر الوحدة والعميل والملاحظات. البرنامج يمنع بيع كمية أكبر من المتاح، ويسجل الحركة في التقارير.';
+    if(v.contains('الشراء')||v.contains('مشتريات'))return 'صفحة المشتريات تسجل دخول الكمية للمخزون. اختر المنتج والكمية وسعر الوحدة والمورد. الكمية تزيد وتُسجل الحركة في سجل المشتريات.';
+    if(v.contains('المورد'))return 'صفحة الموردين تحفظ بيانات الموردين وتربط المورد بالمنتجات وبحركات الشراء. بيانات الطرف لا تعني وجود دفتر حسابات تفصيلي كامل.';
+    if(v.contains('العميل'))return 'صفحة العملاء تحفظ بيانات العملاء وتتيح ربط العميل بحركات البيع.';
+    if(v.contains('المخزن')||v.contains('المخازن'))return 'صفحة المخازن تحفظ أسماء المخازن وبياناتها. تنبيه: الإصدار الحالي لا يفصل رصيد كل منتج لكل مخزن؛ كمية المنتج ما زالت كمية إجمالية.';
+    if(v.contains('المصروف'))return 'صفحة المصروفات تحفظ البيان والتصنيف والمبلغ والملاحظات، وتدخل المصروفات في ملخص صافي الربح والتدفق النقدي.';
+    if(v.contains('التقرير')||v.contains('الأرباح')||v.contains('الربح'))return 'التقارير تعرض قيمة المخزون بسعر الشراء والبيع وإجمالي المبيعات والمشتريات والمصروفات والربح التقديري. الأرقام ملخصة وليست نظام محاسبة ضريبية أو دفتر أستاذ متكامل.';
+    if(v.contains('النسخ')||v.contains('الاحتياطي')||v.contains('استعادة'))return 'من الإعدادات يمكنك إنشاء نسخة احتياطية JSON واستعادة البيانات. الاستعادة تستبدل البيانات الحالية؛ خذ نسخة احتياطية حديثة قبلها. كما يمكن استيراد وتصدير CSV للأصناف.';
+    if(v.contains('qr')||v.contains('باركود')||v.contains('الكود'))return 'يمكن إنشاء وطباعة ملصق للمنتج يحتوي اسمه وكوده وQR. قارئ الكاميرا يقرأ QR والباركود على الأجهزة المدعومة. لو الكاميرا لم تعمل، راجع إذن الكاميرا واستخدم البحث بالكود.';
+    if(v.contains('الانترنت')||v.contains('إنترنت')||v.contains('اوفلاين')||v.contains('دون اتصال'))return 'قاعدة البيانات والبحث والعمليات الأساسية محلية على الجهاز، لذلك لا تحتاج إنترنت بعد التثبيت. لا يوجد تزامن تلقائي بين جهازين؛ استخدم النسخ الاحتياطي لنقل البيانات.';
+    if(v.contains('الطباعة'))return 'يمكن طباعة تقارير المخزون وحركات البيع والشراء والتقارير المالية وقوائم العملاء والموردين والمخازن والمصروفات وملصق المنتج، حسب دعم الجهاز والطابعة.';
+    if(v.contains('الإعدادات')||v.contains('الاعدادات'))return 'الإعدادات تسمح بتغيير اسم النشاط وشعاره والعملة والخلفية والوضع الليلي ومظهر الألوان، مع خيارات النسخ الاحتياطي والاستعادة.';
+    if(v.contains('خارج')||v.contains('معلومة عامة')||v.contains('سؤال عام'))return 'أقدر أساعدك بمعلومات عامة ثابتة ومختصرة موجودة ضمن معرفتي المدمجة، لكن هذا الإصدار يعمل دون إنترنت ولا يملك بحثًا مباشرًا في الأخبار أو الأسعار أو المواقع الحديثة. اسألني سؤالًا محددًا.';
+    return null;
+  }
+  int? pageFor(String q) {
+    final v=q.replaceFirst(RegExp(r'^(افتح|روح|انتقل إلى|اذهب إلى|اعرض)\s*'),'').trim();
+    if(v.contains('الرئيسية')||v.contains('الداشبورد'))return 0;
+    if(v.contains('المنتجات')||v.contains('الأصناف'))return 1;
+    if(v.contains('المبيعات')||v=='بيع')return 2;
+    if(v.contains('المشتريات')||v=='شراء')return 3;
+    if(v.contains('الموردين')||v.contains('الموردون'))return 4;
+    if(v.contains('العملاء'))return 5;
+    if(v.contains('المخازن'))return 6;
+    if(v.contains('المصروفات'))return 7;
+    if(v.contains('التقارير'))return 8;
+    if(v.contains('الإعدادات')||v.contains('الاعدادات'))return 9;
+    if(v.contains('بحث الأسعار')||v.contains('بحث الاسعار'))return 10;
+    if(v.contains('التصنيفات'))return 11;
+    if(v.contains('الأدوات')||v.contains('الادوات'))return 12;
+    if(v.contains('المساعد'))return 13;
+    return null;
   }
   Future<void> runCommand() async {
     final command=input.text.trim();if(command.isEmpty)return;
     setState(()=>busy=true);
     try {
+      final page=pageFor(command);
+      if(page!=null&&RegExp(r'^(افتح|روح|انتقل|اذهب|اعرض)').hasMatch(command)){
+        widget.go(page);setState(()=>reply='فتحت لك الصفحة المطلوبة.');return;
+      }
+      final answer=helpAnswer(command);
+      if(answer!=null&&!RegExp(r'^(ضيف|اضف|أضف|سجل|عدّل|عدل|غير|غيّر|أرشف|ارشف)').hasMatch(command)){
+        setState(()=>reply=answer);return;
+      }
+      if(RegExp(r'^(ضيف|اضف|أضف)\s+(مهمة|تذكير)').hasMatch(command)){
+        final title=command.replaceFirst(RegExp(r'^(ضيف|اضف|أضف)\s+(مهمة|تذكير)\s*'),'').trim();
+        if(title.isEmpty){setState(()=>reply='اكتب عنوان المهمة بعد كلمة «ضيف مهمة».');return;}
+        if(await confirm('تأكيد إضافة مهمة','سأضيف المهمة: '+title+'؟')){
+          await StoreDb.instance.saveTask(title);widget.changed();setState(()=>reply='تمت إضافة المهمة إلى الأدوات الذكية.');
+        } else setState(()=>reply='لم أضف المهمة.');
+        return;
+      }
+      if(RegExp(r'^(ضيف|اضف|أضف)\s+مصروف').hasMatch(command)){
+        final title=textField(command,'مصروف');
+        final amount=double.tryParse(numberField(command,'مبلغ'))??0;
+        final category=textField(command,'تصنيف');
+        if(title.isEmpty||amount<=0){setState(()=>reply='اكتب المصروف بهذا الشكل: ضيف مصروف نقل مبلغ 150 تصنيف تشغيل');return;}
+        if(await confirm('تأكيد المصروف','البيان: '+title+'\nالمبلغ: '+money(amount)+'\nالتصنيف: '+category+'\nهل أسجله؟')){
+          await StoreDb.instance.addExpense(title,category,amount,'أضيف بواسطة مساعد البرنامج');widget.changed();setState(()=>reply='تم تسجيل المصروف.');
+        } else setState(()=>reply='لم أسجل أي مصروف.');
+        return;
+      }
+      if(RegExp(r'^(سجل|اعمل|نفذ)\s+(بيع|شراء)').hasMatch(command)){
+        final sale=command.contains('بيع');
+        final query=command.replaceFirst(RegExp(r'^(سجل|اعمل|نفذ)\s+(بيع|شراء)\s*'),'').split(RegExp(r'\s+(كمية|سعر)\s*')).first.trim();
+        final found=await StoreDb.instance.products(query);
+        if(found.isEmpty){setState(()=>reply='لم أجد المنتج المطلوب. اكتب اسمه أو جزءًا منه.');return;}
+        final product=found.first;final qty=int.tryParse(numberField(command,'كمية'))??0;
+        final price=double.tryParse(numberField(command,'سعر'))??((sale?product['sell']:product['buy']) as num).toDouble();
+        if(qty<=0){setState(()=>reply='حدد الكمية. مثال: سجل بيع فلتر زيت كمية 2 سعر 80');return;}
+        final title=sale?'تأكيد تسجيل بيع':'تأكيد تسجيل شراء';
+        if(await confirm(title,(sale?'المنتج: ':'المنتج: ')+(product['name']??'').toString()+'\nالكمية: '+qty.toString()+'\nسعر الوحدة: '+money(price)+'\nالإجمالي: '+money(qty*price)+'\nهل أنفّذ الحركة؟')){
+          await StoreDb.instance.addMovement(sale?'sale':'purchase',product,qty,price,'تم التسجيل بواسطة مساعد البرنامج');widget.changed();setState(()=>reply=sale?'تم تسجيل البيع وتحديث المخزون.':'تم تسجيل الشراء وتحديث المخزون.');
+        } else setState(()=>reply='لم أسجل الحركة.');
+        return;
+      }
+      if(RegExp(r'^(عدّل|عدل)\s+كمية').hasMatch(command)){
+        final query=command.replaceFirst(RegExp(r'^(عدّل|عدل)\s+كمية\s*'),'').split(RegExp(r'\s+(إلى|الى)\s*')).first.trim();
+        final qty=int.tryParse(numberField(command,'إلى')==''?numberField(command,'الى'):numberField(command,'إلى'));
+        final found=await StoreDb.instance.products(query);
+        if(found.isEmpty||qty==null){setState(()=>reply='مثال: عدل كمية فلتر الزيت إلى 10');return;}
+        final p=found.first;
+        if(await confirm('تأكيد تعديل المخزون','المنتج: '+p['name'].toString()+'\nالكمية الحالية: '+p['qty'].toString()+'\nالكمية الجديدة: '+qty.toString())){
+          await StoreDb.instance.adjustStock(p,qty,'تسوية بواسطة مساعد البرنامج');widget.changed();setState(()=>reply='تم تعديل الكمية وتسجيل سبب التسوية في سجل المخزون.');
+        } else setState(()=>reply='لم أغير الكمية.');
+        return;
+      }
+      if(RegExp(r'^(غير|غيّر|عدل|عدّل)\s+سعر').hasMatch(command)){
+        final sale=command.contains('بيع');final buy=command.contains('شراء');
+        final key=sale?'سعر بيع':'سعر شراء';
+        final query=command.replaceFirst(RegExp(r'^(غير|غيّر|عدل|عدّل)\s+سعر\s+(بيع|شراء)\s*'),'').split(RegExp(r'\s+(إلى|الى)\s*')).first.trim();
+        final raw=numberField(command,'إلى').isNotEmpty?numberField(command,'إلى'):numberField(command,'الى');
+        final price=double.tryParse(raw);final found=await StoreDb.instance.products(query);
+        if((!sale&&!buy)||price==null||found.isEmpty){setState(()=>reply='مثال: غير سعر بيع فلتر الزيت إلى 95');return;}
+        final p=found.first;final data=Map<String,Object?>.from(p);data[sale?'sell':'buy']=price;
+        if(await confirm('تأكيد تعديل السعر','المنتج: '+p['name'].toString()+'\n'+key+': '+money(price)+'\nهل تحفظ السعر؟')){
+          await StoreDb.instance.saveProduct(data,p['id'] as int);await StoreDb.instance.log('تعديل سعر من المساعد',p['name'].toString());widget.changed();setState(()=>reply='تم تحديث السعر وتسجيل التعديل.');
+        } else setState(()=>reply='لم أغير السعر.');
+        return;
+      }
+      if(RegExp(r'^(أرشف|ارشف)\s+').hasMatch(command)){
+        final query=command.replaceFirst(RegExp(r'^(أرشف|ارشف)\s*'),'').trim();
+        final found=await StoreDb.instance.products(query);
+        if(found.isEmpty){setState(()=>reply='لم أجد المنتج لأرشفه.');return;}
+        final p=found.first;
+        if(await confirm('تأكيد أرشفة المنتج','سيتم إخفاء '+p['name'].toString()+' من القائمة النشطة مع الاحتفاظ بسجلاته. متابعة؟')){
+          await StoreDb.instance.setArchived(p['id'] as int,true);widget.changed();setState(()=>reply='تمت أرشفة المنتج مع الاحتفاظ بسجلاته.');
+        } else setState(()=>reply='لم أؤرشف المنتج.');
+        return;
+      }
       final addIntent=RegExp(r'^(ضيف|اضف|أضف|سجل|إضافة)\s+(منتج|صنف)').hasMatch(command);
       if(addIntent){
-        String numberField(String key)=>RegExp('$key\\s*[:=]?\\s*([0-9]+(?:\\.[0-9]+)?)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
-        String textField(String key) {
-          final escaped=RegExp.escape(key);
-          final stop=r'(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)';
-          final pattern=RegExp(escaped+r'\s*[:=]?\s*(.*?)(?=\s+'+stop+r'\s*|$)',caseSensitive:false);
-          return pattern.firstMatch(command)?.group(1)?.trim()??'';
-        }
-        final name=RegExp(r'اسم\s*[:=]?\s*(.*?)(?=\s+(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)\s*|$)').firstMatch(command)?.group(1)?.trim()??'';
-        final qty=int.tryParse(numberField('كمية'))??0;
-        final buy=double.tryParse(numberField('شراء'))??0;
-        final sell=double.tryParse(numberField('بيع'))??0;
-        final category=textField('تصنيف'),brand=textField('ماركة'),manufacturer=textField('شركة');
-        final partNo=textField('رقم القطعة'),altPartNo=textField('البديل'),location=textField('مكان التخزين');
-        final unit=textField('وحدة'),country=textField('بلد المنشأ'),altNames=textField('أسماء بديلة');
-        final specs=textField('مواصفات'),compatibility=textField('متوافق مع'),dimensions=textField('الأبعاد'),weight=textField('وزن');
-        if(name.isEmpty){setState(()=>reply='اكتب اسم المنتج. مثال: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60 ماركة تويوتا رقم القطعة ABC123');return;}
-        final ok=await ask(context,'مراجعة المنتج قبل الإضافة','الاسم: $name\nالكمية: $qty\nالشراء: $buy\nالبيع: $sell\nالتصنيف: $category\nالماركة: $brand\nالشركة: $manufacturer\nرقم القطعة: $partNo\nالبديل: $altPartNo\nالموقع: $location\nالمواصفات: $specs\nهل تريد إضافة المنتج بهذه البيانات؟');
-        if(ok==true){
-          await StoreDb.instance.saveProduct({'name':name,'category':category,'qty':qty,'min_qty':0,'buy':buy,'sell':sell,'manufacturer':manufacturer,'part_no':partNo,'alt_part_no':altPartNo,'location':location,'description':'أضيف بواسطة مساعد البرنامج','wholesale':0.0,'brand':brand,'unit':unit.isEmpty?'قطعة':unit,'country':country,'alt_names':altNames,'specs':specs,'image_path':'','sku':'','supplier_id':null,'compatibility':compatibility,'dimensions':dimensions,'weight':weight},null);
-          await StoreDb.instance.log('إضافة منتج بالمساعد',name);
-          widget.changed();if(mounted)setState(()=>reply='تمت إضافة $name. يمكنك فتح المنتج لاستكمال الصورة والمورد وأي تفاصيل إضافية.');
-        } else if(mounted)setState(()=>reply='لم أضف أي بيانات.');
-        if(mounted)setState(()=>results=[]);
-      } else {
-        final query=clean(command);
-        final found=await StoreDb.instance.products(query);
-        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت ${found.length} نتيجة في قاعدة بيانات جهازك.';});
+        final name=textField(command,'اسم');
+        final qty=int.tryParse(numberField(command,'كمية'))??0;
+        final buy=double.tryParse(numberField(command,'شراء'))??0;
+        final sell=double.tryParse(numberField(command,'بيع'))??0;
+        final category=textField(command,'تصنيف'),brand=textField(command,'ماركة'),manufacturer=textField(command,'شركة');
+        final partNo=textField(command,'رقم القطعة'),altPartNo=textField(command,'البديل'),location=textField(command,'مكان التخزين');
+        final unit=textField(command,'وحدة'),country=textField(command,'بلد المنشأ'),altNames=textField(command,'أسماء بديلة');
+        final specs=textField(command,'مواصفات'),compatibility=textField(command,'متوافق مع'),dimensions=textField(command,'الأبعاد'),weight=textField(command,'وزن');
+        if(name.isEmpty){setState(()=>reply='مثال: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60 ماركة تويوتا');return;}
+        final data={'name':name,'category':category,'qty':qty,'min_qty':0,'buy':buy,'sell':sell,'manufacturer':manufacturer,'part_no':partNo,'alt_part_no':altPartNo,'location':location,'description':'أضيف بواسطة مساعد البرنامج','wholesale':0.0,'brand':brand,'unit':unit.isEmpty?'قطعة':unit,'country':country,'alt_names':altNames,'specs':specs,'image_path':'','sku':'','supplier_id':null,'compatibility':compatibility,'dimensions':dimensions,'weight':weight};
+        if(await confirm('مراجعة المنتج قبل الإضافة','الاسم: '+name+'\nالكمية: '+qty.toString()+'\nالشراء: '+money(buy)+'\nالبيع: '+money(sell)+'\nالتصنيف: '+category+'\nالماركة: '+brand+'\nرقم القطعة: '+partNo+'\nالمواصفات: '+specs+'\nهل تضيفه؟')){
+          await StoreDb.instance.saveProduct(data,null);await StoreDb.instance.log('إضافة منتج بالمساعد',name);widget.changed();setState(()=>reply='تمت إضافة '+name+'.');
+        } else setState(()=>reply='لم أضف المنتج.');
+        return;
       }
-    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: ${e.toString().replaceFirst('Exception: ','')}');}
+      if(command.contains('ملخص')||command.contains('إحصائيات')||command.contains('احصائيات')){
+        final d=await StoreDb.instance.summary();
+        setState(()=>reply='ملخص البرنامج:\nعدد المنتجات: '+d['count'].toString()+'\nإجمالي الوحدات: '+d['qty'].toString()+'\nنواقص المخزون: '+d['low'].toString()+'\nالمبيعات: '+money(d['sales'])+'\nالمشتريات: '+money(d['buys'])+'\nالمصروفات: '+money(d['expense_total'])+'\nالربح التقديري: '+money(d['profit']));
+        return;
+      }
+      final query=clean(command);
+      final found=await StoreDb.instance.products(query);
+      if(found.isNotEmpty){setState(()=>results=found);setState(()=>reply='وجدت '+found.length.toString()+' نتيجة في بيانات جهازك. اضغط على المنتج لعرض تفاصيله أو تعديله.');}
+      else setState(()=>reply='لم أفهم الطلب أو لم أجد المنتج. اكتب «مساعدة» لعرض ما أستطيع فعله، أو «أمثلة للأوامر».');
+    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: '+e.toString().replaceFirst('Exception: ',''));}
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Row(children:[const CircleAvatar(child:Icon(Icons.support_agent)),const SizedBox(width:10),const Expanded(child:Text('مساعد MY APP',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)))]),
-      const SizedBox(height:8),const Text('مساعد محلي يعمل دون إنترنت. يبحث في الاسم والكود والماركة والأسماء البديلة والمواصفات، ويضيف المنتج بعد مراجعة البيانات.'),
+      const SizedBox(height:8),const Text('مساعد محلي دون إنترنت: يشرح صفحات البرنامج، يفتحها، يبحث عن المنتجات وينفذ أوامر المخزون والمبيعات والمشتريات والمصروفات والمهام بعد موافقتك.'),
       const SizedBox(height:12),Text(reply),
     ]))),
-    TextField(controller:input,minLines:2,maxLines:5,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'ابحث عن اسم مشابه لفلتر تويوتا\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60 ماركة تويوتا رقم القطعة ABC123',border:OutlineInputBorder())),
+    TextField(controller:input,minLines:2,maxLines:5,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب سؤالك أو أمرك',hintText:'مثال: اشرح التقارير\nأو: افتح المنتجات\nأو: سجل بيع فلتر زيت كمية 2 سعر 80',border:OutlineInputBorder())),
     const SizedBox(height:10),FilledButton.icon(onPressed:busy?null:runCommand,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send),label:const Text('تنفيذ الطلب')),
     const SizedBox(height:14),if(results.isNotEmpty)const Text('نتائج البحث',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    ...results.map((e)=>Card(child:ListTile(onTap:()=>openProduct(e),leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: ${e['sku']} • البدائل: ${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
+    ...results.map((e)=>Card(child:ListTile(onTap:()=>showProduct(e),leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: '+e['sku'].toString()+' • البدائل: '+e['alt_names'].toString()),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
   ]);
 }
 
