@@ -69,6 +69,49 @@ class StoreDb {
         if(oldVersion<7){await _upgradeProductColumns(db);await _createSmartTables(db);}
       });
   }
+
+  Future<void> _upgradeProductColumns(DatabaseExecutor db) async {
+    final cols=await db.rawQuery('PRAGMA table_info(products)');
+    final names=cols.map((e)=>e['name']).toSet();
+    final definitions=<String,String>{
+      'wholesale':'REAL NOT NULL DEFAULT 0','brand':'TEXT NOT NULL DEFAULT ""',
+      'unit':'TEXT NOT NULL DEFAULT "قطعة"','country':'TEXT NOT NULL DEFAULT ""',
+      'alt_names':'TEXT NOT NULL DEFAULT ""','specs':'TEXT NOT NULL DEFAULT ""',
+      'image_path':'TEXT NOT NULL DEFAULT ""','supplier_id':'INTEGER'
+    };
+    for(final e in definitions.entries){if(!names.contains(e.key))await db.execute('ALTER TABLE products ADD COLUMN '+e.key+' '+e.value);}
+  }
+  Future<void> _createSmartTables(DatabaseExecutor db) async {
+    await db.execute('CREATE TABLE IF NOT EXISTS categories(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,parent_id INTEGER,color INTEGER NOT NULL DEFAULT 0,description TEXT NOT NULL DEFAULT "")');
+    await db.execute('CREATE TABLE IF NOT EXISTS favorites(product_id INTEGER PRIMARY KEY,created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS recent_searches(id INTEGER PRIMARY KEY AUTOINCREMENT,query TEXT NOT NULL,created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS activity_log(id INTEGER PRIMARY KEY AUTOINCREMENT,action TEXT NOT NULL,details TEXT NOT NULL,created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS tasks(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,done INTEGER NOT NULL DEFAULT 0,created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS product_notes(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER,title TEXT NOT NULL,body TEXT NOT NULL,created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS product_images(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,path TEXT NOT NULL,is_primary INTEGER NOT NULL DEFAULT 0)');
+    await _upgradeProductColumns(db);
+  }
+  Future<void> log(String action,String details) async {
+    await database!.insert('activity_log',{'action':action,'details':details,'created_at':DateTime.now().toIso8601String()});
+  }
+  Future<List<Map<String,Object?>>> categories([String query=''])=>database!.query('categories',where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%'+query.trim()+'%'],orderBy:'name');
+  Future<void> saveCategory(Map<String,Object?> data,int? id) async {if(id==null){await database!.insert('categories',data);}else{await database!.update('categories',data,where:'id=?',whereArgs:[id]);}}
+  Future<void> toggleFavorite(int id,bool value) async {
+    if(value){await database!.insert('favorites',{'product_id':id,'created_at':DateTime.now().toIso8601String()},conflictAlgorithm:ConflictAlgorithm.replace);}
+    else{await database!.delete('favorites',where:'product_id=?',whereArgs:[id]);}
+  }
+  Future<bool> isFavorite(int id) async => (await database!.query('favorites',where:'product_id=?',whereArgs:[id],limit:1)).isNotEmpty;
+  Future<List<Map<String,Object?>>> favoriteProducts() async => database!.rawQuery('SELECT p.* FROM products p INNER JOIN favorites f ON f.product_id=p.id ORDER BY f.created_at DESC');
+  Future<void> saveSearch(String query) async {
+    if(query.trim().isEmpty)return;
+    await database!.insert('recent_searches',{'query':query.trim(),'created_at':DateTime.now().toIso8601String()});
+    await database!.rawDelete('DELETE FROM recent_searches WHERE id NOT IN (SELECT id FROM recent_searches ORDER BY id DESC LIMIT 100)');
+  }
+  Future<List<Map<String,Object?>>> recentSearches()=>database!.query('recent_searches',orderBy:'id DESC',limit:100);
+  Future<List<Map<String,Object?>>> activity()=>database!.query('activity_log',orderBy:'id DESC',limit:300);
+  Future<void> saveTask(String title) async {if(title.trim().isNotEmpty)await database!.insert('tasks',{'title':title.trim(),'done':0,'created_at':DateTime.now().toIso8601String()});}
+  Future<List<Map<String,Object?>>> tasks()=>database!.query('tasks',orderBy:'done, id DESC');
+  Future<void> toggleTask(int id,bool done) async {await database!.update('tasks',{'done':done?1:0},where:'id=?',whereArgs:[id]);}
   Future<void> _createProductHistory(DatabaseExecutor db) async {
     await db.execute('CREATE TABLE IF NOT EXISTS price_history(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,old_buy REAL NOT NULL,new_buy REAL NOT NULL,old_sell REAL NOT NULL,new_sell REAL NOT NULL,reason TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
   }
