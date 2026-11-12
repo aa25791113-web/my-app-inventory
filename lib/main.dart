@@ -587,12 +587,12 @@ class _AssistantPageState extends State<AssistantPage> {
       final addIntent=RegExp(r'^(ضيف|اضف|أضف|سجل|إضافة)\\s+(منتج|صنف)').hasMatch(command);
       if(addIntent){
         String field(String key)=>RegExp('$key\\s*[:=]?\\s*([^،,]+)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
-        var name=field('اسم');if(name.isEmpty){name=command.replaceFirst(RegExp(r'^(ضيف|اضف|أضف|سجل|إضافة)\\s+(منتج|صنف)\\s*'),'').split(RegExp(r'\\s+(كمية|شراء|بيع|سعر)\\s*')).first.trim();}
+        var name=field('اسم');if(name.isEmpty){name=command.replaceFirst(RegExp(r'^(ضيف|اضف|أضف|سجل|إضافة)\\s+(منتج|صنف)\\s*'),'').split(RegExp(r'\s+(كمية|شراء|بيع|سعر)\\s*')).first.trim();}
         final qty=int.tryParse(field('كمية'))??0;
         final buy=double.tryParse(field('شراء'))??double.tryParse(field('سعر الشراء'))??0;
         final sell=double.tryParse(field('بيع'))??double.tryParse(field('سعر البيع'))??0;
         if(name.isEmpty){setState(()=>reply='اكتب اسم المنتج. مثال: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60');return;}
-        final ok=await ask(context,'تأكيد إضافة المنتج','الاسم: $name\\nالكمية: $qty\\nسعر الشراء: $buy\\nسعر البيع: $sell\\nسيتم إنشاء كود تلقائي. هل أنفّذ؟');
+        final ok=await ask(context,'تأكيد إضافة المنتج','الاسم: $name\nالكمية: $qty\nسعر الشراء: $buy\nسعر البيع: $sell\nسيتم إنشاء كود تلقائي. هل أنفّذ؟');
         if(ok==true){
           await StoreDb.instance.saveProduct({'name':name,'category':'','qty':qty,'min_qty':0,'buy':buy,'sell':sell,'manufacturer':'','part_no':'','alt_part_no':'','location':'','description':'أضيف بواسطة مساعد البرنامج','wholesale':0.0,'brand':'','unit':'قطعة','country':'','alt_names':'','specs':'','image_path':'','sku':'','supplier_id':null,'compatibility':'','dimensions':'','weight':''},null);
           await StoreDb.instance.log('إضافة منتج بالمساعد',name);
@@ -602,7 +602,7 @@ class _AssistantPageState extends State<AssistantPage> {
       } else {
         final query=clean(command.replaceFirst(RegExp(r'^(ابحث|دور|هات|فين)\\s*'),''));
         final found=await StoreDb.instance.products(query);
-        if(mounted)setState(()=>{results=found,reply:found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت ${found.length} نتيجة. اضغط على المنتج لعرض بياناته.'});
+        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت ${found.length} نتيجة. اضغط على المنتج لعرض بياناته.';});
       }
     } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: ${e.toString().replaceFirst('Exception: ','')}');}
     finally{if(mounted)setState(()=>busy=false);}
@@ -613,7 +613,7 @@ class _AssistantPageState extends State<AssistantPage> {
       const SizedBox(height:8),const Text('مساعد محلي يعمل دون إنترنت وينفّذ أوامر البحث والإضافة بعد مراجعتك.'),
       const SizedBox(height:12),Text(reply),
     ]))),
-    TextField(controller:input,minLines:2,maxLines:4,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'مثال: ابحث عن فلتر تويوتا\\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60',border:OutlineInputBorder())),
+    TextField(controller:input,minLines:2,maxLines:4,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'مثال: ابحث عن فلتر تويوتا\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60',border:OutlineInputBorder())),
     const SizedBox(height:10),FilledButton.icon(onPressed:busy?null:runCommand,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send),label:const Text('تنفيذ الطلب')),
     const SizedBox(height:14),if(results.isNotEmpty)const Text('نتائج البحث',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
     ...results.map((e)=>Card(child:ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: ${e['sku']} • البدائل: ${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
