@@ -650,12 +650,19 @@ class _DashboardState extends State<Dashboard> {
     const SizedBox(height:10),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
     const SizedBox(height:3),Text(label,maxLines:2,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:11,color:Theme.of(context).colorScheme.onSurfaceVariant))]))));
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
-    Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Text('أهلاً بك في ${widget.appName}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
-      const Text('تابع مخزونك وحركة تجارتك من مكان واحد.'),
-      const SizedBox(height:12),Wrap(spacing:8,children:[
-        FilledButton.icon(onPressed:()=>widget.go(1),icon:const Icon(Icons.add_box),label:const Text('المنتجات')),
-        FilledButton.tonalIcon(onPressed:()=>widget.go(2),icon:const Icon(Icons.point_of_sale),label:const Text('تسجيل بيع'))])]))),
+    Container(width:double.infinity,padding:const EdgeInsets.all(20),decoration:BoxDecoration(
+      gradient:LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.primary.withOpacity(.78)]),
+      borderRadius:BorderRadius.circular(22),boxShadow:[BoxShadow(color:Theme.of(context).colorScheme.primary.withOpacity(.16),blurRadius:18,offset:const Offset(0,8))]
+    ),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      const Row(children:[Icon(Icons.storefront_outlined,color:Colors.white,size:27),SizedBox(width:9),Text('لوحة التحكم',style:TextStyle(color:Colors.white70,fontWeight:FontWeight.w600))]),
+      const SizedBox(height:12),Text('أهلاً بك في ${widget.appName}',style:const TextStyle(fontSize:22,fontWeight:FontWeight.w900,color:Colors.white)),
+      const SizedBox(height:5),const Text('كل حركة مخزونك ومبيعاتك في مكان واحد.',style:TextStyle(color:Colors.white70)),
+      const SizedBox(height:16),Wrap(spacing:8,runSpacing:8,children:[
+        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white,foregroundColor:Theme.of(context).colorScheme.primary),onPressed:()=>widget.go(1),icon:const Icon(Icons.add_box),label:const Text('إضافة / المنتجات')),
+        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(2),icon:const Icon(Icons.point_of_sale),label:const Text('تسجيل بيع')),
+        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(13),icon:const Icon(Icons.support_agent),label:const Text('المساعد'))
+      ])
+    ]),);
     Row(children:[stat('عدد المنتجات',(data['count']??0).toString(),Icons.inventory_2),stat('إجمالي الوحدات',(data['qty']??0).toString(),Icons.numbers)]),
     Row(children:[stat('نواقص المخزون',(data['low']??0).toString(),Icons.warning_amber),stat('المنتجات النافدة',(data['out']??0).toString(),Icons.remove_shopping_cart)]),
     Row(children:[stat('قيمة المخزون شراء',money(data['stock']),Icons.account_balance_wallet),stat('قيمة المخزون بيع',money(data['stock_sell']),Icons.price_check)]),
