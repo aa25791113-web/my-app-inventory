@@ -403,7 +403,7 @@ class _MovementPageState extends State<MovementPage> {
             ...rows.map((e)=>'${e['product_name']} | الكمية: ${e['qty']} | سعر الوحدة: ${money(e['unit_price'])} | الإجمالي: ${money(e['total'])} | الطرف: ${e['party_name']} | التاريخ: ${e['created_at']} | ملاحظات: ${e['note']}')
           ]),icon:const Icon(Icons.print_outlined)),
           FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:Text(sale?'بيع':'شراء'))
-        ])))),
+        ]))),
       Expanded(child:rows.isEmpty?Center(child:Text(sale?'لا توجد مبيعات مسجلة':'لا توجد مشتريات مسجلة'))
         :ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];final dt=DateTime.tryParse(e['created_at'] as String? ?? '');
           return Card(child:ListTile(leading:CircleAvatar(child:Icon(sale?Icons.south_west:Icons.north_east)),
@@ -589,7 +589,7 @@ class SettingsPage extends StatelessWidget {
 
 Future<void> printTextReport(BuildContext context,String title,List<String> lines) async {
   try {
-    const int w=1240,h=1754,pad=64;
+    const double w=1240,h=1754,pad=64;
     final images=<Uint8List>[];
     ui.PictureRecorder? recorder;
     ui.Canvas? canvas;
@@ -601,13 +601,13 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       final heading=TextPainter(text:TextSpan(text:title,style:const TextStyle(fontSize:42,fontWeight:FontWeight.bold,color:Color(0xFF111111))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
       heading.layout(maxWidth:w-2*pad);
       heading.paint(canvas!,Offset(pad,pad));
-      final date=TextPainter(text:TextSpan(text:'تاريخ الطباعة: \${DateTime.now().toLocal().toString().substring(0,16)}',style:const TextStyle(fontSize:22,color:Color(0xFF555555))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
+      final date=TextPainter(text:TextSpan(text:'تاريخ الطباعة: ${DateTime.now().toLocal().toString().substring(0,16)}',style:const TextStyle(fontSize:22,color:Color(0xFF555555))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
       date.layout(maxWidth:w-2*pad);date.paint(canvas!,Offset(pad,pad+heading.height+18));
       y=pad+heading.height+date.height+65;
     }
     Future<void> finishPage() async {
       final picture=recorder!.endRecording();
-      final image=await picture.toImage(w,h);
+      final image=await picture.toImage(w.toInt(),h.toInt());
       final bytes=await image.toByteData(format:ui.ImageByteFormat.png);
       if(bytes!=null) images.add(bytes.buffer.asUint8List());
       image.dispose();
