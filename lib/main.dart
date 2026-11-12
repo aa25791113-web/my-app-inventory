@@ -1,8 +1,12 @@
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
+import 'dart:ui' as ui;
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:pdf/pdf.dart' as pdf;
+import 'package:pdf/widgets.dart' as pw;
+import 'package:printing/printing.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -325,7 +329,12 @@ class _ProductsPageState extends State<ProductsPage> {
   @override Widget build(BuildContext context)=>Column(children:[
     Padding(padding:const EdgeInsets.all(12),child:Row(children:[
       Expanded(child:TextField(controller:search,onChanged:(_)=>load(),decoration:const InputDecoration(hintText:'بحث بالاسم أو التصنيف',prefixIcon:Icon(Icons.search)))),
-      const SizedBox(width:8),IconButton.filled(onPressed:()=>edit(),icon:const Icon(Icons.add))])),
+      const SizedBox(width:4),
+      IconButton(tooltip:'طباعة الجرد',onPressed:()=>printTextReport(context,'تقرير جرد المنتجات',[
+        'عدد المنتجات: ${rows.length}',
+        ...rows.map((e)=>'${e['name']} | التصنيف: ${e['category']} | الكمية: ${e['qty']} | حد التنبيه: ${e['min_qty']} | شراء: ${money(e['buy'])} | بيع: ${money(e['sell'])}')
+      ]),icon:const Icon(Icons.print_outlined)),
+      IconButton.filled(onPressed:()=>edit(),icon:const Icon(Icons.add))])),
     Expanded(child:rows.isEmpty?const Center(child:Text('لا توجد منتجات. اضغط + لإضافة منتج.'))
       :ListView.builder(padding:const EdgeInsets.only(bottom:20),itemCount:rows.length,itemBuilder:(c,i){
         final e=rows[i];final low=(e['qty'] as int)<=(e['min_qty'] as int);
@@ -388,7 +397,13 @@ class _MovementPageState extends State<MovementPage> {
     return Column(children:[
       Card(child:ListTile(leading:Icon(sale?Icons.point_of_sale:Icons.shopping_cart),title:Text(sale?'إجمالي المبيعات':'إجمالي المشتريات'),
         subtitle:Text(money(total),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
-        trailing:FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:Text(sale?'بيع':'شراء')))),
+        trailing:Row(mainAxisSize:MainAxisSize.min,children:[
+          IconButton(tooltip:'طباعة سجل الحركات',onPressed:()=>printTextReport(context,sale?'تقرير المبيعات':'تقرير المشتريات',[
+            'عدد الحركات: ${rows.length}',
+            ...rows.map((e)=>'${e['product_name']} | الكمية: ${e['qty']} | سعر الوحدة: ${money(e['unit_price'])} | الإجمالي: ${money(e['total'])} | الطرف: ${e['party_name']} | التاريخ: ${e['created_at']} | ملاحظات: ${e['note']}')
+          ]),icon:const Icon(Icons.print_outlined)),
+          FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:Text(sale?'بيع':'شراء'))
+        ])))),
       Expanded(child:rows.isEmpty?Center(child:Text(sale?'لا توجد مبيعات مسجلة':'لا توجد مشتريات مسجلة'))
         :ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];final dt=DateTime.tryParse(e['created_at'] as String? ?? '');
           return Card(child:ListTile(leading:CircleAvatar(child:Icon(sale?Icons.south_west:Icons.north_east)),
@@ -505,6 +520,22 @@ class _ReportsPageState extends State<ReportsPage> {
   Widget tile(String title,String value,IconData icon)=>Card(child:ListTile(leading:Icon(icon),title:Text(title),trailing:Text(value,style:const TextStyle(fontWeight:FontWeight.bold))));
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
     const Text('التقارير والجرد',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
+    FilledButton.icon(onPressed:()=>printTextReport(context,'التقرير المالي وتقرير المخزون',[
+      'تاريخ التقرير: ${DateTime.now().toLocal()}',
+      'عدد المنتجات: ${data['count']??0}',
+      'إجمالي الوحدات: ${data['qty']??0}',
+      'قيمة المخزون: ${money(data['stock'])}',
+      'إجمالي المبيعات: ${money(data['sales'])}',
+      'إجمالي المشتريات: ${money(data['buys'])}',
+      'الربح التقديري قبل المصروفات: ${money(data['profit'])}',
+      'المصروفات: ${money(data['expense_total'])}',
+      'الربح بعد المصروفات: ${money(((data['profit'] as num?)??0)-((data['expense_total'] as num?)??0))}',
+      'صافي الحركة النقدية: ${money(((data['sales'] as num?)??0)-((data['buys'] as num?)??0))}',
+      'تفاصيل المخزون:',
+      ...products.map((e)=>'${e['name']} | الكمية: ${e['qty']} | تكلفة الوحدة: ${money(e['buy'])} | إجمالي التكلفة: ${money((e['qty'] as int)*(e['buy'] as num).toDouble())}'),
+      'عدد الحركات المسجلة: ${ops.length}',
+      ...ops.map((e)=>'${e['kind']=='sale'?'بيع':'شراء'} | ${e['product_name']} | ${e['qty']} × ${money(e['unit_price'])} | الإجمالي: ${money(e['total'])} | ${e['created_at']}')
+    ]),icon:const Icon(Icons.print),label:const Text('طباعة التقرير الكامل')),
     tile('قيمة المخزون بسعر الشراء',money(data['stock']),Icons.warehouse_outlined),
     tile('إجمالي المبيعات',money(data['sales']),Icons.trending_up),
     tile('إجمالي المشتريات',money(data['buys']),Icons.shopping_bag_outlined),
@@ -553,6 +584,51 @@ class SettingsPage extends StatelessWidget {
     const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 1.0'),
       subtitle:Text('المنتجات والمخزون والمبيعات والمشتريات والتقارير والنسخ الاحتياطي.'))),
   ]);
+}
+
+
+Future<void> printTextReport(BuildContext context,String title,List<String> lines) async {
+  try {
+    const int w=1240,h=1754,pad=64;
+    final images=<Uint8List>[];
+    ui.PictureRecorder? recorder;
+    ui.Canvas? canvas;
+    double y=0;
+    void beginPage() {
+      recorder=ui.PictureRecorder();
+      canvas=ui.Canvas(recorder!);
+      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
+      final heading=TextPainter(text:TextSpan(text:title,style:const TextStyle(fontSize:42,fontWeight:FontWeight.bold,color:Color(0xFF111111))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
+      heading.layout(maxWidth:w-2*pad);
+      heading.paint(canvas!,Offset(pad,pad));
+      final date=TextPainter(text:TextSpan(text:'تاريخ الطباعة: \${DateTime.now().toLocal().toString().substring(0,16)}',style:const TextStyle(fontSize:22,color:Color(0xFF555555))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
+      date.layout(maxWidth:w-2*pad);date.paint(canvas!,Offset(pad,pad+heading.height+18));
+      y=pad+heading.height+date.height+65;
+    }
+    Future<void> finishPage() async {
+      final picture=recorder!.endRecording();
+      final image=await picture.toImage(w,h);
+      final bytes=await image.toByteData(format:ui.ImageByteFormat.png);
+      if(bytes!=null) images.add(bytes.buffer.asUint8List());
+      image.dispose();
+    }
+    beginPage();
+    for(final line in lines) {
+      final painter=TextPainter(text:TextSpan(text:line,style:const TextStyle(fontSize:27,color:Color(0xFF161616))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
+      painter.layout(maxWidth:w-2*pad);
+      if(y+painter.height+24>h-pad) { await finishPage(); beginPage(); }
+      painter.paint(canvas!,Offset(pad,y));
+      y+=painter.height+24;
+    }
+    await finishPage();
+    final document=pw.Document();
+    for(final bytes in images) {
+      document.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:pw.EdgeInsets.zero,build:(_)=>pw.Image(pw.MemoryImage(bytes),fit:pw.BoxFit.fill)));
+    }
+    await Printing.layoutPdf(name:'MYAPP_Report.pdf',onLayout:(_)=>document.save());
+  } catch(e) {
+    if(context.mounted) toast(context,'تعذر تجهيز الطباعة: $e');
+  }
 }
 
 String money(Object? value)=>((value as num?)??0).toStringAsFixed(2)+' ج.م';
