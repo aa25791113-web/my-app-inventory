@@ -46,6 +46,30 @@ jobs:
           python tool/generate_icon.py
           sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
       - run: flutter pub get
+      - name: Align Android plugin compile SDK versions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          roots = [Path("android"), Path.home() / ".pub-cache" / "hosted" / "pub.dev"]
+          changed = []
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("build.gradle*"):
+                  try:
+                      source = path.read_text()
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  updated = source
+                  updated = re.sub(r'compileSdk\\s*=\\s*(?:flutter\\.compileSdkVersion|\\d+)', 'compileSdk = 36', updated)
+                  updated = re.sub(r'compileSdkVersion\\s+(?:flutter\\.compileSdkVersion|\\d+)', 'compileSdkVersion 36', updated)
+                  if updated != source:
+                      path.write_text(updated)
+                      changed.append(str(path))
+          print("Aligned compile SDK in", len(changed), "Gradle files")
+          PY
       - run: dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos
       - run: flutter build apk --release
