@@ -1,9 +1,12 @@
 name: Build Windows App
+concurrency:
+  group: windows-release-${{ github.ref }}
+  cancel-in-progress: true
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["lib/**", "pubspec.yaml", ".github/workflows/windows-build.yml"]
+    paths: ["lib/**", "pubspec.yaml", "tool/**", "assets/**", "installer.iss", ".github/workflows/windows-build.yml"]
 jobs:
   build:
     runs-on: windows-latest
