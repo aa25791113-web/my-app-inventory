@@ -98,6 +98,10 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> categories([String query=''])=>database!.query('categories',where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%'+query.trim()+'%'],orderBy:'name');
   Future<void> saveCategory(Map<String,Object?> data,int? id) async {if(id==null){await database!.insert('categories',data);}else{await database!.update('categories',data,where:'id=?',whereArgs:[id]);}}
+  Future<void> bulkAdjustSellingPrices(double value,bool percent,String reason) async {
+    if(value<0)throw Exception('القيمة غير صحيحة.');
+    await database!.transaction((txn) async {final rows=await txn.query('products',where:'archived=0');for(final row in rows){final old=(row['sell'] as num).toDouble();final next=percent?old*(1+value/100):old+value;if(next<0)continue;if(next!=old){await txn.insert('price_history',{'product_id':row['id'],'product_name':row['name'],'old_buy':row['buy'],'new_buy':row['buy'],'old_sell':old,'new_sell':next,'reason':reason,'created_at':DateTime.now().toIso8601String()});await txn.update('products',{'sell':next},where:'id=?',whereArgs:[row['id']]);}}await txn.insert('activity_log',{'action':'تعديل أسعار جماعي','details':(percent?'نسبة ':'قيمة ')+value.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});});
+  }
   Future<void> toggleFavorite(int id,bool value) async {
     if(value){await database!.insert('favorites',{'product_id':id,'created_at':DateTime.now().toIso8601String()},conflictAlgorithm:ConflictAlgorithm.replace);}
     else{await database!.delete('favorites',where:'product_id=?',whereArgs:[id]);}
@@ -159,7 +163,7 @@ class StoreDb {
       await txn.insert('activity_log',{'action':'تسوية مخزون','details':product['name'].toString()+' | '+old.toString()+' ← '+newQty.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});
     });
   }
-  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'archived=0 AND (name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ? OR brand LIKE ? OR manufacturer LIKE ? OR alt_names LIKE ?)',whereArgs:query.trim().isEmpty?null:List.filled(8,'%'+query.trim()+'%'),orderBy:'name');
+  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'archived=0 AND (name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ? OR brand LIKE ? OR manufacturer LIKE ? OR alt_names LIKE ? OR location LIKE ? OR specs LIKE ?)',whereArgs:query.trim().isEmpty?null:List.filled(10,'%'+query.trim()+'%'),orderBy:'name');
   Future<List<Map<String,Object?>>> priceHistory([int? id])=>database!.query('price_history',where:id==null?null:'product_id=?',whereArgs:id==null?null:[id],orderBy:'id DESC');
   Future<List<Map<String,Object?>>> similarProducts(Uint8List queryBytes) async {
     final source=img.decodeImage(queryBytes);if(source==null)return [];
