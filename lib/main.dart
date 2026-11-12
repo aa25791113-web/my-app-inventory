@@ -165,9 +165,9 @@ class StoreDb {
 
   Future<void> saveProduct(Map<String,Object?> data, int? id) async {
     final v=Map<String,Object?>.from(data);
-    if(id==null){v['sku']=await generateUniqueSku();await database!.insert('products',v);return;}
+    if(id==null){final requested=(v['sku']??'').toString().trim().toUpperCase();if(requested.isEmpty){v['sku']=await generateUniqueSku();}else{final exists=await database!.query('products',columns:['id'],where:'sku=?',whereArgs:[requested],limit:1);if(exists.isNotEmpty)throw Exception('هذا الكود مستخدم بالفعل.');v['sku']=requested;}await database!.insert('products',v);return;}
     final rows=await database!.query('products',where:'id=?',whereArgs:[id],limit:1);if(rows.isEmpty)throw Exception('المنتج غير موجود.');
-    final old=rows.first;final ob=(old['buy'] as num).toDouble(),os=(old['sell'] as num).toDouble(),nb=(v['buy'] as num).toDouble(),ns=(v['sell'] as num).toDouble();
+    final old=rows.first;final requested=(v['sku']??'').toString().trim().toUpperCase();if(requested.isEmpty||requested==old['sku']){v['sku']=old['sku'];}else{final exists=await database!.query('products',columns:['id'],where:'sku=? AND id<>?',whereArgs:[requested,id],limit:1);if(exists.isNotEmpty)throw Exception('هذا الكود مستخدم بالفعل.');v['sku']=requested;}final ob=(old['buy'] as num).toDouble(),os=(old['sell'] as num).toDouble(),nb=(v['buy'] as num).toDouble(),ns=(v['sell'] as num).toDouble();
     if(ob!=nb||os!=ns)await database!.insert('price_history',{'product_id':id,'product_name':old['name'],'old_buy':ob,'new_buy':nb,'old_sell':os,'new_sell':ns,'reason':'تعديل السعر','created_at':DateTime.now().toIso8601String()});
     await database!.update('products',v,where:'id=?',whereArgs:[id]);
   }
@@ -539,7 +539,7 @@ class _ProductDialogState extends State<ProductDialog> {
   @override void initState(){super.initState();final e=widget.item;c=[
     TextEditingController(text:e?['name'] as String? ?? ''),TextEditingController(text:e?['category'] as String? ?? ''),
     TextEditingController(text:(e?['qty']??0).toString()),TextEditingController(text:(e?['min_qty']??0).toString()),
-    TextEditingController(text:(e?['buy']??0).toString()),TextEditingController(text:(e?['sell']??0).toString()),TextEditingController(text:e?['manufacturer'] as String? ?? ''),TextEditingController(text:e?['part_no'] as String? ?? ''),TextEditingController(text:e?['alt_part_no'] as String? ?? ''),TextEditingController(text:e?['location'] as String? ?? ''),TextEditingController(text:e?['description'] as String? ?? ''),TextEditingController(text:(e?['wholesale']??0).toString()),TextEditingController(text:e?['brand'] as String? ?? ''),TextEditingController(text:e?['unit'] as String? ?? 'قطعة'),TextEditingController(text:e?['country'] as String? ?? ''),TextEditingController(text:e?['alt_names'] as String? ?? ''),TextEditingController(text:e?['specs'] as String? ?? '')];imagePath=e?['image_path'] as String?;}
+    TextEditingController(text:(e?['buy']??0).toString()),TextEditingController(text:(e?['sell']??0).toString()),TextEditingController(text:e?['manufacturer'] as String? ?? ''),TextEditingController(text:e?['part_no'] as String? ?? ''),TextEditingController(text:e?['alt_part_no'] as String? ?? ''),TextEditingController(text:e?['location'] as String? ?? ''),TextEditingController(text:e?['description'] as String? ?? ''),TextEditingController(text:(e?['wholesale']??0).toString()),TextEditingController(text:e?['brand'] as String? ?? ''),TextEditingController(text:e?['unit'] as String? ?? 'قطعة'),TextEditingController(text:e?['country'] as String? ?? ''),TextEditingController(text:e?['alt_names'] as String? ?? ''),TextEditingController(text:e?['specs'] as String? ?? ''),TextEditingController(text:e?['sku'] as String? ?? '')];imagePath=e?['image_path'] as String?;}
   @override void dispose(){for(final x in c){x.dispose();}super.dispose();}
   String? req(String? v)=>v==null||v.trim().isEmpty?'مطلوب':null;
   String? integer(String? v)=>int.tryParse(v??'')==null||int.parse(v!)<0?'أدخل عدداً صحيحاً':null;
@@ -551,7 +551,7 @@ class _ProductDialogState extends State<ProductDialog> {
   }
   Future<void> save() async {
     if(!form.currentState!.validate())return;
-    await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim(),'wholesale':double.parse(c[11].text),'brand':c[12].text.trim(),'unit':c[13].text.trim(),'country':c[14].text.trim(),'alt_names':c[15].text.trim(),'specs':c[16].text.trim(),'image_path':imagePath??''},widget.item?['id'] as int?);
+    await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim(),'wholesale':double.parse(c[11].text),'brand':c[12].text.trim(),'unit':c[13].text.trim(),'country':c[14].text.trim(),'alt_names':c[15].text.trim(),'specs':c[16].text.trim(),'image_path':imagePath??'','sku':c[17].text.trim()},widget.item?['id'] as int?);
     await StoreDb.instance.log(widget.item==null?'إضافة منتج':'تعديل منتج',c[0].text.trim());
     if(mounted)Navigator.pop(context,true);
   }
@@ -559,7 +559,7 @@ class _ProductDialogState extends State<ProductDialog> {
     title:Text(widget.item==null?'إضافة منتج':'تعديل منتج'),
     content:SizedBox(width:420,child:Form(key:form,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
       if(widget.item!=null) Padding(padding:const EdgeInsets.only(bottom:8),child:Text('كود الصنف: ${widget.item!['sku']??''}',style:const TextStyle(fontWeight:FontWeight.bold,letterSpacing:1.5))),
-      field(0,'اسم المنتج *',validator:req),field(1,'التصنيف'),
+      field(0,'اسم المنتج *',validator:req),field(1,'التصنيف'),field(17,'كود المنتج (اتركه فارغاً للتوليد التلقائي)'),
       Row(children:[Expanded(child:field(2,'الكمية',validator:integer,type:TextInputType.number)),const SizedBox(width:8),Expanded(child:field(3,'حد التنبيه',validator:integer,type:TextInputType.number))]),
       Row(children:[Expanded(child:field(4,'سعر الشراء',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true))),const SizedBox(width:8),Expanded(child:field(5,'سعر البيع',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true)))]),
       const Divider(),field(6,'الشركة المصنعة'),field(7,'رقم القطعة الأصلي'),field(8,'رقم القطعة البديل'),field(9,'مكان التخزين / الرف'),field(10,'الوصف المختصر'),
