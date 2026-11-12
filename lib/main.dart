@@ -437,21 +437,24 @@ class ProductDialog extends StatefulWidget {
   @override State<ProductDialog> createState()=>_ProductDialogState();
 }
 class _ProductDialogState extends State<ProductDialog> {
-  final form=GlobalKey<FormState>(); late final List<TextEditingController> c;
+  final form=GlobalKey<FormState>(); late final List<TextEditingController> c; String? imagePath;
   @override void initState(){super.initState();final e=widget.item;c=[
     TextEditingController(text:e?['name'] as String? ?? ''),TextEditingController(text:e?['category'] as String? ?? ''),
     TextEditingController(text:(e?['qty']??0).toString()),TextEditingController(text:(e?['min_qty']??0).toString()),
-    TextEditingController(text:(e?['buy']??0).toString()),TextEditingController(text:(e?['sell']??0).toString()),TextEditingController(text:e?['manufacturer'] as String? ?? ''),TextEditingController(text:e?['part_no'] as String? ?? ''),TextEditingController(text:e?['alt_part_no'] as String? ?? ''),TextEditingController(text:e?['location'] as String? ?? ''),TextEditingController(text:e?['description'] as String? ?? '')];}
+    TextEditingController(text:(e?['buy']??0).toString()),TextEditingController(text:(e?['sell']??0).toString()),TextEditingController(text:e?['manufacturer'] as String? ?? ''),TextEditingController(text:e?['part_no'] as String? ?? ''),TextEditingController(text:e?['alt_part_no'] as String? ?? ''),TextEditingController(text:e?['location'] as String? ?? ''),TextEditingController(text:e?['description'] as String? ?? ''),TextEditingController(text:(e?['wholesale']??0).toString()),TextEditingController(text:e?['brand'] as String? ?? ''),TextEditingController(text:e?['unit'] as String? ?? 'قطعة'),TextEditingController(text:e?['country'] as String? ?? ''),TextEditingController(text:e?['alt_names'] as String? ?? ''),TextEditingController(text:e?['specs'] as String? ?? '')];imagePath=e?['image_path'] as String?;}
   @override void dispose(){for(final x in c){x.dispose();}super.dispose();}
   String? req(String? v)=>v==null||v.trim().isEmpty?'مطلوب':null;
   String? integer(String? v)=>int.tryParse(v??'')==null||int.parse(v!)<0?'أدخل عدداً صحيحاً':null;
   String? decimal(String? v)=>double.tryParse(v??'')==null||double.parse(v!)<0?'أدخل سعراً صحيحاً':null;
   Widget field(int i,String label,{String? Function(String?)? validator,TextInputType? type})=>Padding(padding:const EdgeInsets.only(bottom:9),
     child:TextFormField(controller:c[i],validator:validator,keyboardType:type,decoration:InputDecoration(labelText:label)));
+  Future<void> pickImage(ImageSource source) async {
+    try{final picked=await ImagePicker().pickImage(source:source,imageQuality:82,maxWidth:1600);if(picked==null)return;final dir=await getApplicationSupportDirectory();final ext=p.extension(picked.path);final target=File(p.join(dir.path,'product_'+DateTime.now().microsecondsSinceEpoch.toString()+(ext.isEmpty?'.jpg':ext)));await File(picked.path).copy(target.path);if(mounted)setState(()=>imagePath=target.path);}catch(e){if(mounted)toast(context,'تعذر اختيار الصورة: $e');}
+  }
   Future<void> save() async {
     if(!form.currentState!.validate())return;
-    await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),
-      'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim()},widget.item?['id'] as int?);
+    await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim(),'wholesale':double.parse(c[11].text),'brand':c[12].text.trim(),'unit':c[13].text.trim(),'country':c[14].text.trim(),'alt_names':c[15].text.trim(),'specs':c[16].text.trim(),'image_path':imagePath??''},widget.item?['id'] as int?);
+    await StoreDb.instance.log(widget.item==null?'إضافة منتج':'تعديل منتج',c[0].text.trim());
     if(mounted)Navigator.pop(context,true);
   }
   @override Widget build(BuildContext context)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
@@ -461,7 +464,11 @@ class _ProductDialogState extends State<ProductDialog> {
       field(0,'اسم المنتج *',validator:req),field(1,'التصنيف'),
       Row(children:[Expanded(child:field(2,'الكمية',validator:integer,type:TextInputType.number)),const SizedBox(width:8),Expanded(child:field(3,'حد التنبيه',validator:integer,type:TextInputType.number))]),
       Row(children:[Expanded(child:field(4,'سعر الشراء',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true))),const SizedBox(width:8),Expanded(child:field(5,'سعر البيع',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true)))]),
-      const Divider(),field(6,'الشركة المصنعة'),field(7,'رقم القطعة الأصلي'),field(8,'رقم القطعة البديل'),field(9,'مكان التخزين / الرف'),field(10,'الوصف والمواصفات'),
+      const Divider(),field(6,'الشركة المصنعة'),field(7,'رقم القطعة الأصلي'),field(8,'رقم القطعة البديل'),field(9,'مكان التخزين / الرف'),field(10,'الوصف المختصر'),
+      Row(children:[Expanded(child:field(11,'سعر الجملة',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true))),const SizedBox(width:8),Expanded(child:field(12,'الماركة'))]),
+      Row(children:[Expanded(child:field(13,'الوحدة')),const SizedBox(width:8),Expanded(child:field(14,'بلد المنشأ'))]),field(15,'أسماء أخرى للقطعة'),field(16,'المواصفات الفنية'),
+      if(imagePath!=null&&File(imagePath!).existsSync())Padding(padding:const EdgeInsets.all(8),child:Image.file(File(imagePath!),height:110,fit:BoxFit.contain)),
+      Wrap(spacing:8,children:[OutlinedButton.icon(onPressed:()=>pickImage(ImageSource.gallery),icon:const Icon(Icons.photo_library_outlined),label:const Text('اختيار صورة')),OutlinedButton.icon(onPressed:()=>pickImage(ImageSource.camera),icon:const Icon(Icons.camera_alt_outlined),label:const Text('التقاط صورة')),if(imagePath!=null)TextButton(onPressed:()=>setState(()=>imagePath=null),child:const Text('إزالة الصورة'))]),
     ])))),
     actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('إلغاء')),FilledButton(onPressed:save,child:const Text('حفظ'))]));
 }
