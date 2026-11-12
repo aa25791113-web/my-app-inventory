@@ -626,7 +626,12 @@ class _AssistantPageState extends State<AssistantPage> {
       final addIntent=RegExp(r'^(ضيف|اضف|أضف|سجل|إضافة)\s+(منتج|صنف)').hasMatch(command);
       if(addIntent){
         String numberField(String key)=>RegExp('$key\\s*[:=]?\\s*([0-9]+(?:\\.[0-9]+)?)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
-        String textField(String key)=>RegExp('$key\\s*[:=]?\\s*(.*?)(?=\\s+(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)\\s*|$)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
+        String textField(String key) {
+          final escaped=RegExp.escape(key);
+          final stop=r'(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)';
+          final pattern=RegExp(escaped+r'\s*[:=]?\s*(.*?)(?=\s+'+stop+r'\s*|$)',caseSensitive:false);
+          return pattern.firstMatch(command)?.group(1)?.trim()??'';
+        }
         final name=RegExp(r'اسم\s*[:=]?\s*(.*?)(?=\s+(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)\s*|$)').firstMatch(command)?.group(1)?.trim()??'';
         final qty=int.tryParse(numberField('كمية'))??0;
         final buy=double.tryParse(numberField('شراء'))??0;
@@ -692,7 +697,7 @@ class _DashboardState extends State<Dashboard> {
         FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(2),icon:const Icon(Icons.point_of_sale),label:const Text('تسجيل بيع')),
         FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(13),icon:const Icon(Icons.support_agent),label:const Text('المساعد'))
       ])
-    ]),);
+    ),
     Row(children:[stat('عدد المنتجات',(data['count']??0).toString(),Icons.inventory_2),stat('إجمالي الوحدات',(data['qty']??0).toString(),Icons.numbers)]),
     Row(children:[stat('نواقص المخزون',(data['low']??0).toString(),Icons.warning_amber),stat('المنتجات النافدة',(data['out']??0).toString(),Icons.remove_shopping_cart)]),
     Row(children:[stat('قيمة المخزون شراء',money(data['stock']),Icons.account_balance_wallet),stat('قيمة المخزون بيع',money(data['stock_sell']),Icons.price_check)]),
@@ -838,7 +843,23 @@ class _MovementPageState extends State<MovementPage> {
         :ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];final dt=DateTime.tryParse(e['created_at'] as String? ?? '');
           return Card(child:ListTile(leading:CircleAvatar(child:Icon(sale?Icons.south_west:Icons.north_east)),
             title:Text(e['product_name'] as String),subtitle:Text(e['qty'].toString()+' × '+money(e['unit_price'])+' • '+(dt?.toLocal().toString().substring(0,16)??'')+'\n'+(e['party_name']??'').toString()+' • '+e['note'].toString()),
-            isThreeLine:true,trailing:PopupMenuButton<String>(onSelected:(v)async{if(v=='delete'&&await ask(context,'حذف الحركة','سيتم حذف الحركة وعكس تأثيرها على الكمية. متابعة؟')==true){try{await StoreDb.instance.deleteMovement(e['id'] as int);await load();widget.changed();}catch(err){if(mounted)toast(context,err.toString().replaceFirst('Exception: ',''));}}},itemBuilder:(_)=>const [PopupMenuItem(value:'delete',child:Text('حذف الحركة'))]))));
+            isThreeLine:true,
+            trailing:PopupMenuButton<String>(
+              onSelected:(v) async {
+                if(v!='delete')return;
+                final confirmed=await ask(context,'حذف الحركة','سيتم حذف الحركة وعكس تأثيرها على الكمية. متابعة؟');
+                if(confirmed!=true||!mounted)return;
+                try {
+                  await StoreDb.instance.deleteMovement(e['id'] as int);
+                  await load();
+                  widget.changed();
+                } catch(err) {
+                  if(mounted)toast(context,err.toString().replaceFirst('Exception: ',''));
+                }
+              },
+              itemBuilder:(_)=>const [PopupMenuItem<String>(value:'delete',child:Text('حذف الحركة'))],
+            ),
+          ));
         })),
     ]);
   }
