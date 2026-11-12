@@ -3,6 +3,7 @@ import 'dart:io';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
+import 'package:mobile_scanner/mobile_scanner.dart';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
@@ -389,6 +390,10 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
     try{final file=await picker.pickImage(source:source,imageQuality:80,maxWidth:1200);if(file==null)return;setState(()=>searchingImage=true);final matches=await StoreDb.instance.similarProducts(await File(file.path).readAsBytes());if(mounted)setState(()=>rows=matches);if(mounted&&matches.isEmpty)toast(context,'لم نعثر على صور منتجات محفوظة للمقارنة.');}
     catch(e){if(mounted)toast(context,'تعذر تنفيذ البحث بالصورة: $e');}finally{if(mounted)setState(()=>searchingImage=false);}
   }
+  Future<void> scanCode() async {
+    if(!Platform.isAndroid&&!Platform.isIOS){toast(context,'مسح الكاميرا متاح على الهاتف فقط.');return;}
+    await showDialog(context:context,builder:(ctx)=>Dialog(child:SizedBox(width:360,height:460,child:Column(children:[const Padding(padding:EdgeInsets.all(12),child:Text('وجّه الكاميرا نحو QR أو الباركود')),Expanded(child:MobileScanner(onDetect:(capture){final value=capture.barcodes.isEmpty?null:capture.barcodes.first.rawValue;if(value==null||value.isEmpty)return;Navigator.pop(ctx);controller.text=value;search(value);})),TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))]))));
+  }
   void details(Map<String,Object?> p) {
     showModalBottomSheet(context:context,isScrollControlled:true,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:Padding(padding:const EdgeInsets.all(18),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       if((p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync())ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.file(File(p['image_path'] as String),height:170,fit:BoxFit.contain)),
@@ -415,6 +420,7 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
       TextField(controller:controller,onChanged:search,onSubmitted:(v)=>StoreDb.instance.saveSearch(v),autofocus:false,decoration:InputDecoration(filled:true,hintText:'اكتب اسم المنتج أو الكود...',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:(){controller.clear();search('');},icon:const Icon(Icons.close)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16)))),
       const SizedBox(height:8),
       Wrap(spacing:8,children:[
+        OutlinedButton.icon(onPressed:scanCode,icon:const Icon(Icons.qr_code_scanner),label:const Text('مسح كود')),
         OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.gallery),icon:const Icon(Icons.image_search),label:const Text('بحث بصورة')),
         OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.camera),icon:const Icon(Icons.camera_alt),label:const Text('تصوير')),
       ]),
