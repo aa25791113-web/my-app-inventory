@@ -623,7 +623,7 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 1.2.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 1.3.0'),
       subtitle:Text('المنتجات والمخزون والمبيعات والمشتريات والتقارير والنسخ الاحتياطي.'))),
   ]);
 }
