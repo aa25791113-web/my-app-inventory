@@ -701,7 +701,8 @@ class _ExpressionParser {
   double term(){var v=factor();while(true){if(take('*'))v*=factor();else if(take('/')){final d=factor();if(d==0)throw const FormatException('مينفعش القسمة على صفر.');v/=d;}else if(take('%')){final d=factor();if(d==0)throw const FormatException('مينفعش باقي القسمة على صفر.');v%=d;}else return v;}}
   double factor(){spaces();if(take('+'))return factor();if(take('-'))return -factor();if(take('(')){final v=expression();if(!take(')'))throw const FormatException('في قوس ناقص.');return v;}final m=RegExp(r'^\d+(?:\.\d+)?|^\.\d+').firstMatch(source.substring(index));if(m==null)throw const FormatException('اكتب أرقام وعلامات حسابية صحيحة.');index+=m.group(0)!.length;return double.parse(m.group(0)!);}
 }
-\nclass SmartToolsPage extends StatefulWidget {const SmartToolsPage({super.key});@override State<SmartToolsPage> createState()=>_SmartToolsPageState();}
+
+class SmartToolsPage extends StatefulWidget {const SmartToolsPage({super.key});@override State<SmartToolsPage> createState()=>_SmartToolsPageState();}
 class _SmartToolsPageState extends State<SmartToolsPage>{
  int section=0;List<Map<String,Object?>> rows=[];final task=TextEditingController();final bulkValue=TextEditingController();final calculator=TextEditingController();bool bulkPercent=true;String calculatorResult='الناتج هيظهر هنا';
  @override void initState(){super.initState();load();}@override void dispose(){task.dispose();bulkValue.dispose();calculator.dispose();super.dispose();}
@@ -773,7 +774,7 @@ class _AssistantPageState extends State<AssistantPage> {
     if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';
     if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';
     if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';
-    if(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;
+    if(RegExp(r'^(احسب|احسبلي|حاسبة)\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;
   }
   String? helpAnswer(String q) {
     final v=q.toLowerCase();
