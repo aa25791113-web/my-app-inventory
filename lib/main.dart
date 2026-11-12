@@ -132,6 +132,14 @@ class StoreDb {
     final bytes=Uint8List.fromList(utf8.encode(const JsonEncoder.withIndent('  ').convert(data)));
     return FilePicker.platform.saveFile(dialogTitle:'حفظ النسخة الاحتياطية',fileName:'MYAPP_Backup.json',type:FileType.custom,allowedExtensions:['json'],bytes:bytes);
   }
+  Future<String?> exportInventoryCsv() async {
+    final rows=await database!.query('products',orderBy:'name');
+    String cell(Object? v)=>'"'+(v??'').toString().replaceAll('"','""')+'"';
+    final lines=<String>['ID,Product,Category,Quantity,Minimum,Purchase Price,Selling Price'];
+    for(final r in rows){lines.add([r['id'],r['name'],r['category'],r['qty'],r['min_qty'],r['buy'],r['sell']].map(cell).join(','));}
+    final bytes=Uint8List.fromList(utf8.encode('\uFEFF'+lines.join('\r\n')));
+    return FilePicker.platform.saveFile(dialogTitle:'تصدير جرد المنتجات CSV',fileName:'MYAPP_Inventory.csv',type:FileType.custom,allowedExtensions:['csv'],bytes:bytes);
+  }
   Future<void> importBackup() async {
     final result=await FilePicker.platform.pickFiles(type:FileType.custom,allowedExtensions:['json'],withData:true);
     if(result==null||result.files.isEmpty||result.files.first.bytes==null)return;
@@ -534,6 +542,7 @@ class SettingsPage extends StatelessWidget {
       subtitle:const Text('حفظ جميع البيانات بصيغة JSON في المكان الذي تختاره'),
       onTap:() async {try{final path=await StoreDb.instance.exportBackup();if(context.mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم تصدير النسخة بنجاح.');}
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
+    Card(child:ListTile(leading:const Icon(Icons.table_view_outlined),title:const Text('تصدير جرد المنتجات CSV'),subtitle:const Text('ملف يمكن فتحه في Excel أو برامج الجداول'),onTap:() async {try{final path=await StoreDb.instance.exportInventoryCsv();if(context.mounted)toast(context,path==null?'تم إلغاء التصدير.':'تم تصدير ملف الجرد.');}catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     Card(child:ListTile(leading:const Icon(Icons.file_open_outlined),title:const Text('استيراد نسخة احتياطية من ملف'),
       subtitle:const Text('استعادة المنتجات والحركات والموردين والعملاء والمخازن والمصروفات'),
       onTap:() async {if(await ask(context,'استيراد البيانات','سيتم استبدال البيانات الحالية بمحتويات الملف. متابعة؟')!=true)return;
