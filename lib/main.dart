@@ -826,7 +826,7 @@ class _DashboardState extends State<Dashboard> {
     Row(children:[stat('التصنيفات',(data['categories']??0).toString(),Icons.category),stat('الشركات المصنعة',(data['manufacturers']??0).toString(),Icons.factory)]),
     Row(children:[stat('إجمالي المبيعات',money(data['sales']),Icons.trending_up),stat('إجمالي المشتريات',money(data['buys']),Icons.shopping_bag)]),
     const SizedBox(height:12),const Text('تنبيهات المخزون',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    if(low.isEmpty) const Card(child:ListTile(leading:Icon(Icons.check_circle,color:Colors.green),title:Text('لا توجد منتجات منخفضة المخزون.'))))
+    if(low.isEmpty) const Card(child:ListTile(leading:Icon(Icons.check_circle,color:Colors.green),title:Text('لا توجد منتجات منخفضة المخزون.')))
     else ...low.map((e)=>Card(child:ListTile(leading:const Icon(Icons.warning_amber,color:Colors.orange),title:Text(e['name'] as String),
       subtitle:Text('المتاح: '+e['qty'].toString()+' — حد التنبيه: '+e['min_qty'].toString())))),
   ]));
