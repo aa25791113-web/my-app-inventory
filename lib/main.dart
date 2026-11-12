@@ -93,6 +93,8 @@ class StoreDb {
         'kind':kind,'product_id':product['id'],'product_name':product['name'],
         'qty':qty,'unit_price':price,'total':qty*price,'note':note,
         'created_at':DateTime.now().toIso8601String(),
+        'cost_price':(product['buy'] as num).toDouble(),
+        'party_id':null,'party_name':'','warehouse_id':1,
       });
     });
   }
@@ -102,6 +104,8 @@ class StoreDb {
     final products = await database!.query('products');
     final sales = await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS total FROM operations WHERE kind='sale'");
     final buys = await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS total FROM operations WHERE kind='purchase'");
+    final expenses = await database!.rawQuery("SELECT COALESCE(SUM(amount),0) AS total FROM expenses");
+    final profit = await database!.rawQuery("SELECT COALESCE(SUM((unit_price-cost_price)*qty),0) AS total FROM operations WHERE kind='sale'");
     return {
       'count':products.length,
       'qty':products.fold<int>(0,(sum,row)=>sum + (row['qty'] as int)),
@@ -109,6 +113,8 @@ class StoreDb {
       'stock':products.fold<double>(0,(sum,row)=>sum + (row['qty'] as int) * (row['buy'] as num).toDouble()),
       'sales':(sales.first['total'] as num).toDouble(),
       'buys':(buys.first['total'] as num).toDouble(),
+      'expense_total':(expenses.first['total'] as num).toDouble(),
+      'profit':(profit.first['total'] as num).toDouble(),
     };
   }
   Future<String> backup() async {
@@ -433,6 +439,9 @@ class _ReportsPageState extends State<ReportsPage> {
     tile('قيمة المخزون بسعر الشراء',money(data['stock']),Icons.warehouse_outlined),
     tile('إجمالي المبيعات',money(data['sales']),Icons.trending_up),
     tile('إجمالي المشتريات',money(data['buys']),Icons.shopping_bag_outlined),
+    tile('الربح التقديري قبل المصروفات',money(data['profit']),Icons.auto_graph),
+    tile('إجمالي المصروفات',money(data['expense_total']),Icons.payments_outlined),
+    tile('الربح بعد المصروفات',money(((data['profit'] as num?)??0)-((data['expense_total'] as num?)??0)),Icons.account_balance),
     tile('صافي الحركة النقدية',money(((data['sales'] as num?)??0)-((data['buys'] as num?)??0)),Icons.account_balance),
     const SizedBox(height:10),const Text('الجرد الحالي',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
     ...products.map((e)=>ListTile(dense:true,title:Text(e['name'] as String),subtitle:Text('الكمية '+e['qty'].toString()+' • تكلفة الوحدة '+money(e['buy'])),
