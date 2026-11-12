@@ -165,7 +165,7 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> products([String query = '']) async {
     final q=query.trim();if(q.isEmpty)return database!.query('products',where:'archived=0',orderBy:'name');
-    final tokens=q.split(RegExp(r'\\s+')).where((v)=>v.isNotEmpty).toList();
+    final tokens=q.split(RegExp(r'\s+')).where((v)=>v.isNotEmpty).toList();
     const fields=['name','category','sku','part_no','alt_part_no','brand','manufacturer','alt_names','location','specs'];
     final clauses=tokens.map((_)=>'('+fields.map((f)=>f+' LIKE ?').join(' OR ')+')').join(' AND ');
     final args=tokens.expand((token)=>fields.map((_)=>'%'+token+'%')).toList();
