@@ -32,7 +32,7 @@ class InventoryDb {
     if (id == null) { await database!.insert('products', data); }
     else { await database!.update('products', data, where: 'id=?', whereArgs: [id]); }
   }
-  Future<void> remove(int id) async => database!.delete('products', where: 'id=?', whereArgs: [id]);
+  Future<void> remove(int id) async { await database!.delete('products', where: 'id=?', whereArgs: [id]); }
 }
 
 class MyApp extends StatefulWidget {
