@@ -197,12 +197,26 @@ class _HomePageState extends State<HomePage> {
     const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات'];
     const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
-      appBar:AppBar(title:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      drawer:Drawer(child:SafeArea(child:Column(children:[
+        Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
+          child:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('MY APP',style:TextStyle(fontSize:25,fontWeight:FontWeight.w900)),Text('نظام إدارة المخزون والمبيعات')])),
+        Expanded(child:ListView.builder(itemCount:labels.length,itemBuilder:(c,i)=>ListTile(selected:tab==i,leading:Icon(icons[i]),title:Text(labels[i]),
+          onTap:(){Navigator.pop(context);setState(()=>tab=i);}))),
+        const Padding(padding:EdgeInsets.all(12),child:Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)))
+      ]))),
+      appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer()),
+        title:const Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text('MY APP',style:TextStyle(fontWeight:FontWeight.w900)),
         Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
       body:IndexedStack(index:tab,children:pages),
-      bottomNavigationBar:NavigationBar(selectedIndex:tab,onDestinationSelected:(v)=>setState(()=>tab=v),
-        destinations:List.generate(labels.length,(i)=>NavigationDestination(icon:Icon(icons[i]),label:labels[i]))),
+      bottomNavigationBar:NavigationBar(selectedIndex:tab<5?tab:4,onDestinationSelected:(v)=>setState(()=>tab=v),
+        destinations:const [
+          NavigationDestination(icon:Icon(Icons.dashboard_outlined),label:'الرئيسية'),
+          NavigationDestination(icon:Icon(Icons.inventory_2_outlined),label:'المنتجات'),
+          NavigationDestination(icon:Icon(Icons.point_of_sale),label:'المبيعات'),
+          NavigationDestination(icon:Icon(Icons.shopping_cart_outlined),label:'المشتريات'),
+          NavigationDestination(icon:Icon(Icons.analytics_outlined),label:'التقارير'),
+        ]),
     ));
   }
 }
@@ -251,6 +265,19 @@ class _ProductsPageState extends State<ProductsPage> {
     final ok=await showDialog<bool>(context:context,builder:(_)=>ProductDialog(item:row));
     if(ok==true){await load();widget.changed();}
   }
+  Future<void> adjust(Map<String,Object?> row) async {
+    final qty=TextEditingController(text:row['qty'].toString());final reason=TextEditingController();
+    final ok=await showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+      title:Text('جرد وتسوية '+row['name'].toString()),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        Text('الكمية المسجلة حالياً: '+row['qty'].toString()),
+        TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الكمية الفعلية بعد الجرد')),
+        TextField(controller:reason,decoration:const InputDecoration(labelText:'سبب التسوية'))
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,int.tryParse(qty.text)!=null&&int.parse(qty.text)>=0),child:const Text('حفظ التسوية'))])));
+    if(ok==true){await StoreDb.instance.adjustStock(row,int.parse(qty.text),reason.text);await load();widget.changed();}
+    qty.dispose();reason.dispose();
+  }
   Future<void> remove(Map<String,Object?> row) async {
     if(await ask(context,'حذف المنتج','هل تريد حذف '+row['name'].toString()+'؟')!=true)return;
     try{await StoreDb.instance.removeProduct(row['id'] as int);await load();widget.changed();}
@@ -265,8 +292,8 @@ class _ProductsPageState extends State<ProductsPage> {
         final e=rows[i];final low=(e['qty'] as int)<=(e['min_qty'] as int);
         return Card(child:ListTile(leading:CircleAvatar(child:Icon(low?Icons.warning_amber:Icons.inventory_2)),
           title:Text(e['name'] as String),subtitle:Text(e['category'].toString()+' • الكمية: '+e['qty'].toString()+' • سعر البيع: '+money(e['sell'])),
-          trailing:PopupMenuButton<String>(onSelected:(v)=>v=='edit'?edit(e):remove(e),
-            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
+          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else{remove(e);}},
+            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
       })),
   ]);
 }
