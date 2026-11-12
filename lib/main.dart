@@ -24,7 +24,7 @@ class StoreDb {
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
-    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 2,
+    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 3,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0)');
         await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
@@ -33,7 +33,41 @@ class StoreDb {
         if (oldVersion < 2) {
           await db.execute('CREATE TABLE IF NOT EXISTS operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
         }
+        if (oldVersion < 3) {
+          final cols = await db.rawQuery('PRAGMA table_info(operations)');
+          final names = cols.map((e)=>e['name']).toSet();
+          if (!names.contains('cost_price')) await db.execute('ALTER TABLE operations ADD COLUMN cost_price REAL NOT NULL DEFAULT 0');
+          if (!names.contains('party_id')) await db.execute('ALTER TABLE operations ADD COLUMN party_id INTEGER');
+          if (!names.contains('party_name')) await db.execute('ALTER TABLE operations ADD COLUMN party_name TEXT NOT NULL DEFAULT ""');
+          if (!names.contains('warehouse_id')) await db.execute('ALTER TABLE operations ADD COLUMN warehouse_id INTEGER NOT NULL DEFAULT 1');
+          await _createExtendedTables(db);
+        }
       });
+  }
+  Future<void> _createExtendedTables(DatabaseExecutor db) async {
+    await db.execute('CREATE TABLE IF NOT EXISTS suppliers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,phone TEXT NOT NULL DEFAULT "",email TEXT NOT NULL DEFAULT "",address TEXT NOT NULL DEFAULT "",notes TEXT NOT NULL DEFAULT "",balance REAL NOT NULL DEFAULT 0)');
+    await db.execute('CREATE TABLE IF NOT EXISTS customers(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,phone TEXT NOT NULL DEFAULT "",email TEXT NOT NULL DEFAULT "",address TEXT NOT NULL DEFAULT "",notes TEXT NOT NULL DEFAULT "",balance REAL NOT NULL DEFAULT 0)');
+    await db.execute('CREATE TABLE IF NOT EXISTS warehouses(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,location TEXT NOT NULL DEFAULT "",notes TEXT NOT NULL DEFAULT "")');
+    await db.execute('CREATE TABLE IF NOT EXISTS expenses(id INTEGER PRIMARY KEY AUTOINCREMENT,title TEXT NOT NULL,category TEXT NOT NULL DEFAULT "عام",amount REAL NOT NULL,notes TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
+    await db.execute('CREATE TABLE IF NOT EXISTS stock_adjustments(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,old_qty INTEGER NOT NULL,new_qty INTEGER NOT NULL,difference INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
+    final wh = await db.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
+    if ((wh.first['c'] as int? ?? 0) == 0) await db.insert('warehouses', {'name':'المخزن الرئيسي','location':'','notes':''});
+  }
+  Future<List<Map<String,Object?>>> parties(String table,[String query='']) => database!.query(table,where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%$query%'],orderBy:'name');
+  Future<void> saveParty(String table,Map<String,Object?> data,int? id) async { if(id==null){await database!.insert(table,data);}else{await database!.update(table,data,where:'id=?',whereArgs:[id]);} }
+  Future<void> deleteParty(String table,int id) async { await database!.delete(table,where:'id=?',whereArgs:[id]); }
+  Future<List<Map<String,Object?>>> expenses() => database!.query('expenses',orderBy:'id DESC');
+  Future<void> addExpense(String title,String category,double amount,String notes) async {
+    if(title.trim().isEmpty||amount<=0) throw Exception('أدخل بيان المصروف ومبلغاً أكبر من صفر.');
+    await database!.insert('expenses',{'title':title.trim(),'category':category.trim(),'amount':amount,'notes':notes.trim(),'created_at':DateTime.now().toIso8601String()});
+  }
+  Future<void> adjustStock(Map<String,Object?> product,int newQty,String reason) async {
+    if(newQty<0) throw Exception('الكمية لا يمكن أن تكون سالبة.');
+    await database!.transaction((txn) async {
+      final old=product['qty'] as int;
+      await txn.update('products',{'qty':newQty},where:'id=?',whereArgs:[product['id']]);
+      await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
+    });
   }
   Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',
     where: query.trim().isEmpty ? null : 'name LIKE ? OR category LIKE ?',
@@ -78,7 +112,7 @@ class StoreDb {
   }
   Future<String> backup() async {
     final dir = await getApplicationDocumentsDirectory();
-    final data = {'format':'MYAPP_BACKUP_1','products':await database!.query('products'),'operations':await database!.query('operations')};
+    final data = {'format':'MYAPP_BACKUP_2','products':await database!.query('products'),'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments')};
     final file = File(p.join(dir.path,'my_app_backup.json'));
     await file.writeAsString(const JsonEncoder.withIndent('  ').convert(data));
     return file.path;
@@ -88,15 +122,22 @@ class StoreDb {
     final file = File(p.join(dir.path,'my_app_backup.json'));
     if (!await file.exists()) throw Exception('لا توجد نسخة احتياطية على الجهاز.');
     final data = jsonDecode(await file.readAsString()) as Map<String,dynamic>;
-    if (data['format'] != 'MYAPP_BACKUP_1') throw Exception('ملف النسخة الاحتياطية غير صالح.');
+    if (data['format'] != 'MYAPP_BACKUP_1' && data['format'] != 'MYAPP_BACKUP_2') throw Exception('ملف النسخة الاحتياطية غير صالح.');
     await database!.transaction((txn) async {
-      await txn.delete('operations'); await txn.delete('products');
+      for(final t in ['stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
       for (final row in data['products'] as List) {
         await txn.insert('products',Map<String,Object?>.from(row as Map));
       }
       for (final row in data['operations'] as List) {
-        await txn.insert('operations',Map<String,Object?>.from(row as Map));
+        final m=Map<String,Object?>.from(row as Map);
+        m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);
+        await txn.insert('operations',m);
       }
+      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments']) {
+        for(final row in (data[table] as List? ?? [])) { await txn.insert(table,Map<String,Object?>.from(row as Map)); }
+      }
+      final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
+      if((wh.first['c'] as int? ?? 0)==0) await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
     });
     return file.path;
   }
