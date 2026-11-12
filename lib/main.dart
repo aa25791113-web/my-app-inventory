@@ -591,46 +591,67 @@ class _AssistantPageState extends State<AssistantPage> {
   final input=TextEditingController();
   List<Map<String,Object?>> results=[];
   bool busy=false;
-  String reply='أهلاً بك. أقدر أبحث لك عن منتج بالاسم أو الكود أو الاسم البديل، وأضيف منتج جديد بأمر واضح.';
+  String reply='أهلاً بك. أقدر أبحث لك بالاسم والكود والأسماء البديلة، وأضيف منتجًا بمواصفاته بعد تأكيدك.';
   @override void dispose(){input.dispose();super.dispose();}
-  String clean(String value)=>value.replaceFirst(RegExp(r'^(يا مساعد|مساعد|ابحث عن|ابحث|دور على|دور|هات|فين|عايز|عاوز|من فضلك)\s*'),'').trim();
+  String clean(String value)=>value.replaceFirst(RegExp(r'^(يا مساعد|مساعد|ابحث عن|ابحث|دور على|دورلي على|دور|هات|فين|عايز|عاوز|من فضلك)\s*'),'').replaceFirst(RegExp(r'^(اسم مشابه|اسم شبيه|منتج مشابه|شبيه بـ|مشابه لـ|منتج اسمه|الصنف اسمه)\s*'),'').trim();
+  Future<void> openProduct(Map<String,Object?> e) async {
+    await showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+      title:Text(e['name'].toString()),
+      content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text('الكود: \${e['sku']}'),Text('الكمية: \${e['qty']} \${e['unit']}'),
+        Text('سعر الشراء: \${money(e['buy'])}'),Text('سعر البيع: \${money(e['sell'])}'),
+        Text('التصنيف: \${e['category']}'),Text('الماركة: \${e['brand']}'),
+        Text('رقم القطعة: \${e['part_no']}'),Text('الأسماء البديلة: \${e['alt_names']}'),
+        Text('المواصفات: \${e['specs']}'),
+      ]),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق')),
+        FilledButton(onPressed:()async{Navigator.pop(ctx);final saved=await showDialog<bool>(context:context,builder:(_)=>ProductDialog(item:e));if(saved==true)widget.changed();},child:const Text('تعديل المنتج'))
+      ]
+    )));
+  }
   Future<void> runCommand() async {
     final command=input.text.trim();if(command.isEmpty)return;
     setState(()=>busy=true);
     try {
       final addIntent=RegExp(r'^(ضيف|اضف|أضف|سجل|إضافة)\s+(منتج|صنف)').hasMatch(command);
       if(addIntent){
-        String field(String key)=>RegExp('$key\\s*[:=]?\\s*([0-9]+(?:\\.[0-9]+)?)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
-        final name=RegExp(r'اسم\s*[:=]?\s*(.*?)(?=\s+(?:كمية|شراء|بيع|سعر)\s*|$)').firstMatch(command)?.group(1)?.trim()??'';
-        final qty=int.tryParse(field('كمية'))??0;
-        final buy=double.tryParse(field('شراء'))??0;
-        final sell=double.tryParse(field('بيع'))??0;
-        if(name.isEmpty){setState(()=>reply='اكتب اسم المنتج. مثال: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60');return;}
-        final ok=await ask(context,'تأكيد إضافة المنتج','الاسم: $name\nالكمية: $qty\nسعر الشراء: $buy\nسعر البيع: $sell\nسيتم إنشاء كود تلقائي. هل أنفّذ؟');
+        String numberField(String key)=>RegExp('$key\\s*[:=]?\\s*([0-9]+(?:\\.[0-9]+)?)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
+        String textField(String key)=>RegExp('$key\\s*[:=]?\\s*(.*?)(?=\\s+(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)\\s*|$)',caseSensitive:false).firstMatch(command)?.group(1)?.trim()??'';
+        final name=RegExp(r'اسم\s*[:=]?\s*(.*?)(?=\s+(?:كمية|شراء|بيع|تصنيف|ماركة|شركة|رقم القطعة|البديل|مكان التخزين|وحدة|بلد المنشأ|أسماء بديلة|مواصفات|متوافق مع|الأبعاد|وزن|سعر)\s*|$)').firstMatch(command)?.group(1)?.trim()??'';
+        final qty=int.tryParse(numberField('كمية'))??0;
+        final buy=double.tryParse(numberField('شراء'))??0;
+        final sell=double.tryParse(numberField('بيع'))??0;
+        final category=textField('تصنيف'),brand=textField('ماركة'),manufacturer=textField('شركة');
+        final partNo=textField('رقم القطعة'),altPartNo=textField('البديل'),location=textField('مكان التخزين');
+        final unit=textField('وحدة'),country=textField('بلد المنشأ'),altNames=textField('أسماء بديلة');
+        final specs=textField('مواصفات'),compatibility=textField('متوافق مع'),dimensions=textField('الأبعاد'),weight=textField('وزن');
+        if(name.isEmpty){setState(()=>reply='اكتب اسم المنتج. مثال: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60 ماركة تويوتا رقم القطعة ABC123');return;}
+        final ok=await ask(context,'مراجعة المنتج قبل الإضافة','الاسم: $name\nالكمية: $qty\nالشراء: $buy\nالبيع: $sell\nالتصنيف: $category\nالماركة: $brand\nالشركة: $manufacturer\nرقم القطعة: $partNo\nالبديل: $altPartNo\nالموقع: $location\nالمواصفات: $specs\nهل تريد إضافة المنتج بهذه البيانات؟');
         if(ok==true){
-          await StoreDb.instance.saveProduct({'name':name,'category':'','qty':qty,'min_qty':0,'buy':buy,'sell':sell,'manufacturer':'','part_no':'','alt_part_no':'','location':'','description':'أضيف بواسطة مساعد البرنامج','wholesale':0.0,'brand':'','unit':'قطعة','country':'','alt_names':'','specs':'','image_path':'','sku':'','supplier_id':null,'compatibility':'','dimensions':'','weight':''},null);
+          await StoreDb.instance.saveProduct({'name':name,'category':category,'qty':qty,'min_qty':0,'buy':buy,'sell':sell,'manufacturer':manufacturer,'part_no':partNo,'alt_part_no':altPartNo,'location':location,'description':'أضيف بواسطة مساعد البرنامج','wholesale':0.0,'brand':brand,'unit':unit.isEmpty?'قطعة':unit,'country':country,'alt_names':altNames,'specs':specs,'image_path':'','sku':'','supplier_id':null,'compatibility':compatibility,'dimensions':dimensions,'weight':weight},null);
           await StoreDb.instance.log('إضافة منتج بالمساعد',name);
-          widget.changed();if(mounted)setState(()=>reply='تمت إضافة $name بنجاح. يمكنك فتح صفحة المنتجات لاستكمال المواصفات والصورة والمورد.');
+          widget.changed();if(mounted)setState(()=>reply='تمت إضافة $name. يمكنك فتح المنتج لاستكمال الصورة والمورد وأي تفاصيل إضافية.');
         } else if(mounted)setState(()=>reply='لم أضف أي بيانات.');
         if(mounted)setState(()=>results=[]);
       } else {
         final query=clean(command);
         final found=await StoreDb.instance.products(query);
-        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت ${found.length} نتيجة. هذه نتائج البحث المحلي.';});
+        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت \${found.length} نتيجة في قاعدة بيانات جهازك.';});
       }
-    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: ${e.toString().replaceFirst('Exception: ','')}');}
+    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: \${e.toString().replaceFirst('Exception: ','')}');}
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Row(children:[const CircleAvatar(child:Icon(Icons.support_agent)),const SizedBox(width:10),const Expanded(child:Text('مساعد MY APP',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)))]),
-      const SizedBox(height:8),const Text('مساعد محلي يعمل دون إنترنت وينفّذ أوامر البحث والإضافة بعد مراجعتك.'),
+      const SizedBox(height:8),const Text('مساعد محلي يعمل دون إنترنت. يبحث في الاسم والكود والماركة والأسماء البديلة والمواصفات، ويضيف المنتج بعد مراجعة البيانات.'),
       const SizedBox(height:12),Text(reply),
     ]))),
-    TextField(controller:input,minLines:2,maxLines:4,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'مثال: ابحث عن فلتر تويوتا\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60',border:OutlineInputBorder())),
+    TextField(controller:input,minLines:2,maxLines:5,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'ابحث عن اسم مشابه لفلتر تويوتا\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60 ماركة تويوتا رقم القطعة ABC123',border:OutlineInputBorder())),
     const SizedBox(height:10),FilledButton.icon(onPressed:busy?null:runCommand,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send),label:const Text('تنفيذ الطلب')),
     const SizedBox(height:14),if(results.isNotEmpty)const Text('نتائج البحث',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    ...results.map((e)=>Card(child:ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: ${e['sku']} • البدائل: ${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
+    ...results.map((e)=>Card(child:ListTile(onTap:()=>openProduct(e),leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: \${e['sku']} • البدائل: \${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
   ]);
 }
 
