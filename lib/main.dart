@@ -150,8 +150,19 @@ class StoreDb {
       await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
     });
   }
-  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ?',whereArgs:query.trim().isEmpty?null:List.filled(5,'%'+query.trim()+'%'),orderBy:'name');
+  Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'archived=0 AND (name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ? OR brand LIKE ? OR manufacturer LIKE ? OR alt_names LIKE ?)',whereArgs:query.trim().isEmpty?null:List.filled(8,'%'+query.trim()+'%'),orderBy:'name');
   Future<List<Map<String,Object?>>> priceHistory([int? id])=>database!.query('price_history',where:id==null?null:'product_id=?',whereArgs:id==null?null:[id],orderBy:'id DESC');
+  Future<List<Map<String,Object?>>> similarProducts(Uint8List queryBytes) async {
+    final source=img.decodeImage(queryBytes);if(source==null)return [];
+    final query=img.grayscale(img.copyResize(source,width:8,height:8));
+    final qValues=<double>[];for(var y=0;y<8;y++){for(var x=0;x<8;x++){qValues.add(query.getPixel(x,y).r.toDouble());}}
+    final avg=qValues.reduce((a,b)=>a+b)/qValues.length;
+    final rows=await database!.query('products',where:'image_path<>"" AND archived=0');
+    final ranked=<Map<String,Object?>>[];
+    for(final row in rows){try{final path=row['image_path'] as String;final file=File(path);if(!await file.exists())continue;final decoded=img.decodeImage(await file.readAsBytes());if(decoded==null)continue;final tiny=img.grayscale(img.copyResize(decoded,width:8,height:8));var distance=0;for(var y=0;y<8;y++){for(var x=0;x<8;x++){final v=tiny.getPixel(x,y).r.toDouble();if((v>=avg)!=(v>=qValues[y*8+x]))distance++;}}ranked.add({...row,'similarity':(64-distance)/64});}catch(_){continue;}}
+    ranked.sort((a,b)=>(b['similarity'] as double).compareTo(a['similarity'] as double));return ranked.take(12).toList();
+  }
+
   Future<void> saveProduct(Map<String,Object?> data, int? id) async {
     final v=Map<String,Object?>.from(data);
     if(id==null){v['sku']=await generateUniqueSku();await database!.insert('products',v);return;}
