@@ -216,8 +216,17 @@ class StoreDb {
   }
   Future<void> removeProduct(int id) async {
     final count = Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM operations WHERE product_id=?',[id])) ?? 0;
-    if (count > 0) throw Exception('لا يمكن حذف منتج مرتبط بحركات سابقة.');
-    await database!.delete('products',where:'id=?',whereArgs:[id]);
+    if (count > 0) throw Exception('لا يمكن حذف منتج مرتبط بحركات سابقة؛ استخدم الأرشفة حتى لا تضيع سجلات الحسابات.');
+    final rows=await database!.query('products',columns:['image_path'],where:'id=?',whereArgs:[id],limit:1);
+    if(rows.isEmpty)return;
+    final imagePath=(rows.first['image_path']??'').toString();
+    await database!.transaction((txn) async {
+      await txn.delete('favorites',where:'product_id=?',whereArgs:[id]);
+      await txn.delete('product_notes',where:'product_id=?',whereArgs:[id]);
+      await txn.delete('product_images',where:'product_id=?',whereArgs:[id]);
+      await txn.delete('products',where:'id=?',whereArgs:[id]);
+    });
+    if(imagePath.isNotEmpty){try{final file=File(imagePath);if(await file.exists())await file.delete();}catch(_){}}
   }
   Future<void> addMovement(String kind, Map<String,Object?> product, int qty, double price, String note, [Map<String,Object?>? party]) async {
     if (qty <= 0 || price < 0) throw Exception('تحقق من الكمية والسعر.');
