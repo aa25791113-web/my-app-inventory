@@ -17,15 +17,30 @@ jobs:
       - name: Remove generated sample test
         shell: pwsh
         run: if (Test-Path test) { Remove-Item test -Recurse -Force }
+      - name: Generate branded icons and Windows metadata
+        shell: pwsh
+        run: |
+          python -m pip install pillow
+          python tool/generate_icon.py
+          if (Test-Path windows/runner/Runner.rc) { (Get-Content windows/runner/Runner.rc) -replace 'my_app_inventory','MY APP' | Set-Content windows/runner/Runner.rc }
       - run: flutter pub get
+      - run: dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos
       - run: flutter build windows --release
-      - name: Package Windows app
+      - name: Package portable Windows app
         shell: pwsh
         run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath my-app-windows.zip
+      - name: Build Windows installer
+        shell: pwsh
+        run: |
+          choco install innosetup --yes --no-progress
+          & 'C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe' installer.iss
+          if ($LASTEXITCODE -ne 0) { throw 'Inno Setup failed' }
       - uses: actions/upload-artifact@v4
         with:
           name: my-app-windows
-          path: my-app-windows.zip
+          path: |
+            my-app-windows.zip
+            Output/MY-APP-Setup.exe
           if-no-files-found: error
           retention-days: 14
