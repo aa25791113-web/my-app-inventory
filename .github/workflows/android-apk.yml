@@ -54,7 +54,10 @@ jobs:
           source = manifest.read_text()
           permission = '<uses-permission android:name="android.permission.CAMERA" />'
           if permission not in source:
-              source = source.replace("<manifest ", "<manifest " + permission + "\n    ", 1)
+              import re
+              source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
+              if count != 1:
+                  raise SystemExit("Could not insert camera permission into manifest")
               manifest.write_text(source)
           print("Verified Android camera permission in manifest")
           PY
