@@ -29,11 +29,11 @@ jobs:
           if target is None:
               raise SystemExit("Android app Gradle file was not generated")
           source = target.read_text()
-          updated, count = re.subn(r'compileSdk\\s*=\\s*flutter\\.compileSdkVersion', 'compileSdk = 36', source, count=1)
+          updated, count = re.subn(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', source, count=1)
           if count == 0:
-              updated, count = re.subn(r'compileSdkVersion\\s+flutter\\.compileSdkVersion', 'compileSdkVersion 36', source, count=1)
+              updated, count = re.subn(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', source, count=1)
           if count == 0:
-              updated, count = re.subn(r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36', source, count=1)
+              updated, count = re.subn(r'compileSdk\s*=\s*\\d+', 'compileSdk = 36', source, count=1)
           if count == 0:
               raise SystemExit(f"Could not locate compileSdk setting in {target}")
           target.write_text(updated)
