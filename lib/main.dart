@@ -641,11 +641,13 @@ class _QuickSearchPageState extends State<QuickSearchPage>{
       TextField(controller:controller,onChanged:search,onSubmitted:(v)=>StoreDb.instance.saveSearch(v),autofocus:false,decoration:InputDecoration(filled:true,hintText:'اكتب اسم المنتج أو الكود...',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:(){controller.clear();search('');},icon:const Icon(Icons.close)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16)))),
       const SizedBox(height:8),
       Wrap(spacing:8,children:[
-        OutlinedButton.icon(onPressed:scanCode,icon:const Icon(Icons.qr_code_scanner),label:const Text('مسح بالكاميرا')),\n        OutlinedButton.icon(onPressed:scanImageCode,icon:const Icon(Icons.document_scanner_outlined),label:const Text('قراءة كود من صورة')),
+        OutlinedButton.icon(onPressed:scanCode,icon:const Icon(Icons.qr_code_scanner),label:const Text('مسح بالكاميرا')),
+        OutlinedButton.icon(onPressed:scanImageCode,icon:const Icon(Icons.document_scanner_outlined),label:const Text('قراءة كود من صورة')),
         OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.gallery),icon:const Icon(Icons.image_search),label:const Text('بحث بصورة')),
         OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.camera),icon:const Icon(Icons.camera_alt),label:const Text('تصوير')),
       ]),
-      if(searchingImage)const LinearProgressIndicator(),\n      const Padding(padding:EdgeInsets.only(top:6),child:Text('البحث بالصورة يقارن بصور المنتجات المحفوظة داخل جهازك، ولا يبحث تلقائياً في الإنترنت.',style:TextStyle(fontSize:11,color:Colors.grey)))
+      if(searchingImage)const LinearProgressIndicator(),
+      const Padding(padding:EdgeInsets.only(top:6),child:Text('البحث بالصورة يقارن بصور المنتجات المحفوظة داخل جهازك، ولا يبحث تلقائياً في الإنترنت.',style:TextStyle(fontSize:11,color:Colors.grey)))
     ]))),
     if(rows.isEmpty)const Padding(padding:EdgeInsets.all(28),child:Center(child:Text('ابدأ بكتابة اسم المنتج أو كوده للعثور على سعره.')))
     else ...rows.map((p)=>Card(child:ListTile(onTap:()=>details(p),leading:(p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync()?ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(p['image_path'] as String),width:54,height:54,fit:BoxFit.cover)):const CircleAvatar(child:Icon(Icons.inventory_2)),title:Text(p['name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('الكود: '+p['sku'].toString()+' • المتاح: '+p['qty'].toString()),trailing:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.end,mainAxisAlignment:MainAxisAlignment.center,children:[Text(money(p['sell']),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:16)),if(p['similarity']!=null)Text('تشابه '+(((p['similarity'] as num).toDouble()*100).round()).toString()+'%',style:const TextStyle(fontSize:10,color:Colors.grey))])))),
@@ -765,7 +767,10 @@ class _AssistantPageState extends State<AssistantPage> {
       ]
     )));
   }
-  String? chatAnswer(String q){\n    final v=q.toLowerCase();\n    if(q=='تحية')return 'أهلاً بيك يا صاحبي! عامل إيه؟ 😄 قولّي محتاج تعمل إيه في البرنامج وأنا أساعدك خطوة بخطوة.';\n    if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';\n    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';\n    if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';\n    if(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;\n  }\n  String? helpAnswer(String q) {
+  String? chatAnswer(String q){
+    final v=q.toLowerCase();\n    if(q=='تحية')return 'أهلاً بيك يا صاحبي! عامل إيه؟ 😄 قولّي محتاج تعمل إيه في البرنامج وأنا أساعدك خطوة بخطوة.';\n    if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';\n    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';\n    if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';\n    if(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;
+  }
+  String? helpAnswer(String q) {
     final v=q.toLowerCase();
     if(RegExp(r'(مساعدة|بتعمل ايه|تقدر تعمل|اوامر|أوامر|شرح البرنامج|اشرح البرنامج)').hasMatch(v))return 'أقدر أشرح صفحات البرنامج، أفتح لك الصفحة المطلوبة، أبحث عن المنتجات، أضيف منتجًا أو مهمة أو مصروفًا، أسجل بيعًا أو شراءً، أعدّل كمية أو سعرًا، وأؤرشف منتجًا. قبل أي إضافة أو حركة مالية أو تعديل مؤثر أعرض عليك التفاصيل وأطلب موافقتك. اكتب: أمثلة للأوامر.';
     if(v.contains('أمثلة')||v.contains('امثلة'))return 'جرّب: افتح التقارير • اشرح المخازن • ابحث عن فلتر تويوتا • ضيف مهمة مراجعة المخزون • ضيف مصروف نقل مبلغ 150 تصنيف تشغيل • سجل بيع فلتر زيت كمية 2 سعر 80 • عدل كمية فلتر الزيت إلى 10 • غير سعر بيع فلتر الزيت إلى 95.';
@@ -807,7 +812,9 @@ class _AssistantPageState extends State<AssistantPage> {
     final raw=input.text.trim();if(raw.isEmpty)return;final command=understand(raw);
     setState(()=>busy=true);
     try {
-      final conversational=chatAnswer(command);\n      if(conversational!=null){setState(()=>reply=conversational);return;}\n      final page=pageFor(command);
+      final conversational=chatAnswer(command);
+      if(conversational!=null){setState(()=>reply=conversational);return;}
+      final page=pageFor(command);
       if(page!=null&&RegExp(r'^(افتح|روح|انتقل|اذهب|اعرض)').hasMatch(command)){
         widget.go(page);setState(()=>reply='فتحت لك الصفحة المطلوبة.');return;
       }
