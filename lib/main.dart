@@ -360,6 +360,10 @@ class _ProductsPageState extends State<ProductsPage> {
     try{await StoreDb.instance.removeProduct(row['id'] as int);await load();widget.changed();}
     catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}
   }
+  Future<void> history(Map<String,Object?> row) async {
+    final items=await StoreDb.instance.priceHistory(row['id'] as int);if(!mounted)return;
+    showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('سجل أسعار ${row['name']}'),content:SizedBox(width:420,height:360,child:items.isEmpty?const Center(child:Text('لا توجد تغييرات مسجلة بعد')):ListView(children:items.map((x)=>ListTile(title:Text('بيع: ${money(x['old_sell'])} ← ${money(x['new_sell'])}'),subtitle:Text('شراء: ${money(x['old_buy'])} ← ${money(x['new_buy'])}\\n${x['created_at']}'))).toList())),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))])));
+  }
   @override Widget build(BuildContext context)=>Column(children:[
     Padding(padding:const EdgeInsets.all(12),child:Row(children:[
       Expanded(child:TextField(controller:search,onChanged:(_)=>load(),decoration:const InputDecoration(hintText:'بحث بالاسم أو التصنيف',prefixIcon:Icon(Icons.search)))),
@@ -373,9 +377,9 @@ class _ProductsPageState extends State<ProductsPage> {
       :ListView.builder(padding:const EdgeInsets.only(bottom:20),itemCount:rows.length,itemBuilder:(c,i){
         final e=rows[i];final low=(e['qty'] as int)<=(e['min_qty'] as int);
         return Card(child:ListTile(leading:CircleAvatar(child:Icon(low?Icons.warning_amber:Icons.inventory_2)),
-          title:Text(e['name'] as String),subtitle:Text(e['category'].toString()+' • الكمية: '+e['qty'].toString()+' • سعر البيع: '+money(e['sell'])),
-          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else{remove(e);}},
-            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
+          title:Text(e['name'] as String),subtitle:Text('الكود: ${e['sku']??'—'} • '+e['category'].toString()+' • الكمية: '+e['qty'].toString()+' • سعر البيع: '+money(e['sell'])),
+          trailing:PopupMenuButton<String>(onSelected:(v){if(v=='edit'){edit(e);}else if(v=='adjust'){adjust(e);}else if(v=='history'){history(e);}else{remove(e);}},
+            itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('تعديل')),PopupMenuItem(value:'adjust',child:Text('تسوية وجرد الكمية')),PopupMenuItem(value:'history',child:Text('سجل الأسعار')),PopupMenuItem(value:'delete',child:Text('حذف'))])));
       })),
   ]);
 }
@@ -389,7 +393,7 @@ class _ProductDialogState extends State<ProductDialog> {
   @override void initState(){super.initState();final e=widget.item;c=[
     TextEditingController(text:e?['name'] as String? ?? ''),TextEditingController(text:e?['category'] as String? ?? ''),
     TextEditingController(text:(e?['qty']??0).toString()),TextEditingController(text:(e?['min_qty']??0).toString()),
-    TextEditingController(text:(e?['buy']??0).toString()),TextEditingController(text:(e?['sell']??0).toString())];}
+    TextEditingController(text:(e?['buy']??0).toString()),TextEditingController(text:(e?['sell']??0).toString()),TextEditingController(text:e?['manufacturer'] as String? ?? ''),TextEditingController(text:e?['part_no'] as String? ?? ''),TextEditingController(text:e?['alt_part_no'] as String? ?? ''),TextEditingController(text:e?['location'] as String? ?? ''),TextEditingController(text:e?['description'] as String? ?? '')];}
   @override void dispose(){for(final x in c){x.dispose();}super.dispose();}
   String? req(String? v)=>v==null||v.trim().isEmpty?'مطلوب':null;
   String? integer(String? v)=>int.tryParse(v??'')==null||int.parse(v!)<0?'أدخل عدداً صحيحاً':null;
@@ -399,15 +403,17 @@ class _ProductDialogState extends State<ProductDialog> {
   Future<void> save() async {
     if(!form.currentState!.validate())return;
     await StoreDb.instance.saveProduct({'name':c[0].text.trim(),'category':c[1].text.trim(),'qty':int.parse(c[2].text),
-      'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text)},widget.item?['id'] as int?);
+      'min_qty':int.parse(c[3].text),'buy':double.parse(c[4].text),'sell':double.parse(c[5].text),'manufacturer':c[6].text.trim(),'part_no':c[7].text.trim(),'alt_part_no':c[8].text.trim(),'location':c[9].text.trim(),'description':c[10].text.trim()},widget.item?['id'] as int?);
     if(mounted)Navigator.pop(context,true);
   }
   @override Widget build(BuildContext context)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
     title:Text(widget.item==null?'إضافة منتج':'تعديل منتج'),
     content:SizedBox(width:420,child:Form(key:form,child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+      if(widget.item!=null) Padding(padding:const EdgeInsets.only(bottom:8),child:Text('كود الصنف: ${widget.item!['sku']??''}',style:const TextStyle(fontWeight:FontWeight.bold,letterSpacing:1.5))),
       field(0,'اسم المنتج *',validator:req),field(1,'التصنيف'),
       Row(children:[Expanded(child:field(2,'الكمية',validator:integer,type:TextInputType.number)),const SizedBox(width:8),Expanded(child:field(3,'حد التنبيه',validator:integer,type:TextInputType.number))]),
       Row(children:[Expanded(child:field(4,'سعر الشراء',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true))),const SizedBox(width:8),Expanded(child:field(5,'سعر البيع',validator:decimal,type:const TextInputType.numberWithOptions(decimal:true)))]),
+      const Divider(),field(6,'الشركة المصنعة'),field(7,'رقم القطعة الأصلي'),field(8,'رقم القطعة البديل'),field(9,'مكان التخزين / الرف'),field(10,'الوصف والمواصفات'),
     ])))),
     actions:[TextButton(onPressed:()=>Navigator.pop(context,false),child:const Text('إلغاء')),FilledButton(onPressed:save,child:const Text('حفظ'))]));
 }
