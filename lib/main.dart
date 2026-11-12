@@ -141,12 +141,13 @@ class StoreDb {
     if ((wh.first['c'] as int? ?? 0) == 0) await db.insert('warehouses', {'name':'المخزن الرئيسي','location':'','notes':''});
   }
   Future<List<Map<String,Object?>>> parties(String table,[String query='']) => database!.query(table,where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%$query%'],orderBy:'name');
-  Future<void> saveParty(String table,Map<String,Object?> data,int? id) async { if(id==null){await database!.insert(table,data);}else{await database!.update(table,data,where:'id=?',whereArgs:[id]);} }
+  Future<void> saveParty(String table,Map<String,Object?> data,int? id) async { if(id==null){await database!.insert(table,data);}else{await database!.update(table,data,where:'id=?',whereArgs:[id]);} await log('تعديل بيانات',table); }
   Future<void> deleteParty(String table,int id) async { await database!.delete(table,where:'id=?',whereArgs:[id]); }
   Future<List<Map<String,Object?>>> expenses() => database!.query('expenses',orderBy:'id DESC');
   Future<void> addExpense(String title,String category,double amount,String notes) async {
     if(title.trim().isEmpty||amount<=0) throw Exception('أدخل بيان المصروف ومبلغاً أكبر من صفر.');
     await database!.insert('expenses',{'title':title.trim(),'category':category.trim(),'amount':amount,'notes':notes.trim(),'created_at':DateTime.now().toIso8601String()});
+    await log('إضافة مصروف',title.trim()+' | '+amount.toString());
   }
   Future<void> adjustStock(Map<String,Object?> product,int newQty,String reason) async {
     if(newQty<0) throw Exception('الكمية لا يمكن أن تكون سالبة.');
@@ -154,6 +155,7 @@ class StoreDb {
       final old=product['qty'] as int;
       await txn.update('products',{'qty':newQty},where:'id=?',whereArgs:[product['id']]);
       await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
+      await txn.insert('activity_log',{'action':'تسوية مخزون','details':product['name'].toString()+' | '+old.toString()+' ← '+newQty.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});
     });
   }
   Future<List<Map<String,Object?>>> products([String query = '']) => database!.query('products',where:query.trim().isEmpty?null:'archived=0 AND (name LIKE ? OR category LIKE ? OR sku LIKE ? OR part_no LIKE ? OR alt_part_no LIKE ? OR brand LIKE ? OR manufacturer LIKE ? OR alt_names LIKE ?)',whereArgs:query.trim().isEmpty?null:List.filled(8,'%'+query.trim()+'%'),orderBy:'name');
@@ -196,6 +198,7 @@ class StoreDb {
         'cost_price':(product['buy'] as num).toDouble(),
         'party_id':party?['id'],'party_name':party?['name'] ?? '','warehouse_id':1,
       });
+      await txn.insert('activity_log',{'action':kind=='sale'?'تسجيل بيع':'تسجيل شراء','details':product['name'].toString()+' | كمية: '+qty.toString()+' | إجمالي: '+(qty*price).toString(),'created_at':DateTime.now().toIso8601String()});
     });
   }
   Future<List<Map<String,Object?>>> movements([String? kind]) => database!.query('operations',
@@ -793,8 +796,8 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 1.3.0'),
-      subtitle:Text('المنتجات والمخزون والمبيعات والمشتريات والتقارير والنسخ الاحتياطي.'))),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.1.0'),
+      subtitle:Text('بحث بالاسم والكود والصورة، أكواد فريدة، صور محلية، QR، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
 
