@@ -18,6 +18,27 @@ jobs:
           distribution: temurin
           java-version: "17"
       - run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
+      - name: Set Android compile SDK to 36
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          target = next((p for p in candidates if p.exists()), None)
+          if target is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          source = target.read_text()
+          updated, count = re.subn(r'compileSdk\\s*=\\s*flutter\\.compileSdkVersion', 'compileSdk = 36', source, count=1)
+          if count == 0:
+              updated, count = re.subn(r'compileSdkVersion\\s+flutter\\.compileSdkVersion', 'compileSdkVersion 36', source, count=1)
+          if count == 0:
+              updated, count = re.subn(r'compileSdk\\s*=\\s*\\d+', 'compileSdk = 36', source, count=1)
+          if count == 0:
+              raise SystemExit(f"Could not locate compileSdk setting in {target}")
+          target.write_text(updated)
+          print(f"Configured {target} to compileSdk 36")
+          PY
       - run: rm -rf test
       - name: Generate launcher icon and app label
         run: |
