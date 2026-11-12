@@ -251,7 +251,7 @@ class StoreDb {
   Future<Map<int,String>> _restoreImageBlobs(Map<String,dynamic> data) async {
     final result=<int,String>{};final blobs=data['image_blobs'] as List? ?? [];if(blobs.isEmpty)return result;
     final dir=await getApplicationSupportDirectory();final imageDir=Directory(p.join(dir.path,'product_images'));await imageDir.create(recursive:true);
-    for(final item in blobs){try{final row=Map<String,Object?>.from(item as Map);final id=row['product_id'] as int;final name=(row['name']??'product.jpg').toString();final ext=p.extension(name).isEmpty?'.jpg':p.extension(name);final file=File(p.join(imageDir.path,'product_'+id.toString()+ext));await file.writeAsBytes(base64Decode(row['data'] as String),flush:true);result[id]=file.path;}catch(_){}}
+    for(final item in blobs){try{final row=Map<String,Object?>.from(item as Map);final id=row['product_id'] as int;final name=(row['name']??'product.jpg').toString();final ext=p.extension(name).isEmpty?'.jpg':p.extension(name);final file=File(p.join(imageDir.path,'product_'+id.toString()+'_'+DateTime.now().microsecondsSinceEpoch.toString()+ext));await file.writeAsBytes(base64Decode(row['data'] as String),flush:true);result[id]=file.path;}catch(_){}}
     return result;
   }
   Future<String> backup() async {
