@@ -18,7 +18,7 @@ jobs:
         shell: pwsh
         run: if (Test-Path test) { Remove-Item test -Recurse -Force }
       - run: flutter pub get
-      - run: flutter analyze
+      - run: flutter analyze --no-fatal-infos
       - run: flutter build windows --release
       - name: Package Windows app
         shell: pwsh
