@@ -195,7 +195,7 @@ class StoreDb {
   Future<List<Map<String,Object?>>> movements([String? kind]) => database!.query('operations',
     where:kind == null ? null : 'kind=?',whereArgs:kind == null ? null : [kind],orderBy:'id DESC');
   Future<Map<String,Object?>> summary() async {
-    final products = await database!.query('products');
+    final products = await database!.query('products',where:'archived=0');
     final sales = await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS total FROM operations WHERE kind='sale'");
     final buys = await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS total FROM operations WHERE kind='purchase'");
     final expenses = await database!.rawQuery("SELECT COALESCE(SUM(amount),0) AS total FROM expenses");
@@ -203,8 +203,12 @@ class StoreDb {
     return {
       'count':products.length,
       'qty':products.fold<int>(0,(sum,row)=>sum + (row['qty'] as int)),
-      'low':products.where((row)=>(row['qty'] as int) <= (row['min_qty'] as int)).length,
+      'low':products.where((row)=>(row['qty'] as int)>0&&(row['qty'] as int) <= (row['min_qty'] as int)).length,
+      'out':products.where((row)=>(row['qty'] as int)==0).length,
+      'categories':Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM categories'))??0,
+      'manufacturers':products.map((row)=>(row['manufacturer']??'').toString()).where((v)=>v.isNotEmpty).toSet().length,
       'stock':products.fold<double>(0,(sum,row)=>sum + (row['qty'] as int) * (row['buy'] as num).toDouble()),
+      'stock_sell':products.fold<double>(0,(sum,row)=>sum + (row['qty'] as int) * (row['sell'] as num).toDouble()),
       'sales':(sales.first['total'] as num).toDouble(),
       'buys':(buys.first['total'] as num).toDouble(),
       'expense_total':(expenses.first['total'] as num).toDouble(),
@@ -465,7 +469,9 @@ class _DashboardState extends State<Dashboard> {
         FilledButton.icon(onPressed:()=>widget.go(1),icon:const Icon(Icons.add_box),label:const Text('المنتجات')),
         FilledButton.tonalIcon(onPressed:()=>widget.go(2),icon:const Icon(Icons.point_of_sale),label:const Text('تسجيل بيع'))])]))),
     Row(children:[stat('عدد المنتجات',(data['count']??0).toString(),Icons.inventory_2),stat('إجمالي الوحدات',(data['qty']??0).toString(),Icons.numbers)]),
-    Row(children:[stat('نواقص المخزون',(data['low']??0).toString(),Icons.warning_amber),stat('قيمة المخزون',money(data['stock']),Icons.account_balance_wallet)]),
+    Row(children:[stat('نواقص المخزون',(data['low']??0).toString(),Icons.warning_amber),stat('المنتجات النافدة',(data['out']??0).toString(),Icons.remove_shopping_cart)]),
+    Row(children:[stat('قيمة المخزون شراء',money(data['stock']),Icons.account_balance_wallet),stat('قيمة المخزون بيع',money(data['stock_sell']),Icons.price_check)]),
+    Row(children:[stat('التصنيفات',(data['categories']??0).toString(),Icons.category),stat('الشركات المصنعة',(data['manufacturers']??0).toString(),Icons.factory)]),
     Row(children:[stat('إجمالي المبيعات',money(data['sales']),Icons.trending_up),stat('إجمالي المشتريات',money(data['buys']),Icons.shopping_bag)]),
     const SizedBox(height:12),const Text('تنبيهات المخزون',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
     if(low.isEmpty) const Card(child:ListTile(leading:Icon(Icons.check_circle,color:Colors.green),title:Text('لا توجد منتجات منخفضة المخزون.')))
