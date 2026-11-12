@@ -250,7 +250,6 @@ class StoreDb {
     final data=jsonDecode(utf8.decode(result.files.first.bytes!)) as Map<String,dynamic>;
     if(data['format']!='MYAPP_BACKUP_1'&&data['format']!='MYAPP_BACKUP_2'&&data['format']!='MYAPP_BACKUP_3')throw Exception('ملف النسخة الاحتياطية غير صالح.');
     final restoredImages=await _restoreImageBlobs(data);
-    final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
       for(final t in ['product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
       for(final row in data['products'] as List){final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];await txn.insert('products',product);}
@@ -265,6 +264,7 @@ class StoreDb {
     if (!await file.exists()) throw Exception('لا توجد نسخة احتياطية على الجهاز.');
     final data = jsonDecode(await file.readAsString()) as Map<String,dynamic>;
     if (data['format'] != 'MYAPP_BACKUP_1' && data['format'] != 'MYAPP_BACKUP_2' && data['format'] != 'MYAPP_BACKUP_3') throw Exception('ملف النسخة الاحتياطية غير صالح.');
+    final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
       for(final t in ['product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
       for (final row in data['products'] as List) {
