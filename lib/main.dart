@@ -561,10 +561,11 @@ class SettingsPage extends StatelessWidget {
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     const Text('الإعدادات',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
     Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Text('اسم النشاط التجاري / عنوان البرنامج',style:TextStyle(fontWeight:FontWeight.bold)),
+      const Text('اسم النشاط التجاري / اسم الواجهة داخل التطبيق',style:TextStyle(fontWeight:FontWeight.bold)),
       const SizedBox(height:8),
-      TextFormField(initialValue:appName,onFieldSubmitted:changeAppName,decoration:const InputDecoration(hintText:'اكتب اسم المتجر ثم اضغط تم')),
-      ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image_outlined),title:const Text('تغيير شعار البرنامج'),subtitle:Text(logoPath==null?'لم يتم اختيار شعار بعد':'تم حفظ شعار مخصص على هذا الجهاز'),onTap:changeLogo)
+      TextFormField(initialValue:appName,onFieldSubmitted:changeAppName,decoration:const InputDecoration(hintText:'اكتب الاسم ثم اضغط تم')),
+      const Text('اسم وأيقونة المشغّل الخارجيان ثابتان في ملف التثبيت؛ تغييرهما يتطلب بناء نسخة جديدة.',style:TextStyle(fontSize:11,color:Colors.grey)),
+      ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image_outlined),title:const Text('تغيير الشعار داخل البرنامج'),subtitle:Text(logoPath==null?'لم يتم اختيار شعار بعد':'تم حفظ شعار مخصص على هذا الجهاز'),onTap:changeLogo)
     ]))),
     Card(child:Column(children:[ListTile(leading:const Icon(Icons.wallpaper_outlined),title:const Text('تغيير خلفية البرنامج'),subtitle:Text(backgroundPath==null?'لم يتم اختيار خلفية':'تم حفظ خلفية مخصصة على هذا الجهاز'),onTap:changeBackground),if(backgroundPath!=null) Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:clearBackground,icon:const Icon(Icons.delete_outline),label:const Text('إزالة الخلفية')))])),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
