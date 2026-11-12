@@ -66,8 +66,9 @@ jobs:
                   except (UnicodeDecodeError, OSError):
                       continue
                   updated = source
-                  updated = re.sub(r'compileSdk\s*=\s*(?:flutter\.compileSdkVersion|\d+)', 'compileSdk = 36', updated)
-                  updated = re.sub(r'compileSdkVersion\s+(?:flutter\.compileSdkVersion|\d+)', 'compileSdkVersion 36', updated)
+                  updated = re.sub(r'(?m)^(\s*compileSdk\s*=\s*)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
+                  updated = re.sub(r'(?m)^(\s*compileSdk\s+)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
+                  updated = re.sub(r'(?m)^(\s*compileSdkVersion\s+)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
                   if updated != source:
                       path.write_text(updated)
                       changed.append(str(path))
