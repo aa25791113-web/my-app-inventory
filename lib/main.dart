@@ -826,6 +826,12 @@ class _AssistantPageState extends State<AssistantPage> {
     } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: '+e.toString().replaceFirst('Exception: ',''));}
     finally{if(mounted)setState(()=>busy=false);}
   }
+  Future<void> contactSupport()async{
+    const phone='584263545601';
+    final message=Uri.encodeComponent('مرحباً فريق دعم MY APP 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.4.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
+    final uri=Uri.parse('https://wa.me/$phone?text=$message');
+    if(!await launchUrl(uri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح واتساب. تأكد من تثبيته أو افتح الرابط من المتصفح.');
+  }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Row(children:[const CircleAvatar(child:Icon(Icons.support_agent)),const SizedBox(width:10),const Expanded(child:Text('مساعد MY APP',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)))]),
@@ -834,6 +840,7 @@ class _AssistantPageState extends State<AssistantPage> {
     ]))),
     TextField(controller:input,minLines:2,maxLines:5,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب سؤالك أو أمرك',hintText:'مثال: اشرح التقارير\nأو: افتح المنتجات\nأو: سجل بيع فلتر زيت كمية 2 سعر 80',border:OutlineInputBorder())),
     const SizedBox(height:10),FilledButton.icon(onPressed:busy?null:runCommand,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send),label:const Text('تنفيذ الطلب')),
+    const SizedBox(height:12),Card(child:ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFFE5F8EC),child:Icon(Icons.chat,color:Color(0xFF168C4B))),title:const Text('تواصل مع الدعم الفني',style:TextStyle(fontWeight:FontWeight.bold)),subtitle:const Text('استفسار أو شكوى أو الإبلاغ عن مشكلة'),trailing:const Icon(Icons.open_in_new),onTap:contactSupport)),
     const SizedBox(height:14),if(results.isNotEmpty)const Text('نتائج البحث',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
     ...results.map((e)=>Card(child:ListTile(onTap:()=>showProduct(e),leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: '+e['sku'].toString()+' • البدائل: '+e['alt_names'].toString()),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
   ]);
