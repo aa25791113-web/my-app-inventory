@@ -192,10 +192,11 @@ class _MyAppState extends State<MyApp> {
   Color seedColor = const Color(0xFF087F68);
   String appName = 'MY APP';
   String? logoPath;
+  String? backgroundPath;
   @override void initState(){super.initState();load();}
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
-    if (mounted) setState(() { mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light; seedColor = Color(prefs.getInt('seedColor') ?? 0xFF087F68); appName=prefs.getString('appName') ?? 'MY APP'; logoPath=prefs.getString('logoPath'); });
+    if (mounted) setState(() { mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light; seedColor = Color(prefs.getInt('seedColor') ?? 0xFF087F68); appName=prefs.getString('appName') ?? 'MY APP'; logoPath=prefs.getString('logoPath'); backgroundPath=prefs.getString('backgroundPath'); });
   }
   Future<void> toggle() async {
     final dark = mode != ThemeMode.dark;
@@ -206,15 +207,17 @@ class _MyAppState extends State<MyApp> {
   Future<void> changeSeed(int value) async { final prefs=await SharedPreferences.getInstance(); await prefs.setInt('seedColor',value); if(mounted)setState(()=>seedColor=Color(value)); }
   Future<void> changeAppName(String value) async { final v=value.trim().isEmpty?'MY APP':value.trim(); final prefs=await SharedPreferences.getInstance(); await prefs.setString('appName',v); if(mounted)setState(()=>appName=v); }
   Future<void> changeLogo() async { final picked=await FilePicker.platform.pickFiles(type:FileType.image); if(picked==null||picked.files.isEmpty||picked.files.first.path==null)return; final source=File(picked.files.first.path!); final dir=await getApplicationSupportDirectory(); final ext=p.extension(source.path); final target=File(p.join(dir.path,'my_app_logo'+(ext.isEmpty?'.png':ext))); await source.copy(target.path); final prefs=await SharedPreferences.getInstance(); await prefs.setString('logoPath',target.path); if(mounted)setState(()=>logoPath=target.path); }
+  Future<void> changeBackground() async { final picked=await FilePicker.platform.pickFiles(type:FileType.image); if(picked==null||picked.files.isEmpty||picked.files.first.path==null)return; final source=File(picked.files.first.path!); final dir=await getApplicationSupportDirectory(); final ext=p.extension(source.path); final target=File(p.join(dir.path,'my_app_background'+(ext.isEmpty?'.png':ext))); await source.copy(target.path); final prefs=await SharedPreferences.getInstance(); await prefs.setString('backgroundPath',target.path); if(mounted)setState(()=>backgroundPath=target.path); }
+  Future<void> clearBackground() async { final prefs=await SharedPreferences.getInstance(); await prefs.remove('backgroundPath'); if(mounted)setState(()=>backgroundPath=null); }
   ThemeData makeTheme(Brightness b)=>ThemeData(useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b));
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:appName,
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
-    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo));
+    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground));
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo});
-  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo;
+  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground});
+  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo; final String? backgroundPath; final VoidCallback changeBackground,clearBackground;
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
@@ -222,7 +225,7 @@ class _HomePageState extends State<HomePage> {
   void refresh()=>setState(()=>refreshId++);
   @override Widget build(BuildContext context) {
     final pages=[
-      Dashboard(key:ValueKey('d'+refreshId.toString()),go:(v)=>setState(()=>tab=v)),
+      Dashboard(key:ValueKey('d'+refreshId.toString()),go:(v)=>setState(()=>tab=v),appName:widget.appName),
       ProductsPage(key:ValueKey('p'+refreshId.toString()),changed:refresh),
       MovementPage(key:ValueKey('s'+refreshId.toString()),kind:'sale',changed:refresh),
       MovementPage(key:ValueKey('b'+refreshId.toString()),kind:'purchase',changed:refresh),
@@ -231,7 +234,7 @@ class _HomePageState extends State<HomePage> {
       WarehousePage(key:ValueKey('wh'+refreshId.toString()),changed:refresh),
       ExpensePage(key:ValueKey('ex'+refreshId.toString()),changed:refresh),
       ReportsPage(key:ValueKey('r'+refreshId.toString())),
-      SettingsPage(dark:widget.dark,toggle:widget.toggle,seedColor:widget.seedColor,changeSeed:widget.changeSeed,appName:widget.appName,changeAppName:widget.changeAppName,logoPath:widget.logoPath,changeLogo:widget.changeLogo),
+      SettingsPage(dark:widget.dark,toggle:widget.toggle,seedColor:widget.seedColor,changeSeed:widget.changeSeed,appName:widget.appName,changeAppName:widget.changeAppName,logoPath:widget.logoPath,changeLogo:widget.changeLogo,backgroundPath:widget.backgroundPath,changeBackground:widget.changeBackground,clearBackground:widget.clearBackground),
     ];
     const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات'];
     const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined];
@@ -251,7 +254,10 @@ class _HomePageState extends State<HomePage> {
         title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(widget.appName,style:const TextStyle(fontWeight:FontWeight.w900)),
         const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
-      body:IndexedStack(index:tab,children:pages),
+      body:Stack(children:[
+        if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Image.file(File(widget.backgroundPath!),fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
+        IndexedStack(index:tab,children:pages)
+      ]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab==8?4:(tab<4?tab:0),onDestinationSelected:(v)=>setState(()=>tab=v==4?8:v),
         destinations:const [
           NavigationDestination(icon:Icon(Icons.dashboard_outlined),label:'الرئيسية'),
@@ -265,7 +271,7 @@ class _HomePageState extends State<HomePage> {
 }
 
 class Dashboard extends StatefulWidget {
-  const Dashboard({super.key,required this.go}); final ValueChanged<int> go;
+  const Dashboard({super.key,required this.go,required this.appName}); final ValueChanged<int> go; final String appName;
   @override State<Dashboard> createState()=>_DashboardState();
 }
 class _DashboardState extends State<Dashboard> {
@@ -280,7 +286,7 @@ class _DashboardState extends State<Dashboard> {
     Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:11))]))));
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Text('أهلاً بك في MY APP',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
+      Text('أهلاً بك في ${widget.appName}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
       const Text('تابع مخزونك وحركة تجارتك من مكان واحد.'),
       const SizedBox(height:12),Wrap(spacing:8,children:[
         FilledButton.icon(onPressed:()=>widget.go(1),icon:const Icon(Icons.add_box),label:const Text('المنتجات')),
@@ -551,7 +557,7 @@ class _ReportsPageState extends State<ReportsPage> {
 }
 
 class SettingsPage extends StatelessWidget {
-  const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;final String appName;final ValueChanged<String> changeAppName;final String? logoPath;final VoidCallback changeLogo;
+  const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;final String appName;final ValueChanged<String> changeAppName;final String? logoPath;final VoidCallback changeLogo;final String? backgroundPath;final VoidCallback changeBackground,clearBackground;
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     const Text('الإعدادات',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
     Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -560,6 +566,7 @@ class SettingsPage extends StatelessWidget {
       TextFormField(initialValue:appName,onFieldSubmitted:changeAppName,decoration:const InputDecoration(hintText:'اكتب اسم المتجر ثم اضغط تم')),
       ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image_outlined),title:const Text('تغيير شعار البرنامج'),subtitle:Text(logoPath==null?'لم يتم اختيار شعار بعد':'تم حفظ شعار مخصص على هذا الجهاز'),onTap:changeLogo)
     ]))),
+    Card(child:Column(children:[ListTile(leading:const Icon(Icons.wallpaper_outlined),title:const Text('تغيير خلفية البرنامج'),subtitle:Text(backgroundPath==null?'لم يتم اختيار خلفية':'تم حفظ خلفية مخصصة على هذا الجهاز'),onTap:changeBackground),if(backgroundPath!=null) Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:clearBackground,icon:const Icon(Icons.delete_outline),label:const Text('إزالة الخلفية')))])),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
     Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       const Text('لون واجهة البرنامج',style:TextStyle(fontWeight:FontWeight.bold)),
@@ -581,7 +588,7 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 1.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 1.2.0'),
       subtitle:Text('المنتجات والمخزون والمبيعات والمشتريات والتقارير والنسخ الاحتياطي.'))),
   ]);
 }
