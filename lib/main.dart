@@ -697,7 +697,7 @@ class _ExpressionParser {
   double parse(){final v=expression();spaces();if(index!=source.length)throw const FormatException('راجع صيغة العملية الحسابية.');return v;}
   double expression(){var v=term();while(true){if(take('+'))v+=term();else if(take('-'))v-=term();else return v;}}
   double term(){var v=factor();while(true){if(take('*'))v*=factor();else if(take('/')){final d=factor();if(d==0)throw const FormatException('مينفعش القسمة على صفر.');v/=d;}else if(take('%')){final d=factor();if(d==0)throw const FormatException('مينفعش باقي القسمة على صفر.');v%=d;}else return v;}}
-  double factor(){spaces();if(take('+'))return factor();if(take('-'))return -factor();if(take('(')){final v=expression();if(!take(')'))throw const FormatException('في قوس ناقص.');return v;}final m=RegExp(r'^\\d+(?:\\.\\d+)?|^\\.\\d+').firstMatch(source.substring(index));if(m==null)throw const FormatException('اكتب أرقام وعلامات حسابية صحيحة.');index+=m.group(0)!.length;return double.parse(m.group(0)!);}
+  double factor(){spaces();if(take('+'))return factor();if(take('-'))return -factor();if(take('(')){final v=expression();if(!take(')'))throw const FormatException('في قوس ناقص.');return v;}final m=RegExp(r'^\d+(?:\.\d+)?|^\.\d+').firstMatch(source.substring(index));if(m==null)throw const FormatException('اكتب أرقام وعلامات حسابية صحيحة.');index+=m.group(0)!.length;return double.parse(m.group(0)!);}
 }
 \nclass SmartToolsPage extends StatefulWidget {const SmartToolsPage({super.key});@override State<SmartToolsPage> createState()=>_SmartToolsPageState();}
 class _SmartToolsPageState extends State<SmartToolsPage>{
