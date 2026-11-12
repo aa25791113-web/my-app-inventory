@@ -1,17 +1,20 @@
 from PIL import Image, ImageDraw
 from pathlib import Path
-
-size = 1024
-img = Image.new("RGBA", (size, size), (8, 127, 104, 255))
-d = ImageDraw.Draw(img)
-# Rounded-square inset and simple warehouse/stock mark
-d.rounded_rectangle((48, 48, 976, 976), radius=210, fill=(8, 127, 104, 255), outline=(255,255,255,255), width=24)
-d.polygon([(220, 430), (512, 230), (804, 430)], fill=(255,255,255,255))
-d.rounded_rectangle((260, 420, 764, 790), radius=34, fill=(255,255,255,255))
-d.rectangle((330, 500, 430, 790), fill=(8,127,104,255))
-d.rectangle((465, 500, 565, 790), fill=(8,127,104,255))
-d.rectangle((600, 500, 700, 790), fill=(8,127,104,255))
-d.rounded_rectangle((390, 680, 634, 790), radius=20, fill=(255,255,255,255))
-d.rectangle((490, 690, 534, 790), fill=(8,127,104,255))
+size=1024
+im=Image.new("RGBA",(size,size),(10,12,34,255))
+d=ImageDraw.Draw(im)
+d.rounded_rectangle((36,36,988,988),radius=230,fill=(13,16,48,255),outline=(177,92,255,255),width=24)
+d.rounded_rectangle((70,70,954,954),radius=195,outline=(255,190,72,255),width=8)
+gold=(255,190,72,255); white=(245,247,255,255); purple=(167,92,255,255)
+d.polygon([(245,390),(785,390),(700,650),(330,650)],fill=purple)
+d.line([(245,390),(785,390),(700,650),(330,650),(245,390)],fill=white,width=28,joint="curve")
+d.line([(330,650),(700,650)],fill=gold,width=24)
+for x in (390,500,610): d.line([(x,420),(x+12,615)],fill=white,width=18)
+d.line([(200,300),(285,300),(350,420)],fill=white,width=34)
+d.ellipse((350,690,445,785),fill=gold);d.ellipse((580,690,675,785),fill=gold)
+d.ellipse((375,715,420,760),fill=(13,16,48,255));d.ellipse((605,715,650,760),fill=(13,16,48,255))
+d.polygon([(390,265),(435,185),(510,245),(590,170),(635,270)],fill=gold);d.rectangle((390,270,635,300),fill=gold)
+d.line([(650,360),(730,300),(790,330),(850,245)],fill=purple,width=24)
+d.polygon([(850,245),(785,255),(835,310)],fill=purple)
 Path("assets").mkdir(exist_ok=True)
-img.save("assets/launcher_icon.png")
+im.save("assets/launcher_icon.png")
