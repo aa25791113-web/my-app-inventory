@@ -125,6 +125,7 @@ class StoreDb {
   Future<List<Map<String,Object?>>> activity()=>database!.query('activity_log',orderBy:'id DESC',limit:300);
   Future<void> saveProductNote(int productId,String title,String body) async {await database!.insert('product_notes',{'product_id':productId,'title':title,'body':body,'created_at':DateTime.now().toIso8601String()});await log('إضافة ملاحظة منتج',title);}
   Future<List<Map<String,Object?>>> productNotes(int productId)=>database!.query('product_notes',where:'product_id=?',whereArgs:[productId],orderBy:'id DESC');
+  Future<void> deleteProductNote(int id) async {await database!.delete('product_notes',where:'id=?',whereArgs:[id]);}
   Future<void> saveTask(String title) async {if(title.trim().isNotEmpty)await database!.insert('tasks',{'title':title.trim(),'done':0,'created_at':DateTime.now().toIso8601String()});}
   Future<List<Map<String,Object?>>> tasks()=>database!.query('tasks',orderBy:'done, id DESC');
   Future<void> toggleTask(int id,bool done) async {await database!.update('tasks',{'done':done?1:0},where:'id=?',whereArgs:[id]);}
@@ -602,9 +603,9 @@ class _AssistantPageState extends State<AssistantPage> {
       } else {
         final query=clean(command);
         final found=await StoreDb.instance.products(query);
-        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت \${found.length} نتيجة. هذه نتائج البحث المحلي.';});
+        if(mounted)setState((){results=found;reply=found.isEmpty?'لم أجد تطابقاً. جرّب الاسم البديل أو رقم القطعة أو جزءاً من الاسم.':'وجدت ${found.length} نتيجة. هذه نتائج البحث المحلي.';});
       }
-    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: \${e.toString().replaceFirst('Exception: ','')}');}
+    } catch(e){if(mounted)setState(()=>reply='تعذر تنفيذ الطلب: ${e.toString().replaceFirst('Exception: ','')}');}
     finally{if(mounted)setState(()=>busy=false);}
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
@@ -616,7 +617,7 @@ class _AssistantPageState extends State<AssistantPage> {
     TextField(controller:input,minLines:2,maxLines:4,onSubmitted:(_)=>runCommand(),decoration:const InputDecoration(labelText:'اكتب طلبك',hintText:'مثال: ابحث عن فلتر تويوتا\nأو: ضيف منتج اسم فلتر زيت كمية 5 شراء 40 بيع 60',border:OutlineInputBorder())),
     const SizedBox(height:10),FilledButton.icon(onPressed:busy?null:runCommand,icon:busy?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.send),label:const Text('تنفيذ الطلب')),
     const SizedBox(height:14),if(results.isNotEmpty)const Text('نتائج البحث',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    ...results.map((e)=>Card(child:ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: \${e['sku']} • البدائل: \${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
+    ...results.map((e)=>Card(child:ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('الكود: ${e['sku']} • البدائل: ${e['alt_names']}'),trailing:Text(money(e['sell']),style:const TextStyle(fontWeight:FontWeight.bold)))))
   ]);
 }
 
