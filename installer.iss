@@ -1,5 +1,5 @@
 #define MyAppName "MY APP"
-#define MyAppVersion "3.1.0"
+#define MyAppVersion "3.2.0"
 #define MyAppExeName "my_app_inventory.exe"
 
 [Setup]
