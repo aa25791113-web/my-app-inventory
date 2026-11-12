@@ -1,9 +1,12 @@
 name: Build Android APK
+concurrency:
+  group: android-release-${{ github.ref }}
+  cancel-in-progress: true
 on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths: ["lib/**", "pubspec.yaml", ".github/workflows/android-apk.yml"]
+    paths: ["lib/**", "pubspec.yaml", "tool/**", "assets/**", ".github/workflows/android-apk.yml"]
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -72,10 +75,10 @@ jobs:
           PY
       - run: dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos
-      - run: flutter build apk --release
+      - run: flutter build apk --release --split-per-abi
       - uses: actions/upload-artifact@v4
         with:
           name: my-app-android-apk
-          path: build/app/outputs/flutter-apk/app-release.apk
+          path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 14
