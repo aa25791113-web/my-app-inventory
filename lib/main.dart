@@ -768,7 +768,12 @@ class _AssistantPageState extends State<AssistantPage> {
     )));
   }
   String? chatAnswer(String q){
-    final v=q.toLowerCase();\n    if(q=='تحية')return 'أهلاً بيك يا صاحبي! عامل إيه؟ 😄 قولّي محتاج تعمل إيه في البرنامج وأنا أساعدك خطوة بخطوة.';\n    if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';\n    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';\n    if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';\n    if(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;
+    final v=q.toLowerCase();
+    if(q=='تحية')return 'أهلاً بيك يا صاحبي! عامل إيه؟ 😄 قولّي محتاج تعمل إيه في البرنامج وأنا أساعدك خطوة بخطوة.';
+    if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';
+    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';
+    if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';
+    if(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}\n    return null;
   }
   String? helpAnswer(String q) {
     final v=q.toLowerCase();
