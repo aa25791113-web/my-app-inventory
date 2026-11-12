@@ -440,7 +440,8 @@ class _HomePageState extends State<HomePage> {
       appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer())),
         title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(widget.appName,style:const TextStyle(fontWeight:FontWeight.w900)),
-        const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))])),
+        const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))]),
+        actions:[IconButton(tooltip:'مساعد البرنامج',onPressed:()=>setState(()=>tab=13),icon:const Icon(Icons.support_agent)),const SizedBox(width:6)]),
       body:Stack(children:[
         if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Image.file(File(widget.backgroundPath!),fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
         IndexedStack(index:tab,children:pages)
@@ -644,9 +645,10 @@ class _DashboardState extends State<Dashboard> {
     final d=await StoreDb.instance.summary(); final p=await StoreDb.instance.products();
     if(mounted) setState(() { data=d; low=p.where((e)=>(e['qty'] as int)<=(e['min_qty'] as int)).toList(); });
   }
-  Widget stat(String label,String value,IconData icon)=>Expanded(child:Card(child:Padding(padding:const EdgeInsets.all(12),child:Column(children:[
-    Icon(icon),const SizedBox(height:5),Text(value,style:const TextStyle(fontSize:19,fontWeight:FontWeight.bold)),
-    Text(label,textAlign:TextAlign.center,style:const TextStyle(fontSize:11))]))));
+  Widget stat(String label,String value,IconData icon)=>Expanded(child:Card(child:Padding(padding:const EdgeInsets.symmetric(horizontal:12,vertical:15),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Container(width:36,height:36,decoration:BoxDecoration(color:Theme.of(context).colorScheme.primaryContainer,borderRadius:BorderRadius.circular(12)),child:Icon(icon,color:Theme.of(context).colorScheme.primary,size:20)),
+    const SizedBox(height:10),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
+    const SizedBox(height:3),Text(label,maxLines:2,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:11,color:Theme.of(context).colorScheme.onSurfaceVariant))]))));
   @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
       Text('أهلاً بك في ${widget.appName}',style:const TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
