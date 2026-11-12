@@ -1,6 +1,6 @@
 name: Build Windows App
 concurrency:
-  group: windows-release-${{ github.ref }}
+  group: windows-release-v3-${{ github.ref }}
   cancel-in-progress: true
 on:
   workflow_dispatch:
