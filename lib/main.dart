@@ -593,7 +593,7 @@ class _AssistantPageState extends State<AssistantPage> {
   bool busy=false;
   String reply='أهلاً بك. أقدر أبحث لك بالاسم والكود والأسماء البديلة، وأضيف منتجًا بمواصفاته بعد تأكيدك.';
   @override void dispose(){input.dispose();super.dispose();}
-  String clean(String value)=>value.replaceFirst(RegExp(r'^(يا مساعد|مساعد|ابحث عن|ابحث|دور على|دورلي على|دور|هات|فين|عايز|عاوز|من فضلك)\s*'),'').replaceFirst(RegExp(r'^(اسم مشابه|اسم شبيه|منتج مشابه|شبيه بـ|مشابه لـ|منتج اسمه|الصنف اسمه)\s*'),'').trim();
+  String clean(String value)=>value.replaceFirst(RegExp(r'^(يا مساعد|مساعد|ابحثلي عن|ابحث عن|ابحث|دور على|دورلي على|دور|هات|فين|عايز|عاوز|من فضلك)\s*'),'').replaceFirst(RegExp(r'^(اسم مشابه|اسم شبيه|منتج مشابه|شبيه بـ|مشابه لـ|منتج اسمه|الصنف اسمه|منتج)\s*(?:لـ|ل)?'),'').trim();
   Future<void> openProduct(Map<String,Object?> e) async {
     await showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
       title:Text(e['name'].toString()),
