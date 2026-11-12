@@ -357,6 +357,74 @@ class _HomePageState extends State<HomePage> {
   }
 }
 
+
+class QuickSearchPage extends StatefulWidget {const QuickSearchPage({super.key});@override State<QuickSearchPage> createState()=>_QuickSearchPageState();}
+class _QuickSearchPageState extends State<QuickSearchPage>{
+  final controller=TextEditingController();final picker=ImagePicker();List<Map<String,Object?>> rows=[];bool searchingImage=false;
+  @override void dispose(){controller.dispose();super.dispose();}
+  Future<void> search(String value) async {final r=await StoreDb.instance.products(value);if(mounted)setState(()=>rows=r);}
+  Future<void> imageSearch(ImageSource source) async {
+    try{final file=await picker.pickImage(source:source,imageQuality:80,maxWidth:1200);if(file==null)return;setState(()=>searchingImage=true);final matches=await StoreDb.instance.similarProducts(await File(file.path).readAsBytes());if(mounted)setState(()=>rows=matches);if(mounted&&matches.isEmpty)toast(context,'لم نعثر على صور منتجات محفوظة للمقارنة.');}
+    catch(e){if(mounted)toast(context,'تعذر تنفيذ البحث بالصورة: $e');}finally{if(mounted)setState(()=>searchingImage=false);}
+  }
+  void details(Map<String,Object?> p) {
+    showModalBottomSheet(context:context,isScrollControlled:true,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:Padding(padding:const EdgeInsets.all(18),child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      if((p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync())ClipRRect(borderRadius:BorderRadius.circular(14),child:Image.file(File(p['image_path'] as String),height:170,fit:BoxFit.contain)),
+      Text(p['name'].toString(),style:const TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
+      Text('الكود: '+p['sku'].toString()),
+      const SizedBox(height:8),Text(money(p['sell']),style:TextStyle(fontSize:34,fontWeight:FontWeight.w900,color:Theme.of(ctx).colorScheme.primary)),
+      Text('الشراء: '+money(p['buy'])+' • الجملة: '+money(p['wholesale'])),
+      Text('المتاح: '+p['qty'].toString()+' '+p['unit'].toString()+' • '+p['category'].toString()),
+      Text('الشركة: '+(p['manufacturer']??'').toString()+' • الماركة: '+(p['brand']??'').toString()),
+      Text('رقم القطعة: '+(p['part_no']??'').toString()+' • البديل: '+(p['alt_part_no']??'').toString()),
+      Text('الموقع: '+(p['location']??'').toString()),
+      Wrap(spacing:8,children:[
+        OutlinedButton.icon(onPressed:(){Clipboard.setData(ClipboardData(text:p['sku'].toString()));toast(ctx,'تم نسخ الكود');},icon:const Icon(Icons.copy),label:const Text('نسخ الكود')),
+        FilledButton.icon(onPressed:(){Clipboard.setData(ClipboardData(text:money(p['sell'])));toast(ctx,'تم نسخ السعر');},icon:const Icon(Icons.price_check),label:const Text('نسخ السعر')),
+        OutlinedButton.icon(onPressed:()=>showQr(ctx,p['sku'].toString(),p['name'].toString()),icon:const Icon(Icons.qr_code),label:const Text('QR'))
+      ])
+    ])))));
+  }
+  @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
+    Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      const Text('بحث الأسعار السريع',style:TextStyle(fontSize:22,fontWeight:FontWeight.w900)),
+      const Text('ابحث بالاسم أو الكود أو رقم القطعة'),
+      const SizedBox(height:12),
+      TextField(controller:controller,onChanged:search,onSubmitted:(v)=>StoreDb.instance.saveSearch(v),autofocus:false,decoration:InputDecoration(filled:true,hintText:'اكتب اسم المنتج أو الكود...',prefixIcon:const Icon(Icons.search),suffixIcon:IconButton(onPressed:(){controller.clear();search('');},icon:const Icon(Icons.close)),border:OutlineInputBorder(borderRadius:BorderRadius.circular(16)))),
+      const SizedBox(height:8),
+      Wrap(spacing:8,children:[
+        OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.gallery),icon:const Icon(Icons.image_search),label:const Text('بحث بصورة')),
+        OutlinedButton.icon(onPressed:()=>imageSearch(ImageSource.camera),icon:const Icon(Icons.camera_alt),label:const Text('تصوير')),
+      ]),
+      if(searchingImage)const LinearProgressIndicator()
+    ]))),
+    if(rows.isEmpty)const Padding(padding:EdgeInsets.all(28),child:Center(child:Text('ابدأ بكتابة اسم المنتج أو كوده للعثور على سعره.')))
+    else ...rows.map((p)=>Card(child:ListTile(onTap:()=>details(p),leading:(p['image_path']??'').toString().isNotEmpty&&File(p['image_path'] as String).existsSync()?ClipRRect(borderRadius:BorderRadius.circular(8),child:Image.file(File(p['image_path'] as String),width:54,height:54,fit:BoxFit.cover)):const CircleAvatar(child:Icon(Icons.inventory_2)),title:Text(p['name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('الكود: '+p['sku'].toString()+' • المتاح: '+p['qty'].toString()),trailing:Text(money(p['sell']),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:16))))),
+  ]);
+}
+
+void showQr(BuildContext context,String code,String name){
+  showDialog(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('رمز المنتج: '+name),content:SizedBox(width:230,height:260,child:Column(children:[QrImageView(data:code,size:190),Text(code,style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))])),actions:[TextButton(onPressed:()=>Navigator.pop(c),child:const Text('إغلاق'))])));
+}
+
+class CategoriesPage extends StatefulWidget {const CategoriesPage({super.key});@override State<CategoriesPage> createState()=>_CategoriesPageState();}
+class _CategoriesPageState extends State<CategoriesPage>{
+ List<Map<String,Object?>> rows=[];@override void initState(){super.initState();load();}
+ Future<void> load()async{final r=await StoreDb.instance.categories();if(mounted)setState(()=>rows=r);}
+ Future<void> edit([Map<String,Object?>? e])async{final name=TextEditingController(text:e?['name'] as String? ?? '');final desc=TextEditingController(text:e?['description'] as String? ?? '');final ok=await showDialog<bool>(context:context,builder:(c)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text(e==null?'تصنيف جديد':'تعديل التصنيف'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'اسم التصنيف')),TextField(controller:desc,decoration:const InputDecoration(labelText:'الوصف'))]),actions:[TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(c,name.text.trim().isNotEmpty),child:const Text('حفظ'))])));if(ok==true){await StoreDb.instance.saveCategory({'name':name.text.trim(),'description':desc.text.trim(),'color':0,'parent_id':null},e?['id'] as int?);await load();}name.dispose();desc.dispose();}
+ @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(12),children:[Row(children:[const Expanded(child:Text('تصنيفات الأصناف',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold))),IconButton.filled(onPressed:()=>edit(),icon:const Icon(Icons.add))]),if(rows.isEmpty)const Text('لم تتم إضافة تصنيفات بعد.')else ...rows.map((e)=>Card(child:ListTile(leading:const Icon(Icons.category_outlined),title:Text(e['name'].toString()),subtitle:Text(e['description'].toString()),trailing:IconButton(onPressed:()=>edit(e),icon:const Icon(Icons.edit)))))]);}
+ 
+class SmartToolsPage extends StatefulWidget {const SmartToolsPage({super.key});@override State<SmartToolsPage> createState()=>_SmartToolsPageState();}
+class _SmartToolsPageState extends State<SmartToolsPage>{
+ int section=0;List<Map<String,Object?>> rows=[];final task=TextEditingController();
+ @override void initState(){super.initState();load();}@override void dispose(){task.dispose();super.dispose();}
+ Future<void> load()async{List<Map<String,Object?>> r=[];if(section==0)r=await StoreDb.instance.favoriteProducts();if(section==1)r=await StoreDb.instance.tasks();if(section==2)r=await StoreDb.instance.activity();if(section==3)r=await StoreDb.instance.recentSearches();if(mounted)setState(()=>rows=r);}
+ @override Widget build(BuildContext context)=>Column(children:[
+  Padding(padding:const EdgeInsets.all(10),child:Wrap(spacing:6,children:[ChoiceChip(label:const Text('المفضلة'),selected:section==0,onSelected:(_){setState(()=>section=0);load();}),ChoiceChip(label:const Text('المهام'),selected:section==1,onSelected:(_){setState(()=>section=1);load();}),ChoiceChip(label:const Text('النشاط'),selected:section==2,onSelected:(_){setState(()=>section=2);load();}),ChoiceChip(label:const Text('عمليات البحث'),selected:section==3,onSelected:(_){setState(()=>section=3);load();})])),
+  if(section==1)Padding(padding:const EdgeInsets.symmetric(horizontal:12),child:Row(children:[Expanded(child:TextField(controller:task,decoration:const InputDecoration(hintText:'مهمة جديدة'))),IconButton.filled(onPressed:()async{await StoreDb.instance.saveTask(task.text);task.clear();await load();},icon:const Icon(Icons.add))])),
+  Expanded(child:rows.isEmpty?const Center(child:Text('لا توجد بيانات هنا بعد.')):ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];if(section==0)return Card(child:ListTile(title:Text(e['name'].toString()),subtitle:Text('الكود: '+e['sku'].toString()+' • '+money(e['sell']))));if(section==1)return CheckboxListTile(value:e['done']==1,title:Text(e['title'].toString()),onChanged:(v)async{await StoreDb.instance.toggleTask(e['id'] as int,v==true);await load();});if(section==2)return ListTile(leading:const Icon(Icons.history),title:Text(e['action'].toString()),subtitle:Text(e['details'].toString()),trailing:Text((e['created_at']??'').toString().split('T').first));return ListTile(leading:const Icon(Icons.search),title:Text(e['query'].toString()),subtitle:Text((e['created_at']??'').toString()));}))
+ ]);
+}
 class Dashboard extends StatefulWidget {
   const Dashboard({super.key,required this.go,required this.appName}); final ValueChanged<int> go; final String appName;
   @override State<Dashboard> createState()=>_DashboardState();
