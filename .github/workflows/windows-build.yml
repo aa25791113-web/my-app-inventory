@@ -17,6 +17,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
+      - name: Remove only Flutter's generated sample test
+        shell: pwsh
+        run: |
+          @'
+          from pathlib import Path
+          sample = Path('test/widget_test.dart')
+          if sample.exists() and 'package:material_ui/material_ui.dart' in sample.read_text():
+              sample.unlink()
+              print('Removed incompatible Flutter template test; project tests are preserved.')
+          '@ | python -
       - name: Generate branded icons and Windows metadata
         shell: pwsh
         run: |
