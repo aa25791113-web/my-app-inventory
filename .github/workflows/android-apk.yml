@@ -42,7 +42,6 @@ jobs:
           target.write_text(updated)
           print(f"Configured {target} to compileSdk 36")
           PY
-      - run: rm -rf test
       - name: Generate launcher icon and app label
         run: |
           python -m pip install --quiet pillow
