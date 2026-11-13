@@ -148,6 +148,7 @@ class StoreDb {
       final op=found.first;final pid=op['product_id'] as int;final qty=op['qty'] as int;
       final products=await txn.query('products',where:'id=?',whereArgs:[pid],limit:1);
       if(products.isNotEmpty){final current=products.first['qty'] as int;final next=op['kind']=='sale'?current+qty:current-qty;if(next<0)throw Exception('لا يمكن حذف عملية الشراء لأن الكمية صُرفت بالفعل. سوِّ المخزون أولاً.');await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,?)',[pid,current]);final stockRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[pid],limit:1);final stockQty=stockRows.first['qty'] as int;final nextWarehouse=op['kind']=='sale'?stockQty+qty:stockQty-qty;if(nextWarehouse<0)throw Exception('لا يمكن عكس الحركة: الكمية لم تعد متاحة في المخزن الرئيسي.');await txn.update('warehouse_stock',{'qty':nextWarehouse},where:'product_id=? AND warehouse_id=1',whereArgs:[pid]);await txn.update('products',{'qty':next},where:'id=?',whereArgs:[pid]);}
+      await txn.delete('party_ledger',where:'reference=?',whereArgs:['operation:'+id.toString()]);
       await txn.delete('operations',where:'id=?',whereArgs:[id]);
       await txn.insert('activity_log',{'action':'حذف حركة وعكس أثرها','details':op['product_name'].toString()+' | '+qty.toString(),'created_at':DateTime.now().toIso8601String()});
     });
@@ -205,6 +206,9 @@ class StoreDb {
   Future<void> _createPartyLedger(DatabaseExecutor db) async {
     await db.execute('CREATE TABLE IF NOT EXISTS party_ledger(id INTEGER PRIMARY KEY AUTOINCREMENT,party_type TEXT NOT NULL,party_id INTEGER NOT NULL,entry_type TEXT NOT NULL,amount REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,reference TEXT NOT NULL DEFAULT "")');
     await db.execute('CREATE INDEX IF NOT EXISTS idx_party_ledger_party ON party_ledger(party_type,party_id,id)');
+    await db.execute("INSERT INTO party_ledger(party_type,party_id,entry_type,amount,note,created_at,reference) SELECT CASE WHEN kind='sale' THEN 'customer' ELSE 'supplier' END,party_id,'debit',total,note,created_at,'operation:'||id FROM operations o WHERE party_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM party_ledger l WHERE l.reference='operation:'||o.id)");
+    await db.execute("INSERT INTO party_ledger(party_type,party_id,entry_type,amount,note,created_at,reference) SELECT 'customer',customer_id,'debit',total,'فاتورة سابقة',created_at,'invoice:'||id||':debit' FROM invoices i WHERE customer_id IS NOT NULL AND NOT EXISTS(SELECT 1 FROM party_ledger l WHERE l.reference='invoice:'||i.id||':debit')");
+    await db.execute("INSERT INTO party_ledger(party_type,party_id,entry_type,amount,note,created_at,reference) SELECT 'customer',customer_id,'credit',paid,'مدفوع عند إصدار فاتورة سابقة',created_at,'invoice:'||id||':credit' FROM invoices i WHERE customer_id IS NOT NULL AND paid>0 AND NOT EXISTS(SELECT 1 FROM party_ledger l WHERE l.reference='invoice:'||i.id||':credit')");
   }
   Future<List<Map<String,Object?>>> partyLedger(String type,int id) => database!.query('party_ledger',where:'party_type=? AND party_id=?',whereArgs:[type,id],orderBy:'id DESC');
   Future<double> partyBalance(String type,int id) async {
@@ -327,14 +331,14 @@ class StoreDb {
       if(kind=='sale' && whQty<qty) throw Exception('الكمية المتاحة في المخزن الرئيسي غير كافية.');
       await txn.update('warehouse_stock',{'qty':kind=='sale'?whQty-qty:whQty+qty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
       await txn.update('products', {'qty':next},where:'id=?',whereArgs:[product['id']]);
-      await txn.insert('operations', {
+      final operationId=await txn.insert('operations', {
         'kind':kind,'product_id':product['id'],'product_name':product['name'],
         'qty':qty,'unit_price':price,'total':qty*price,'note':note,
         'created_at':DateTime.now().toIso8601String(),
         'cost_price':(product['buy'] as num).toDouble(),
         'party_id':party?['id'],'party_name':party?['name'] ?? '','warehouse_id':1,
       });
-      if(party!=null){await txn.insert('party_ledger',{'party_type':kind=='sale'?'customer':'supplier','party_id':party['id'],'entry_type':'debit','amount':qty*price,'note':note,'created_at':DateTime.now().toIso8601String(),'reference':kind=='sale'?'بيع مباشر':'شراء مباشر'});}
+      if(party!=null){await txn.insert('party_ledger',{'party_type':kind=='sale'?'customer':'supplier','party_id':party['id'],'entry_type':'debit','amount':qty*price,'note':note,'created_at':DateTime.now().toIso8601String(),'reference':'operation:'+operationId.toString()});}
       await txn.insert('activity_log',{'action':kind=='sale'?'تسجيل بيع':'تسجيل شراء','details':product['name'].toString()+' | كمية: '+qty.toString()+' | إجمالي: '+(qty*price).toString(),'created_at':DateTime.now().toIso8601String()});
     });
   }
