@@ -266,11 +266,21 @@ class StoreDb {
 
   Future<void> saveProduct(Map<String,Object?> data, int? id) async {
     final v=Map<String,Object?>.from(data);
-    if(id==null){final requested=(v['sku']??'').toString().trim().toUpperCase();if(requested.isEmpty){v['sku']=await generateUniqueSku();}else{final exists=await database!.query('products',columns:['id'],where:'sku=?',whereArgs:[requested],limit:1);if(exists.isNotEmpty)throw Exception('هذا الكود مستخدم بالفعل.');v['sku']=requested;}await database!.insert('products',v);return;}
+    if(id==null){final requested=(v['sku']??'').toString().trim().toUpperCase();if(requested.isEmpty){v['sku']=await generateUniqueSku();}else{final exists=await database!.query('products',columns:['id'],where:'sku=?',whereArgs:[requested],limit:1);if(exists.isNotEmpty)throw Exception('هذا الكود مستخدم بالفعل.');v['sku']=requested;}final newId=await database!.insert('products',v);
+      await database!.insert('warehouse_stock',{'product_id':newId,'warehouse_id':1,'qty':v['qty']??0},conflictAlgorithm:ConflictAlgorithm.replace);
+      return;}
     final rows=await database!.query('products',where:'id=?',whereArgs:[id],limit:1);if(rows.isEmpty)throw Exception('المنتج غير موجود.');
     final old=rows.first;final requested=(v['sku']??'').toString().trim().toUpperCase();if(requested.isEmpty||requested==old['sku']){v['sku']=old['sku'];}else{final exists=await database!.query('products',columns:['id'],where:'sku=? AND id<>?',whereArgs:[requested,id],limit:1);if(exists.isNotEmpty)throw Exception('هذا الكود مستخدم بالفعل.');v['sku']=requested;}final ob=(old['buy'] as num).toDouble(),os=(old['sell'] as num).toDouble(),nb=(v['buy'] as num).toDouble(),ns=(v['sell'] as num).toDouble();
     if(ob!=nb||os!=ns)await database!.insert('price_history',{'product_id':id,'product_name':old['name'],'old_buy':ob,'new_buy':nb,'old_sell':os,'new_sell':ns,'reason':'تعديل السعر','created_at':DateTime.now().toIso8601String()});
-    await database!.update('products',v,where:'id=?',whereArgs:[id]);
+    final otherRows=await database!.rawQuery('SELECT COALESCE(SUM(qty),0) AS qty FROM warehouse_stock WHERE product_id=? AND warehouse_id<>1',[id]);
+     final otherQty=(otherRows.first['qty'] as num).toInt();
+     final targetQty=(v['qty'] as num).toInt();
+     if(targetQty<otherQty)throw Exception('الكمية الإجمالية لا يمكن أن تقل عن الموجود في المخازن الأخرى.');
+     await database!.transaction((txn) async {
+       await txn.update('products',v,where:'id=?',whereArgs:[id]);
+       await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[id]);
+       await txn.update('warehouse_stock',{'qty':targetQty-otherQty},where:'product_id=? AND warehouse_id=1',whereArgs:[id]);
+     });
   }
   Future<void> removeProduct(int id) async {
     final count = Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM operations WHERE product_id=?',[id])) ?? 0;
@@ -437,6 +447,7 @@ class StoreDb {
       for(final row in data['operations'] as List){final m=Map<String,Object?>.from(row as Map);m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);await txn.insert('operations',m);}
       for(final table in ['warehouse_stock','warehouse_transfers','suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images','invoices','invoice_items']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');if((wh.first['c'] as int? ?? 0)==0)await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
+       if(data['warehouse_stock']==null)await txn.execute('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) SELECT id,1,qty FROM products');
     });
   }
   Future<String> restore() async {
@@ -461,6 +472,7 @@ class StoreDb {
       }
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
       if((wh.first['c'] as int? ?? 0)==0) await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
+       if(data['warehouse_stock']==null) await txn.execute('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) SELECT id,1,qty FROM products');
     });
     return file.path;
   }
