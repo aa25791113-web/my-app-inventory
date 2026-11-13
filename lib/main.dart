@@ -212,14 +212,21 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> partyLedger(String type,int id) => database!.query('party_ledger',where:'party_type=? AND party_id=?',whereArgs:[type,id],orderBy:'id DESC');
   Future<double> partyBalance(String type,int id) async {
+    final table=type=='customer'?'customers':'suppliers';
+    final party=await database!.query(table,columns:['balance'],where:'id=?',whereArgs:[id],limit:1);
+    final opening=party.isEmpty?0.0:(party.first['balance'] as num).toDouble();
     final rows=await database!.rawQuery("SELECT COALESCE(SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END),0) AS balance FROM party_ledger WHERE party_type=? AND party_id=?",[type,id]);
-    return (rows.first['balance'] as num).toDouble();
+    return opening+(rows.first['balance'] as num).toDouble();
   }
   Future<void> recordPartyPayment({required String type,required int partyId,required double amount,required String note}) async {
     if(amount<=0)throw Exception('أدخل مبلغاً أكبر من صفر.');
     await database!.transaction((txn) async {
+      final table=type=='customer'?'customers':'suppliers';
+      final partyRows=await txn.query(table,columns:['balance'],where:'id=?',whereArgs:[partyId],limit:1);
+      if(partyRows.isEmpty)throw Exception('الحساب غير موجود.');
+      final opening=(partyRows.first['balance'] as num).toDouble();
       final rows=await txn.rawQuery("SELECT COALESCE(SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END),0) AS balance FROM party_ledger WHERE party_type=? AND party_id=?",[type,partyId]);
-      final balance=(rows.first['balance'] as num).toDouble();
+      final balance=opening+(rows.first['balance'] as num).toDouble();
       if(amount>balance)throw Exception('المبلغ أكبر من الرصيد المستحق.');
       await txn.insert('party_ledger',{'party_type':type,'party_id':partyId,'entry_type':'credit','amount':amount,'note':note,'created_at':DateTime.now().toIso8601String(),'reference':'دفعة يدوية'});
       await txn.insert('activity_log',{'action':type=='customer'?'تحصيل من عميل':'سداد لمورد','details':'رقم الطرف $partyId | $amount | $note','created_at':DateTime.now().toIso8601String()});
@@ -1479,6 +1486,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
       if(parties.isNotEmpty)DropdownButtonFormField<int>(value:partyId,decoration:const InputDecoration(labelText:'اختر الحساب'),items:parties.map((e)=>DropdownMenuItem(value:e['id'] as int,child:Text(e['name'].toString()))).toList(),onChanged:(v){setState(()=>partyId=v);load();}),
       if(partyId!=null)Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(type=='customer'?'المبلغ المستحق على العميل':'المبلغ المستحق للمورد',style:const TextStyle(fontWeight:FontWeight.bold)),
+        Text('الرصيد الافتتاحي: ${money(parties.firstWhere((e)=>e['id']==partyId)['balance'])}',style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
         const SizedBox(height:6),Text(money(balance),style:TextStyle(fontSize:25,fontWeight:FontWeight.w900,color:balance>0?Theme.of(context).colorScheme.error:Theme.of(context).colorScheme.primary)),
         const SizedBox(height:10),FilledButton.icon(onPressed:balance>0?addPayment:null,icon:const Icon(Icons.payments_outlined),label:Text(type=='customer'?'تسجيل تحصيل':'تسجيل سداد')),
       ]))),
