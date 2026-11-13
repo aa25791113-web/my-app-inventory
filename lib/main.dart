@@ -140,14 +140,14 @@ class StoreDb {
   Future<void> deleteActivity(int id) async {await database!.delete('activity_log',where:'id=?',whereArgs:[id]);}
   Future<void> deleteCategory(int id) async {await database!.delete('categories',where:'id=?',whereArgs:[id]);}
   Future<void> deleteExpense(int id) async {await database!.delete('expenses',where:'id=?',whereArgs:[id]);}
-  Future<void> deleteWarehouse(int id) async {final count=Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM warehouses'));if((count??0)<=1)throw Exception('يجب الاحتفاظ بمخزن واحد على الأقل.');await database!.delete('warehouses',where:'id=?',whereArgs:[id]);}
+  Future<void> deleteWarehouse(int id) async {if(id==1)throw Exception('لا يمكن حذف المخزن الرئيسي لأنه مرتبط بالحركات الافتراضية.');final count=Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM warehouses'));if((count??0)<=1)throw Exception('يجب الاحتفاظ بمخزن واحد على الأقل.');await database!.delete('warehouses',where:'id=?',whereArgs:[id]);}
   Future<void> deleteMovement(int id) async {
     await database!.transaction((txn) async {
       final found=await txn.query('operations',where:'id=?',whereArgs:[id],limit:1);
       if(found.isEmpty)return;
       final op=found.first;final pid=op['product_id'] as int;final qty=op['qty'] as int;
       final products=await txn.query('products',where:'id=?',whereArgs:[pid],limit:1);
-      if(products.isNotEmpty){final current=products.first['qty'] as int;final next=op['kind']=='sale'?current+qty:current-qty;if(next<0)throw Exception('لا يمكن حذف عملية الشراء لأن الكمية صُرفت بالفعل. سوِّ المخزون أولاً.');await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[pid]);final stockRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[pid],limit:1);final stockQty=stockRows.first['qty'] as int;final nextWarehouse=op['kind']=='sale'?stockQty+qty:stockQty-qty;if(nextWarehouse<0)throw Exception('لا يمكن عكس الحركة: الكمية لم تعد متاحة في المخزن الرئيسي.');await txn.update('warehouse_stock',{'qty':nextWarehouse},where:'product_id=? AND warehouse_id=1',whereArgs:[pid]);await txn.update('products',{'qty':next},where:'id=?',whereArgs:[pid]);}
+      if(products.isNotEmpty){final current=products.first['qty'] as int;final next=op['kind']=='sale'?current+qty:current-qty;if(next<0)throw Exception('لا يمكن حذف عملية الشراء لأن الكمية صُرفت بالفعل. سوِّ المخزون أولاً.');await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,?)',[pid,current]);final stockRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[pid],limit:1);final stockQty=stockRows.first['qty'] as int;final nextWarehouse=op['kind']=='sale'?stockQty+qty:stockQty-qty;if(nextWarehouse<0)throw Exception('لا يمكن عكس الحركة: الكمية لم تعد متاحة في المخزن الرئيسي.');await txn.update('warehouse_stock',{'qty':nextWarehouse},where:'product_id=? AND warehouse_id=1',whereArgs:[pid]);await txn.update('products',{'qty':next},where:'id=?',whereArgs:[pid]);}
       await txn.delete('operations',where:'id=?',whereArgs:[id]);
       await txn.insert('activity_log',{'action':'حذف حركة وعكس أثرها','details':op['product_name'].toString()+' | '+qty.toString(),'created_at':DateTime.now().toIso8601String()});
     });
@@ -181,7 +181,7 @@ class StoreDb {
     await db.execute('CREATE TABLE IF NOT EXISTS warehouse_transfers(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,from_warehouse_id INTEGER NOT NULL,to_warehouse_id INTEGER NOT NULL,qty INTEGER NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
     await db.execute('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) SELECT id,1,qty FROM products');
   }
-  Future<List<Map<String,Object?>>> warehouseStock(int warehouseId) async => database!.rawQuery('SELECT p.id,p.name,p.sku,p.qty AS total_qty,COALESCE(ws.qty,0) AS warehouse_qty,p.buy,p.sell FROM products p LEFT JOIN warehouse_stock ws ON ws.product_id=p.id AND ws.warehouse_id=? WHERE p.archived=0 ORDER BY p.name',[warehouseId]);
+  Future<List<Map<String,Object?>>> warehouseStock(int warehouseId) async { await database!.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) SELECT id,1,qty FROM products'); return database!.rawQuery('SELECT p.id,p.name,p.sku,p.qty AS total_qty,COALESCE(ws.qty,0) AS warehouse_qty,p.buy,p.sell FROM products p LEFT JOIN warehouse_stock ws ON ws.product_id=p.id AND ws.warehouse_id=? WHERE p.archived=0 ORDER BY p.name',[warehouseId]); }
   Future<List<Map<String,Object?>>> warehouseTransfers() => database!.query('warehouse_transfers',orderBy:'id DESC',limit:200);
   Future<void> transferStock({required int productId,required int fromWarehouseId,required int toWarehouseId,required int qty,required String note}) async {
     if(fromWarehouseId==toWarehouseId) throw Exception('اختر مخزنين مختلفين.');
@@ -234,12 +234,11 @@ class StoreDb {
     if(newQty<0) throw Exception('الكمية لا يمكن أن تكون سالبة.');
     await database!.transaction((txn) async {
       final old=product['qty'] as int;
-      final oldQty=product['qty'] as int;
       final otherRows=await txn.rawQuery('SELECT COALESCE(SUM(qty),0) AS qty FROM warehouse_stock WHERE product_id=? AND warehouse_id<>1',[product['id']]);
       final otherQty=(otherRows.first['qty'] as num).toInt();
       if(newQty<otherQty) throw Exception('الكمية الجديدة أقل من الكميات الموجودة في المخازن الأخرى.');
       await txn.update('products',{'qty':newQty},where:'id=?',whereArgs:[product['id']]);
-      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[product['id']]);
+      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,?)',[product['id'],newQty]);
       await txn.update('warehouse_stock',{'qty':newQty-otherQty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
       await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
       await txn.insert('activity_log',{'action':'تسوية مخزون','details':product['name'].toString()+' | '+old.toString()+' ← '+newQty.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});
@@ -322,7 +321,7 @@ class StoreDb {
       final current = product['qty'] as int;
       if (kind == 'sale' && current < qty) throw Exception('الكمية المتاحة لا تكفي.');
       final next = kind == 'sale' ? current - qty : current + qty;
-      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[product['id']]);
+      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,?)',[product['id'],current]);
       final whRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']],limit:1);
       final whQty=whRows.first['qty'] as int;
       if(kind=='sale' && whQty<qty) throw Exception('الكمية المتاحة في المخزن الرئيسي غير كافية.');
@@ -359,7 +358,7 @@ class StoreDb {
       if(customerId!=null){if(total>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'debit','amount':total,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});if(paid>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});}
       for(final item in items){final id=item['product_id'] as int;final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();final line=q*price;
         final current=(await txn.query('products',columns:['qty'],where:'id=?',whereArgs:[id])).first['qty'] as int;
-        await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[id]);
+        await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,?)',[id,current]);
         final warehouseRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[id],limit:1);
         final warehouseQty=warehouseRows.first['qty'] as int;
         if(warehouseQty<q) throw Exception('الكمية في المخزن الرئيسي لا تكفي لإصدار الفاتورة.');
