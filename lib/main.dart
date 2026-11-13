@@ -42,7 +42,7 @@ class StoreDb {
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
-    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 11,
+    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 12,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0,sku TEXT NOT NULL DEFAULT "",manufacturer TEXT NOT NULL DEFAULT "",part_no TEXT NOT NULL DEFAULT "",alt_part_no TEXT NOT NULL DEFAULT "",location TEXT NOT NULL DEFAULT "",description TEXT NOT NULL DEFAULT "",archived INTEGER NOT NULL DEFAULT 0,wholesale REAL NOT NULL DEFAULT 0,brand TEXT NOT NULL DEFAULT "",unit TEXT NOT NULL DEFAULT "قطعة",country TEXT NOT NULL DEFAULT "",alt_names TEXT NOT NULL DEFAULT "",specs TEXT NOT NULL DEFAULT "",image_path TEXT NOT NULL DEFAULT "",supplier_id INTEGER,compatibility TEXT NOT NULL DEFAULT "",dimensions TEXT NOT NULL DEFAULT "",weight TEXT NOT NULL DEFAULT "",package_size INTEGER NOT NULL DEFAULT 1)');
         await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,cost_price REAL NOT NULL DEFAULT 0,party_id INTEGER,party_name TEXT NOT NULL DEFAULT "",warehouse_id INTEGER NOT NULL DEFAULT 1)');
@@ -74,7 +74,7 @@ class StoreDb {
           await _createProductHistory(db);
           await _backfillProductCodes(db);
         }
-        if(oldVersion<8){await _upgradeProductColumns(db);await _createSmartTables(db);} if(oldVersion<9){await _createSmartTables(db);} if(oldVersion<10){await _createSmartTables(db);} if(oldVersion<11){await _createWarehouseStock(db);}
+        if(oldVersion<8){await _upgradeProductColumns(db);await _createSmartTables(db);} if(oldVersion<9){await _createSmartTables(db);} if(oldVersion<10){await _createSmartTables(db);} if(oldVersion<11){await _createWarehouseStock(db);} if(oldVersion<12){await _createPartyLedger(db);}
       });
   }
 
@@ -174,6 +174,7 @@ class StoreDb {
     final wh = await db.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
     if ((wh.first['c'] as int? ?? 0) == 0) await db.insert('warehouses', {'name':'المخزن الرئيسي','location':'','notes':''});
     await _createWarehouseStock(db);
+    await _createPartyLedger(db);
   }
   Future<void> _createWarehouseStock(DatabaseExecutor db) async {
     await db.execute('CREATE TABLE IF NOT EXISTS warehouse_stock(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,warehouse_id INTEGER NOT NULL,qty INTEGER NOT NULL DEFAULT 0,UNIQUE(product_id,warehouse_id))');
@@ -199,6 +200,25 @@ class StoreDb {
       await txn.update('warehouse_stock',{'qty':(toRows.first['qty'] as int)+qty},where:'product_id=? AND warehouse_id=?',whereArgs:[productId,toWarehouseId]);
       await txn.insert('warehouse_transfers',{'product_id':productId,'product_name':product['name'],'from_warehouse_id':fromWarehouseId,'to_warehouse_id':toWarehouseId,'qty':qty,'note':note,'created_at':DateTime.now().toIso8601String()});
       await txn.insert('activity_log',{'action':'تحويل مخزون بين المخازن','details':'${product['name']} | ${qty} | ${fromWarehouseId} → ${toWarehouseId}','created_at':DateTime.now().toIso8601String()});
+    });
+  }
+  Future<void> _createPartyLedger(DatabaseExecutor db) async {
+    await db.execute('CREATE TABLE IF NOT EXISTS party_ledger(id INTEGER PRIMARY KEY AUTOINCREMENT,party_type TEXT NOT NULL,party_id INTEGER NOT NULL,entry_type TEXT NOT NULL,amount REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,reference TEXT NOT NULL DEFAULT "")');
+    await db.execute('CREATE INDEX IF NOT EXISTS idx_party_ledger_party ON party_ledger(party_type,party_id,id)');
+  }
+  Future<List<Map<String,Object?>>> partyLedger(String type,int id) => database!.query('party_ledger',where:'party_type=? AND party_id=?',whereArgs:[type,id],orderBy:'id DESC');
+  Future<double> partyBalance(String type,int id) async {
+    final rows=await database!.rawQuery("SELECT COALESCE(SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END),0) AS balance FROM party_ledger WHERE party_type=? AND party_id=?",[type,id]);
+    return (rows.first['balance'] as num).toDouble();
+  }
+  Future<void> recordPartyPayment({required String type,required int partyId,required double amount,required String note}) async {
+    if(amount<=0)throw Exception('أدخل مبلغاً أكبر من صفر.');
+    await database!.transaction((txn) async {
+      final rows=await txn.rawQuery("SELECT COALESCE(SUM(CASE WHEN entry_type='debit' THEN amount ELSE -amount END),0) AS balance FROM party_ledger WHERE party_type=? AND party_id=?",[type,partyId]);
+      final balance=(rows.first['balance'] as num).toDouble();
+      if(amount>balance)throw Exception('المبلغ أكبر من الرصيد المستحق.');
+      await txn.insert('party_ledger',{'party_type':type,'party_id':partyId,'entry_type':'credit','amount':amount,'note':note,'created_at':DateTime.now().toIso8601String(),'reference':'دفعة يدوية'});
+      await txn.insert('activity_log',{'action':type=='customer'?'تحصيل من عميل':'سداد لمورد','details':'رقم الطرف $partyId | $amount | $note','created_at':DateTime.now().toIso8601String()});
     });
   }
   Future<List<Map<String,Object?>>> parties(String table,[String query='']) => database!.query(table,where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%$query%'],orderBy:'name');
@@ -315,6 +335,7 @@ class StoreDb {
         'cost_price':(product['buy'] as num).toDouble(),
         'party_id':party?['id'],'party_name':party?['name'] ?? '','warehouse_id':1,
       });
+      if(party!=null){await txn.insert('party_ledger',{'party_type':kind=='sale'?'customer':'supplier','party_id':party['id'],'entry_type':'debit','amount':qty*price,'note':note,'created_at':DateTime.now().toIso8601String(),'reference':kind=='sale'?'بيع مباشر':'شراء مباشر'});}
       await txn.insert('activity_log',{'action':kind=='sale'?'تسجيل بيع':'تسجيل شراء','details':product['name'].toString()+' | كمية: '+qty.toString()+' | إجمالي: '+(qty*price).toString(),'created_at':DateTime.now().toIso8601String()});
     });
   }
@@ -335,6 +356,7 @@ class StoreDb {
       final count=Sqflite.firstIntValue(await txn.rawQuery('SELECT COUNT(*) FROM invoices'))??0;
       final invoiceNo='INV-${DateTime.now().year}-${(count+1).toString().padLeft(5,'0')}';
       final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':customerId,'customer_name':customerName,'subtotal':subtotal,'discount_value':discountValue,'discount_mode':discountPercent?'percent':'amount','discount_amount':discount,'total':total,'paid':paid,'note':note,'created_at':now});
+      if(customerId!=null){if(total>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'debit','amount':total,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});if(paid>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});}
       for(final item in items){final id=item['product_id'] as int;final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();final line=q*price;
         final current=(await txn.query('products',columns:['qty'],where:'id=?',whereArgs:[id])).first['qty'] as int;
         await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[id]);
@@ -381,7 +403,7 @@ class StoreDb {
     final products=await database!.query('products');
     final blobs=<Map<String,Object?>>[];
     for(final product in products){final path=(product['image_path']??'').toString();if(path.isEmpty)continue;try{final file=File(path);if(await file.exists()){blobs.add({'product_id':product['id'],'name':p.basename(path),'data':base64Encode(await file.readAsBytes())});}}catch(_){}}
-    return {'format':'MYAPP_BACKUP_3','products':products,'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments'),'price_history':await database!.query('price_history'),'categories':await database!.query('categories'),'favorites':await database!.query('favorites'),'recent_searches':await database!.query('recent_searches'),'activity_log':await database!.query('activity_log'),'tasks':await database!.query('tasks'),'product_notes':await database!.query('product_notes'),'product_images':await database!.query('product_images'),'invoices':await database!.query('invoices'),'invoice_items':await database!.query('invoice_items'),'invoice_payments':await database!.query('invoice_payments'),'warehouse_stock':await database!.query('warehouse_stock'),'warehouse_transfers':await database!.query('warehouse_transfers'),'image_blobs':blobs};
+    return {'format':'MYAPP_BACKUP_3','products':products,'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments'),'price_history':await database!.query('price_history'),'categories':await database!.query('categories'),'favorites':await database!.query('favorites'),'recent_searches':await database!.query('recent_searches'),'activity_log':await database!.query('activity_log'),'tasks':await database!.query('tasks'),'product_notes':await database!.query('product_notes'),'product_images':await database!.query('product_images'),'invoices':await database!.query('invoices'),'invoice_items':await database!.query('invoice_items'),'invoice_payments':await database!.query('invoice_payments'),'warehouse_stock':await database!.query('warehouse_stock'),'warehouse_transfers':await database!.query('warehouse_transfers'),'party_ledger':await database!.query('party_ledger'),'image_blobs':blobs};
   }
   Future<Map<int,String>> _restoreImageBlobs(Map<String,dynamic> data) async {
     final result=<int,String>{};final blobs=data['image_blobs'] as List? ?? [];if(blobs.isEmpty)return result;
@@ -442,10 +464,10 @@ class StoreDb {
     if(data['format']!='MYAPP_BACKUP_1'&&data['format']!='MYAPP_BACKUP_2'&&data['format']!='MYAPP_BACKUP_3')throw Exception('ملف النسخة الاحتياطية غير صالح.');
     final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
-      for(final t in ['warehouse_transfers','warehouse_stock','invoice_payments','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
+      for(final t in ['party_ledger','warehouse_transfers','warehouse_stock','invoice_payments','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
       for(final row in data['products'] as List){final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];var sku=(product['sku']??'').toString();if(sku.isEmpty||(await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty){do{sku=_newSku();}while((await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty);product['sku']=sku;}await txn.insert('products',product);}
       for(final row in data['operations'] as List){final m=Map<String,Object?>.from(row as Map);m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);await txn.insert('operations',m);}
-      for(final table in ['warehouse_stock','warehouse_transfers','suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images','invoices','invoice_items']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
+      for(final table in ['party_ledger','warehouse_stock','warehouse_transfers','suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images','invoices','invoice_items']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');if((wh.first['c'] as int? ?? 0)==0)await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
        if(data['warehouse_stock']==null)await txn.execute('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) SELECT id,1,qty FROM products');
     });
@@ -458,7 +480,7 @@ class StoreDb {
     if (data['format'] != 'MYAPP_BACKUP_1' && data['format'] != 'MYAPP_BACKUP_2' && data['format'] != 'MYAPP_BACKUP_3') throw Exception('ملف النسخة الاحتياطية غير صالح.');
     final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
-      for(final t in ['warehouse_transfers','warehouse_stock','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
+      for(final t in ['party_ledger','warehouse_transfers','warehouse_stock','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
       for (final row in data['products'] as List) {
         final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];var sku=(product['sku']??'').toString();if(sku.isEmpty||(await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty){do{sku=_newSku();}while((await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty);product['sku']=sku;}await txn.insert('products',product);
       }
@@ -467,7 +489,7 @@ class StoreDb {
         m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);
         await txn.insert('operations',m);
       }
-      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','warehouse_stock','warehouse_transfers','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images']) {
+      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','warehouse_stock','warehouse_transfers','party_ledger','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images']) {
         for(final row in (data[table] as List? ?? [])) { await txn.insert(table,Map<String,Object?>.from(row as Map)); }
       }
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
@@ -550,9 +572,10 @@ class _HomePageState extends State<HomePage> {
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       const ScientificCalculatorPage(),
       WarehouseStockPage(key:ValueKey('whstock'+refreshId.toString()),changed:refresh),
+      PartyLedgerPage(key:ValueKey('ledger'+refreshId.toString())),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية','توزيع المخزون'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined,Icons.swap_horiz];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية','توزيع المخزون','حسابات العملاء والموردين'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined,Icons.swap_horiz,Icons.account_balance_wallet_outlined];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
@@ -1416,6 +1439,48 @@ class _WarehouseStockPageState extends State<WarehouseStockPage> {
       ...products.map((e)=>Card(child:ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('كود: ${e['sku']} • إجمالي كل المخازن: ${e['total_qty']}'),trailing:Text((e['warehouse_qty'] as int).toString(),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold))))),
       const SizedBox(height:14),const Text('آخر تحويلات المخزون',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
       ...transfers.take(30).map((e)=>ListTile(dense:true,leading:const Icon(Icons.swap_horiz),title:Text('${e['product_name']} • ${e['qty']} قطعة'),subtitle:Text('مخزن ${e['from_warehouse_id']} ← مخزن ${e['to_warehouse_id']} • ${e['created_at']}'))),
+    ]));
+  }
+}
+
+
+class PartyLedgerPage extends StatefulWidget {
+  const PartyLedgerPage({super.key});
+  @override State<PartyLedgerPage> createState()=>_PartyLedgerPageState();
+}
+class _PartyLedgerPageState extends State<PartyLedgerPage> {
+  String type='customer';List<Map<String,Object?>> parties=[],entries=[];int? partyId;double balance=0;bool loading=true;
+  @override void initState(){super.initState();load();}
+  Future<void> load() async {
+    final p=await StoreDb.instance.parties(type=='customer'?'customers':'suppliers');
+    final id=p.any((e)=>e['id']==partyId)?partyId:(p.isEmpty?null:p.first['id'] as int);
+    final l=id==null?<Map<String,Object?>>[]:await StoreDb.instance.partyLedger(type,id);
+    final b=id==null?0.0:await StoreDb.instance.partyBalance(type,id);
+    if(mounted)setState((){parties=p;partyId=id;entries=l;balance=b;loading=false;});
+  }
+  Future<void> addPayment() async {
+    if(partyId==null){toast(context,'أضف عميلاً أو مورداً أولاً.');return;}
+    final amount=TextEditingController(),note=TextEditingController();
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text(type=='customer'?'تسجيل تحصيل من العميل':'تسجيل سداد للمورد'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:amount,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ')),TextField(controller:note,decoration:const InputDecoration(labelText:'البيان'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('حفظ الدفعة'))])));
+    if(ok==true){try{await StoreDb.instance.recordPartyPayment(type:type,partyId:partyId!,amount:double.parse(amount.text),note:note.text.trim());await load();if(mounted)toast(context,'تم تسجيل الدفعة.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
+    amount.dispose();note.dispose();
+  }
+  @override Widget build(BuildContext context){
+    if(loading)return const Center(child:CircularProgressIndicator());
+    return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
+      const Text('الحسابات والذمم المالية',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
+      const SizedBox(height:10),
+      SegmentedButton<String>(segments:const [ButtonSegment(value:'customer',label:Text('العملاء'),icon:Icon(Icons.people_alt_outlined)),ButtonSegment(value:'supplier',label:Text('الموردون'),icon:Icon(Icons.local_shipping_outlined))],selected:{type},onSelectionChanged:(v){setState(()=>{type=v.first,loading=true,partyId=null});load();}),
+      const SizedBox(height:10),
+      if(parties.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(18),child:Text('لا توجد بيانات لهذا النوع. أضف عميلاً أو مورداً أولاً.'))),
+      if(parties.isNotEmpty)DropdownButtonFormField<int>(value:partyId,decoration:const InputDecoration(labelText:'اختر الحساب'),items:parties.map((e)=>DropdownMenuItem(value:e['id'] as int,child:Text(e['name'].toString()))).toList(),onChanged:(v){setState(()=>partyId=v);load();}),
+      if(partyId!=null)Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Text(type=='customer'?'المبلغ المستحق على العميل':'المبلغ المستحق للمورد',style:const TextStyle(fontWeight:FontWeight.bold)),
+        const SizedBox(height:6),Text(money(balance),style:TextStyle(fontSize:25,fontWeight:FontWeight.w900,color:balance>0?Theme.of(context).colorScheme.error:Theme.of(context).colorScheme.primary)),
+        const SizedBox(height:10),FilledButton.icon(onPressed:balance>0?addPayment:null,icon:const Icon(Icons.payments_outlined),label:Text(type=='customer'?'تسجيل تحصيل':'تسجيل سداد')),
+      ]))),
+      const Text('كشف الحساب',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
+      ...entries.map((e)=>Card(child:ListTile(leading:Icon(e['entry_type']=='debit'?Icons.add_circle_outline:Icons.remove_circle_outline),title:Text((e['entry_type']=='debit'?'مستحق + ':'دفعة - ')+money(e['amount'])),subtitle:Text('${e['note']} • ${e['created_at']}'),trailing:Text(e['reference'].toString())))),
     ]));
   }
 }
