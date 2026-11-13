@@ -17,9 +17,6 @@ jobs:
           channel: stable
           cache: true
       - run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
-      - name: Remove generated sample test
-        shell: pwsh
-        run: if (Test-Path test) { Remove-Item test -Recurse -Force }
       - name: Generate branded icons and Windows metadata
         shell: pwsh
         run: |
