@@ -147,7 +147,7 @@ class StoreDb {
       if(found.isEmpty)return;
       final op=found.first;final pid=op['product_id'] as int;final qty=op['qty'] as int;
       final products=await txn.query('products',where:'id=?',whereArgs:[pid],limit:1);
-      if(products.isNotEmpty){final current=products.first['qty'] as int;final next=op['kind']=='sale'?current-qty:current+qty;if(next<0)throw Exception('لا يمكن حذف عملية الشراء لأن الكمية صُرفت بالفعل. سوِّ المخزون أولاً.');await txn.update('products',{'qty':next},where:'id=?',whereArgs:[pid]);}
+      if(products.isNotEmpty){final current=products.first['qty'] as int;final next=op['kind']=='sale'?current+qty:current-qty;if(next<0)throw Exception('لا يمكن حذف عملية الشراء لأن الكمية صُرفت بالفعل. سوِّ المخزون أولاً.');await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[pid]);final stockRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[pid],limit:1);final stockQty=stockRows.first['qty'] as int;final nextWarehouse=op['kind']=='sale'?stockQty+qty:stockQty-qty;if(nextWarehouse<0)throw Exception('لا يمكن عكس الحركة: الكمية لم تعد متاحة في المخزن الرئيسي.');await txn.update('warehouse_stock',{'qty':nextWarehouse},where:'product_id=? AND warehouse_id=1',whereArgs:[pid]);await txn.update('products',{'qty':next},where:'id=?',whereArgs:[pid]);}
       await txn.delete('operations',where:'id=?',whereArgs:[id]);
       await txn.insert('activity_log',{'action':'حذف حركة وعكس أثرها','details':op['product_name'].toString()+' | '+qty.toString(),'created_at':DateTime.now().toIso8601String()});
     });
@@ -214,9 +214,13 @@ class StoreDb {
     if(newQty<0) throw Exception('الكمية لا يمكن أن تكون سالبة.');
     await database!.transaction((txn) async {
       final old=product['qty'] as int;
+      final oldQty=product['qty'] as int;
+      final otherRows=await txn.rawQuery('SELECT COALESCE(SUM(qty),0) AS qty FROM warehouse_stock WHERE product_id=? AND warehouse_id<>1',[product['id']]);
+      final otherQty=(otherRows.first['qty'] as num).toInt();
+      if(newQty<otherQty) throw Exception('الكمية الجديدة أقل من الكميات الموجودة في المخازن الأخرى.');
       await txn.update('products',{'qty':newQty},where:'id=?',whereArgs:[product['id']]);
       await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[product['id']]);
-      await txn.update('warehouse_stock',{'qty':newQty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
+      await txn.update('warehouse_stock',{'qty':newQty-otherQty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
       await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
       await txn.insert('activity_log',{'action':'تسوية مخزون','details':product['name'].toString()+' | '+old.toString()+' ← '+newQty.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});
     });
@@ -1371,7 +1375,7 @@ class _WarehouseStockPageState extends State<WarehouseStockPage> {
     final id=selectedWarehouse??w.first['id'] as int;
     final p=await StoreDb.instance.warehouseStock(id);
     final t=await StoreDb.instance.warehouseTransfers();
-    if(mounted)setState(()=>{warehouses=w,selectedWarehouse=id,products=p,transfers=t,loading=false});
+    if(mounted)setState(() { warehouses=w; selectedWarehouse=id; products=p; transfers=t; loading=false; });
   }
   Future<void> transfer() async {
     if(warehouses.length<2){toast(context,'أضف مخزناً آخر أولاً.');return;}
