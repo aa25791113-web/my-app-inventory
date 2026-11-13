@@ -20,6 +20,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'premium_assistant.dart';
+import 'scientific_calculator.dart';
 
 String currencyLabel='ج.م';
 Future<void> main() async {
@@ -450,10 +452,15 @@ class _MyAppState extends State<MyApp> {
   ThemeData makeTheme(Brightness b)=>ThemeData(
     useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b),
     scaffoldBackgroundColor:b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8),
-    cardTheme:CardThemeData(elevation:1,margin:const EdgeInsets.symmetric(horizontal:10,vertical:6),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(18))),
-    appBarTheme:const AppBarTheme(centerTitle:false,elevation:0,scrolledUnderElevation:0),
+    cardTheme:CardThemeData(color:b==Brightness.dark?const Color(0xFF192630):Colors.white,elevation:b==Brightness.dark?0:1,margin:const EdgeInsets.symmetric(horizontal:10,vertical:7),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20),side:BorderSide(color:b==Brightness.dark?const Color(0xFF293A45):const Color(0xFFE8EDF1)))),
+    appBarTheme:AppBarTheme(centerTitle:false,elevation:0,scrolledUnderElevation:0,backgroundColor:b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8),surfaceTintColor:Colors.transparent,titleTextStyle:TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:b==Brightness.dark?Colors.white:const Color(0xFF17252D))),
     inputDecorationTheme:InputDecorationTheme(filled:true,isDense:true,contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:13),border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none),focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide(width:1.4,color:seedColor))),
-    navigationBarTheme:const NavigationBarThemeData(height:68,labelBehavior:NavigationDestinationLabelBehavior.onlyShowSelected)
+    navigationBarTheme:NavigationBarThemeData(height:70,elevation:0,backgroundColor:b==Brightness.dark?const Color(0xFF17232C):Colors.white,indicatorColor:ColorScheme.fromSeed(seedColor:seedColor,brightness:b).primaryContainer,labelBehavior:NavigationDestinationLabelBehavior.onlyShowSelected),
+    dialogTheme:DialogThemeData(shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),elevation:12),
+    snackBarTheme:SnackBarThemeData(behavior:SnackBarBehavior.floating,shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14))),
+    dividerTheme:DividerThemeData(color:b==Brightness.dark?const Color(0xFF293A45):const Color(0xFFE5EBEF)),
+    filledButtonTheme:FilledButtonThemeData(style:FilledButton.styleFrom(shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14)),padding:const EdgeInsets.symmetric(horizontal:18,vertical:13))),
+    outlinedButtonTheme:OutlinedButtonThemeData(style:OutlinedButton.styleFrom(shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(14)),padding:const EdgeInsets.symmetric(horizontal:16,vertical:12)))
   );
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:appName,
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
@@ -483,12 +490,13 @@ class _HomePageState extends State<HomePage> {
       QuickSearchPage(key:ValueKey('q'+refreshId.toString())),
       CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
-      AssistantPage(key:ValueKey('assistant'+refreshId.toString()),changed:refresh,go:(v)=>setState(()=>tab=v)),
+      const PremiumAssistantPage(),
       InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh),
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
+      const ScientificCalculatorPage(),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','مساعد البرنامج','الفواتير','انتظار الدفع'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.support_agent,Icons.receipt_long,Icons.pending_actions];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
