@@ -223,7 +223,7 @@ class StoreDb {
   }
   Future<List<Map<String,Object?>>> parties(String table,[String query='']) => database!.query(table,where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%$query%'],orderBy:'name');
   Future<void> saveParty(String table,Map<String,Object?> data,int? id) async { if(id==null){await database!.insert(table,data);}else{await database!.update(table,data,where:'id=?',whereArgs:[id]);} await log('تعديل بيانات',table); }
-  Future<void> deleteParty(String table,int id) async { await database!.delete(table,where:'id=?',whereArgs:[id]); }
+  Future<void> deleteParty(String table,int id) async { final type=table=='customers'?'customer':table=='suppliers'?'supplier':'';if(type.isNotEmpty){final count=Sqflite.firstIntValue(await database!.rawQuery('SELECT COUNT(*) FROM party_ledger WHERE party_type=? AND party_id=?',[type,id]))??0;if(count>0)throw Exception('لا يمكن حذف حساب له كشف حركات مالية؛ احتفظ بالسجل أو عدّل بياناته.');}await database!.delete(table,where:'id=?',whereArgs:[id]); }
   Future<List<Map<String,Object?>>> expenses() => database!.query('expenses',orderBy:'id DESC');
   Future<void> addExpense(String title,String category,double amount,String notes) async {
     if(title.trim().isEmpty||amount<=0) throw Exception('أدخل بيان المصروف ومبلغاً أكبر من صفر.');
@@ -374,7 +374,7 @@ class StoreDb {
   Future<List<Map<String,Object?>>> invoicePayments(int id)=>database!.query('invoice_payments',where:'invoice_id=?',whereArgs:[id],orderBy:'id DESC');
   Future<void> addInvoicePayment(int id,double amount) async {
     if(amount<=0)throw Exception('أدخل مبلغاً صحيحاً.');
-    await database!.transaction((txn) async {final rows=await txn.query('invoices',where:'id=?',whereArgs:[id],limit:1);if(rows.isEmpty)throw Exception('الفاتورة غير موجودة.');final row=rows.first;final due=(row['total'] as num).toDouble()-(row['paid'] as num).toDouble();if(amount>due)throw Exception('المبلغ أكبر من المتبقي.');await txn.update('invoices',{'paid':(row['paid'] as num).toDouble()+amount},where:'id=?',whereArgs:[id]);await txn.insert('invoice_payments',{'invoice_id':id,'amount':amount,'paid_at':DateTime.now().toIso8601String(),'note':'دفعة نقدية'});await txn.insert('activity_log',{'action':'تحصيل دفعة فاتورة','details':row['invoice_no'].toString()+' | '+amount.toString(),'created_at':DateTime.now().toIso8601String()});});
+    await database!.transaction((txn) async {final rows=await txn.query('invoices',where:'id=?',whereArgs:[id],limit:1);if(rows.isEmpty)throw Exception('الفاتورة غير موجودة.');final row=rows.first;final due=(row['total'] as num).toDouble()-(row['paid'] as num).toDouble();if(amount>due)throw Exception('المبلغ أكبر من المتبقي.');await txn.update('invoices',{'paid':(row['paid'] as num).toDouble()+amount},where:'id=?',whereArgs:[id]);await txn.insert('invoice_payments',{'invoice_id':id,'amount':amount,'paid_at':DateTime.now().toIso8601String(),'note':'دفعة نقدية'});if(row['customer_id']!=null){await txn.insert('party_ledger',{'party_type':'customer','party_id':row['customer_id'],'entry_type':'credit','amount':amount,'note':'تحصيل فاتورة '+row['invoice_no'].toString(),'created_at':DateTime.now().toIso8601String(),'reference':row['invoice_no'].toString()});}await txn.insert('activity_log',{'action':'تحصيل دفعة فاتورة','details':row['invoice_no'].toString()+' | '+amount.toString(),'created_at':DateTime.now().toIso8601String()});});
   }
 
   Future<Map<String,Object?>> summary() async {
@@ -1470,7 +1470,7 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
     return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
       const Text('الحسابات والذمم المالية',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold)),
       const SizedBox(height:10),
-      SegmentedButton<String>(segments:const [ButtonSegment(value:'customer',label:Text('العملاء'),icon:Icon(Icons.people_alt_outlined)),ButtonSegment(value:'supplier',label:Text('الموردون'),icon:Icon(Icons.local_shipping_outlined))],selected:{type},onSelectionChanged:(v){setState(()=>{type=v.first,loading=true,partyId=null});load();}),
+      SegmentedButton<String>(segments:const [ButtonSegment(value:'customer',label:Text('العملاء'),icon:Icon(Icons.people_alt_outlined)),ButtonSegment(value:'supplier',label:Text('الموردون'),icon:Icon(Icons.local_shipping_outlined))],selected:{type},onSelectionChanged:(v){setState((){type=v.first;loading=true;partyId=null;});load();}),
       const SizedBox(height:10),
       if(parties.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(18),child:Text('لا توجد بيانات لهذا النوع. أضف عميلاً أو مورداً أولاً.'))),
       if(parties.isNotEmpty)DropdownButtonFormField<int>(value:partyId,decoration:const InputDecoration(labelText:'اختر الحساب'),items:parties.map((e)=>DropdownMenuItem(value:e['id'] as int,child:Text(e['name'].toString()))).toList(),onChanged:(v){setState(()=>partyId=v);load();}),
