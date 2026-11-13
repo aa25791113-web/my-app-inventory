@@ -885,7 +885,7 @@ class _AssistantPageState extends State<AssistantPage> {
     if(v.contains('الشراء')||v.contains('مشتريات'))return 'صفحة المشتريات تسجل دخول الكمية للمخزون. اختر المنتج والكمية وسعر الوحدة والمورد. الكمية تزيد وتُسجل الحركة في سجل المشتريات.';
     if(v.contains('المورد'))return 'صفحة الموردين تحفظ بيانات الموردين وتربط المورد بالمنتجات وبحركات الشراء. بيانات الطرف لا تعني وجود دفتر حسابات تفصيلي كامل.';
     if(v.contains('العميل'))return 'صفحة العملاء تحفظ بيانات العملاء وتتيح ربط العميل بحركات البيع.';
-    if(v.contains('المخزن')||v.contains('المخازن'))return 'صفحة المخازن تحفظ أسماء المخازن وبياناتها. تنبيه: الإصدار الحالي لا يفصل رصيد كل منتج لكل مخزن؛ كمية المنتج ما زالت كمية إجمالية.';
+    if(v.contains('المخزن')||v.contains('المخازن'))return 'تقدر تدير أسماء المخازن، وتشوف رصيد كل منتج في المخزن المختار، وتحول الكميات بين المخازن من صفحة توزيع المخزون. تسجيل البيع والشراء الحالي مرتبط بالمخزن الرئيسي افتراضياً.';
     if(v.contains('المصروف'))return 'صفحة المصروفات تحفظ البيان والتصنيف والمبلغ والملاحظات، وتدخل المصروفات في ملخص صافي الربح والتدفق النقدي.';
     if(v.contains('التقرير')||v.contains('الأرباح')||v.contains('الربح'))return 'التقارير تعرض قيمة المخزون بسعر الشراء والبيع وإجمالي المبيعات والمشتريات والمصروفات والربح التقديري. الأرقام ملخصة وليست نظام محاسبة ضريبية أو دفتر أستاذ متكامل.';
     if(v.contains('النسخ')||v.contains('الاحتياطي')||v.contains('استعادة'))return 'من الإعدادات يمكنك إنشاء نسخة احتياطية JSON واستعادة البيانات. الاستعادة تستبدل البيانات الحالية؛ خذ نسخة احتياطية حديثة قبلها. كما يمكن استيراد وتصدير CSV للأصناف.';
@@ -1025,7 +1025,7 @@ class _AssistantPageState extends State<AssistantPage> {
   }
   Future<void> contactSupport()async{
     const phone='584263545601';
-    final message=Uri.encodeComponent('مرحباً فريق دعم MY APP 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.5.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
+    final message=Uri.encodeComponent('مرحباً فريق دعم MY APP 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.8.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
     final uri=Uri.parse('https://wa.me/$phone?text=$message');
     if(!await launchUrl(uri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح واتساب. تأكد من تثبيته أو افتح الرابط من المتصفح.');
   }
@@ -1533,7 +1533,7 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.7.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.8.0'),
       subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
