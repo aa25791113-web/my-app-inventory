@@ -50,6 +50,7 @@ class StoreDb {
         await _createProductHistory(db);
         await _backfillProductCodes(db);
         await _createSmartTables(db);
+        await _createPartyLedger(db);
       },
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 2) {
@@ -175,7 +176,6 @@ class StoreDb {
     final wh = await db.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
     if ((wh.first['c'] as int? ?? 0) == 0) await db.insert('warehouses', {'name':'المخزن الرئيسي','location':'','notes':''});
     await _createWarehouseStock(db);
-    await _createPartyLedger(db);
   }
   Future<void> _createWarehouseStock(DatabaseExecutor db) async {
     await db.execute('CREATE TABLE IF NOT EXISTS warehouse_stock(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,warehouse_id INTEGER NOT NULL,qty INTEGER NOT NULL DEFAULT 0,UNIQUE(product_id,warehouse_id))');
