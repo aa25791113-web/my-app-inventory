@@ -46,8 +46,12 @@ class _ScientificCalculatorPageState extends State<ScientificCalculatorPage> {
       if (key == '1/x') { expression = '1/($expression)'; return; }
       if (key == 'mod') { expression += '%'; return; }
       if (['sin','cos','tan','log','ln','abs'].contains(key)) {
-        final inverse = <String,String>{'sin':'asin','cos':'acos','tan':'atan','log':'10^(','ln':'exp(','abs':'abs'}[key]!;
-        expression += (shift && key != 'log' && key != 'ln') ? '$inverse(' : '$key(';
+        final inverse = <String,String>{'sin':'asin','cos':'acos','tan':'atan','log':'10^','ln':'exp','abs':'abs'}[key]!;
+        if (shift && (key == 'log' || key == 'ln')) {
+          expression += '$inverse(';
+        } else {
+          expression += shift ? '$inverse(' : '$key(';
+        }
         shift = false;
         return;
       }
