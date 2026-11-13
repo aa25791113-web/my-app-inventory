@@ -42,7 +42,7 @@ class StoreDb {
   Future<void> init() async {
     final dir = await getApplicationSupportDirectory();
     await dir.create(recursive: true);
-    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 10,
+    database = await openDatabase(p.join(dir.path, 'my_app.sqlite'), version: 11,
       onCreate: (db, version) async {
         await db.execute('CREATE TABLE products(id INTEGER PRIMARY KEY AUTOINCREMENT,name TEXT NOT NULL,category TEXT NOT NULL DEFAULT "",qty INTEGER NOT NULL DEFAULT 0,min_qty INTEGER NOT NULL DEFAULT 0,buy REAL NOT NULL DEFAULT 0,sell REAL NOT NULL DEFAULT 0,sku TEXT NOT NULL DEFAULT "",manufacturer TEXT NOT NULL DEFAULT "",part_no TEXT NOT NULL DEFAULT "",alt_part_no TEXT NOT NULL DEFAULT "",location TEXT NOT NULL DEFAULT "",description TEXT NOT NULL DEFAULT "",archived INTEGER NOT NULL DEFAULT 0,wholesale REAL NOT NULL DEFAULT 0,brand TEXT NOT NULL DEFAULT "",unit TEXT NOT NULL DEFAULT "قطعة",country TEXT NOT NULL DEFAULT "",alt_names TEXT NOT NULL DEFAULT "",specs TEXT NOT NULL DEFAULT "",image_path TEXT NOT NULL DEFAULT "",supplier_id INTEGER,compatibility TEXT NOT NULL DEFAULT "",dimensions TEXT NOT NULL DEFAULT "",weight TEXT NOT NULL DEFAULT "",package_size INTEGER NOT NULL DEFAULT 1)');
         await db.execute('CREATE TABLE operations(id INTEGER PRIMARY KEY AUTOINCREMENT,kind TEXT NOT NULL,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,qty INTEGER NOT NULL,unit_price REAL NOT NULL,total REAL NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL,cost_price REAL NOT NULL DEFAULT 0,party_id INTEGER,party_name TEXT NOT NULL DEFAULT "",warehouse_id INTEGER NOT NULL DEFAULT 1)');
@@ -74,7 +74,7 @@ class StoreDb {
           await _createProductHistory(db);
           await _backfillProductCodes(db);
         }
-        if(oldVersion<8){await _upgradeProductColumns(db);await _createSmartTables(db);} if(oldVersion<9){await _createSmartTables(db);} if(oldVersion<10){await _createSmartTables(db);}
+        if(oldVersion<8){await _upgradeProductColumns(db);await _createSmartTables(db);} if(oldVersion<9){await _createSmartTables(db);} if(oldVersion<10){await _createSmartTables(db);} if(oldVersion<11){await _createWarehouseStock(db);}
       });
   }
 
@@ -173,6 +173,33 @@ class StoreDb {
     await db.execute('CREATE TABLE IF NOT EXISTS stock_adjustments(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,old_qty INTEGER NOT NULL,new_qty INTEGER NOT NULL,difference INTEGER NOT NULL,reason TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
     final wh = await db.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
     if ((wh.first['c'] as int? ?? 0) == 0) await db.insert('warehouses', {'name':'المخزن الرئيسي','location':'','notes':''});
+    await _createWarehouseStock(db);
+  }
+  Future<void> _createWarehouseStock(DatabaseExecutor db) async {
+    await db.execute('CREATE TABLE IF NOT EXISTS warehouse_stock(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,warehouse_id INTEGER NOT NULL,qty INTEGER NOT NULL DEFAULT 0,UNIQUE(product_id,warehouse_id))');
+    await db.execute('CREATE TABLE IF NOT EXISTS warehouse_transfers(id INTEGER PRIMARY KEY AUTOINCREMENT,product_id INTEGER NOT NULL,product_name TEXT NOT NULL,from_warehouse_id INTEGER NOT NULL,to_warehouse_id INTEGER NOT NULL,qty INTEGER NOT NULL,note TEXT NOT NULL DEFAULT "",created_at TEXT NOT NULL)');
+    await db.execute('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) SELECT id,1,qty FROM products');
+  }
+  Future<List<Map<String,Object?>>> warehouseStock(int warehouseId) async => database!.rawQuery('SELECT p.id,p.name,p.sku,p.qty AS total_qty,COALESCE(ws.qty,0) AS warehouse_qty,p.buy,p.sell FROM products p LEFT JOIN warehouse_stock ws ON ws.product_id=p.id AND ws.warehouse_id=? WHERE p.archived=0 ORDER BY p.name',[warehouseId]);
+  Future<List<Map<String,Object?>>> warehouseTransfers() => database!.query('warehouse_transfers',orderBy:'id DESC',limit:200);
+  Future<void> transferStock({required int productId,required int fromWarehouseId,required int toWarehouseId,required int qty,required String note}) async {
+    if(fromWarehouseId==toWarehouseId) throw Exception('اختر مخزنين مختلفين.');
+    if(qty<=0) throw Exception('أدخل كمية صحيحة.');
+    await database!.transaction((txn) async {
+      final productRows=await txn.query('products',where:'id=?',whereArgs:[productId],limit:1);
+      if(productRows.isEmpty) throw Exception('المنتج غير موجود.');
+      final product=productRows.first;
+      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,?,0)',[productId,fromWarehouseId]);
+      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,?,0)',[productId,toWarehouseId]);
+      final fromRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=?',whereArgs:[productId,fromWarehouseId],limit:1);
+      final available=fromRows.first['qty'] as int;
+      if(available<qty) throw Exception('الكمية المتاحة في المخزن المصدر غير كافية.');
+      final toRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=?',whereArgs:[productId,toWarehouseId],limit:1);
+      await txn.update('warehouse_stock',{'qty':available-qty},where:'product_id=? AND warehouse_id=?',whereArgs:[productId,fromWarehouseId]);
+      await txn.update('warehouse_stock',{'qty':(toRows.first['qty'] as int)+qty},where:'product_id=? AND warehouse_id=?',whereArgs:[productId,toWarehouseId]);
+      await txn.insert('warehouse_transfers',{'product_id':productId,'product_name':product['name'],'from_warehouse_id':fromWarehouseId,'to_warehouse_id':toWarehouseId,'qty':qty,'note':note,'created_at':DateTime.now().toIso8601String()});
+      await txn.insert('activity_log',{'action':'تحويل مخزون بين المخازن','details':'${product['name']} | ${qty} | ${fromWarehouseId} → ${toWarehouseId}','created_at':DateTime.now().toIso8601String()});
+    });
   }
   Future<List<Map<String,Object?>>> parties(String table,[String query='']) => database!.query(table,where:query.trim().isEmpty?null:'name LIKE ?',whereArgs:query.trim().isEmpty?null:['%$query%'],orderBy:'name');
   Future<void> saveParty(String table,Map<String,Object?> data,int? id) async { if(id==null){await database!.insert(table,data);}else{await database!.update(table,data,where:'id=?',whereArgs:[id]);} await log('تعديل بيانات',table); }
@@ -188,6 +215,8 @@ class StoreDb {
     await database!.transaction((txn) async {
       final old=product['qty'] as int;
       await txn.update('products',{'qty':newQty},where:'id=?',whereArgs:[product['id']]);
+      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[product['id']]);
+      await txn.update('warehouse_stock',{'qty':newQty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
       await txn.insert('stock_adjustments',{'product_id':product['id'],'product_name':product['name'],'old_qty':old,'new_qty':newQty,'difference':newQty-old,'reason':reason,'created_at':DateTime.now().toIso8601String()});
       await txn.insert('activity_log',{'action':'تسوية مخزون','details':product['name'].toString()+' | '+old.toString()+' ← '+newQty.toString()+' | '+reason,'created_at':DateTime.now().toIso8601String()});
     });
@@ -259,6 +288,11 @@ class StoreDb {
       final current = product['qty'] as int;
       if (kind == 'sale' && current < qty) throw Exception('الكمية المتاحة لا تكفي.');
       final next = kind == 'sale' ? current - qty : current + qty;
+      await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[product['id']]);
+      final whRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']],limit:1);
+      final whQty=whRows.first['qty'] as int;
+      if(kind=='sale' && whQty<qty) throw Exception('الكمية المتاحة في المخزن الرئيسي غير كافية.');
+      await txn.update('warehouse_stock',{'qty':kind=='sale'?whQty-qty:whQty+qty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
       await txn.update('products', {'qty':next},where:'id=?',whereArgs:[product['id']]);
       await txn.insert('operations', {
         'kind':kind,'product_id':product['id'],'product_name':product['name'],
@@ -289,6 +323,11 @@ class StoreDb {
       final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':customerId,'customer_name':customerName,'subtotal':subtotal,'discount_value':discountValue,'discount_mode':discountPercent?'percent':'amount','discount_amount':discount,'total':total,'paid':paid,'note':note,'created_at':now});
       for(final item in items){final id=item['product_id'] as int;final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();final line=q*price;
         final current=(await txn.query('products',columns:['qty'],where:'id=?',whereArgs:[id])).first['qty'] as int;
+        await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,0)',[id]);
+        final warehouseRows=await txn.query('warehouse_stock',where:'product_id=? AND warehouse_id=1',whereArgs:[id],limit:1);
+        final warehouseQty=warehouseRows.first['qty'] as int;
+        if(warehouseQty<q) throw Exception('الكمية في المخزن الرئيسي لا تكفي لإصدار الفاتورة.');
+        await txn.update('warehouse_stock',{'qty':warehouseQty-q},where:'product_id=? AND warehouse_id=1',whereArgs:[id]);
         await txn.update('products',{'qty':current-q},where:'id=?',whereArgs:[id]);
         await txn.insert('invoice_items',{'invoice_id':invoiceId,'product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':line});
         await txn.insert('operations',{'kind':'sale','product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':line,'note':'فاتورة '+invoiceNo,'created_at':now,'cost_price':item['cost_price']??0,'party_id':customerId,'party_name':customerName,'warehouse_id':1});
@@ -328,7 +367,7 @@ class StoreDb {
     final products=await database!.query('products');
     final blobs=<Map<String,Object?>>[];
     for(final product in products){final path=(product['image_path']??'').toString();if(path.isEmpty)continue;try{final file=File(path);if(await file.exists()){blobs.add({'product_id':product['id'],'name':p.basename(path),'data':base64Encode(await file.readAsBytes())});}}catch(_){}}
-    return {'format':'MYAPP_BACKUP_3','products':products,'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments'),'price_history':await database!.query('price_history'),'categories':await database!.query('categories'),'favorites':await database!.query('favorites'),'recent_searches':await database!.query('recent_searches'),'activity_log':await database!.query('activity_log'),'tasks':await database!.query('tasks'),'product_notes':await database!.query('product_notes'),'product_images':await database!.query('product_images'),'invoices':await database!.query('invoices'),'invoice_items':await database!.query('invoice_items'),'invoice_payments':await database!.query('invoice_payments'),'image_blobs':blobs};
+    return {'format':'MYAPP_BACKUP_3','products':products,'operations':await database!.query('operations'),'suppliers':await database!.query('suppliers'),'customers':await database!.query('customers'),'warehouses':await database!.query('warehouses'),'expenses':await database!.query('expenses'),'stock_adjustments':await database!.query('stock_adjustments'),'price_history':await database!.query('price_history'),'categories':await database!.query('categories'),'favorites':await database!.query('favorites'),'recent_searches':await database!.query('recent_searches'),'activity_log':await database!.query('activity_log'),'tasks':await database!.query('tasks'),'product_notes':await database!.query('product_notes'),'product_images':await database!.query('product_images'),'invoices':await database!.query('invoices'),'invoice_items':await database!.query('invoice_items'),'invoice_payments':await database!.query('invoice_payments'),'warehouse_stock':await database!.query('warehouse_stock'),'warehouse_transfers':await database!.query('warehouse_transfers'),'image_blobs':blobs};
   }
   Future<Map<int,String>> _restoreImageBlobs(Map<String,dynamic> data) async {
     final result=<int,String>{};final blobs=data['image_blobs'] as List? ?? [];if(blobs.isEmpty)return result;
@@ -389,10 +428,10 @@ class StoreDb {
     if(data['format']!='MYAPP_BACKUP_1'&&data['format']!='MYAPP_BACKUP_2'&&data['format']!='MYAPP_BACKUP_3')throw Exception('ملف النسخة الاحتياطية غير صالح.');
     final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
-      for(final t in ['invoice_payments','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
+      for(final t in ['warehouse_transfers','warehouse_stock','invoice_payments','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']){await txn.delete(t);}
       for(final row in data['products'] as List){final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];var sku=(product['sku']??'').toString();if(sku.isEmpty||(await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty){do{sku=_newSku();}while((await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty);product['sku']=sku;}await txn.insert('products',product);}
       for(final row in data['operations'] as List){final m=Map<String,Object?>.from(row as Map);m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);await txn.insert('operations',m);}
-      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images','invoices','invoice_items']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
+      for(final table in ['warehouse_stock','warehouse_transfers','suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images','invoices','invoice_items']){for(final row in (data[table] as List? ?? [])){await txn.insert(table,Map<String,Object?>.from(row as Map));}}
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');if((wh.first['c'] as int? ?? 0)==0)await txn.insert('warehouses',{'name':'المخزن الرئيسي','location':'','notes':''});
     });
   }
@@ -404,7 +443,7 @@ class StoreDb {
     if (data['format'] != 'MYAPP_BACKUP_1' && data['format'] != 'MYAPP_BACKUP_2' && data['format'] != 'MYAPP_BACKUP_3') throw Exception('ملف النسخة الاحتياطية غير صالح.');
     final restoredImages=await _restoreImageBlobs(data);
     await database!.transaction((txn) async {
-      for(final t in ['invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
+      for(final t in ['warehouse_transfers','warehouse_stock','invoice_items','invoices','product_images','product_notes','tasks','activity_log','recent_searches','favorites','categories','price_history','stock_adjustments','expenses','operations','products','suppliers','customers','warehouses']) { await txn.delete(t); }
       for (final row in data['products'] as List) {
         final product=Map<String,Object?>.from(row as Map);final id=product['id'] as int?;if(id!=null&&restoredImages.containsKey(id))product['image_path']=restoredImages[id];var sku=(product['sku']??'').toString();if(sku.isEmpty||(await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty){do{sku=_newSku();}while((await txn.query('products',columns:['id'],where:'sku=?',whereArgs:[sku],limit:1)).isNotEmpty);product['sku']=sku;}await txn.insert('products',product);
       }
@@ -413,7 +452,7 @@ class StoreDb {
         m.putIfAbsent('cost_price',()=>0.0);m.putIfAbsent('party_id',()=>null);m.putIfAbsent('party_name',()=> '');m.putIfAbsent('warehouse_id',()=>1);
         await txn.insert('operations',m);
       }
-      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images']) {
+      for(final table in ['suppliers','customers','warehouses','expenses','stock_adjustments','warehouse_stock','warehouse_transfers','price_history','categories','favorites','recent_searches','activity_log','tasks','product_notes','product_images']) {
         for(final row in (data[table] as List? ?? [])) { await txn.insert(table,Map<String,Object?>.from(row as Map)); }
       }
       final wh=await txn.rawQuery('SELECT COUNT(*) AS c FROM warehouses');
@@ -494,9 +533,10 @@ class _HomePageState extends State<HomePage> {
       InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh),
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       const ScientificCalculatorPage(),
+      WarehouseStockPage(key:ValueKey('whstock'+refreshId.toString()),changed:refresh),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية','توزيع المخزون'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined,Icons.swap_horiz];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
@@ -1314,6 +1354,56 @@ class _ReportsPageState extends State<ReportsPage> {
   ]));
 }
 
+
+class WarehouseStockPage extends StatefulWidget {
+  const WarehouseStockPage({super.key,required this.changed});
+  final VoidCallback changed;
+  @override State<WarehouseStockPage> createState()=>_WarehouseStockPageState();
+}
+class _WarehouseStockPageState extends State<WarehouseStockPage> {
+  List<Map<String,Object?>> warehouses=[],products=[],transfers=[];
+  int? selectedWarehouse;
+  bool loading=true;
+  @override void initState(){super.initState();load();}
+  Future<void> load() async {
+    final w=await StoreDb.instance.parties('warehouses');
+    if(w.isEmpty){if(mounted)setState(()=>loading=false);return;}
+    final id=selectedWarehouse??w.first['id'] as int;
+    final p=await StoreDb.instance.warehouseStock(id);
+    final t=await StoreDb.instance.warehouseTransfers();
+    if(mounted)setState(()=>{warehouses=w,selectedWarehouse=id,products=p,transfers=t,loading=false});
+  }
+  Future<void> transfer() async {
+    if(warehouses.length<2){toast(context,'أضف مخزناً آخر أولاً.');return;}
+    final available=products.where((e)=>(e['warehouse_qty'] as int)>0).toList();
+    if(available.isEmpty){toast(context,'لا توجد كميات قابلة للتحويل في هذا المخزن.');return;}
+    Map<String,Object?> product=available.first;
+    int to=warehouses.firstWhere((e)=>e['id']!=selectedWarehouse)['id'] as int;
+    final qty=TextEditingController(text:'1'),note=TextEditingController();
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>StatefulBuilder(builder:(ctx,setDialog)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('تحويل مخزون بين المخازن'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[
+      DropdownButtonFormField<int>(value:product['id'] as int,decoration:const InputDecoration(labelText:'المنتج'),items:available.map((e)=>DropdownMenuItem(value:e['id'] as int,child:Text('${e['name']} • متاح ${e['warehouse_qty']}'))).toList(),onChanged:(v)=>setDialog(()=>product=available.firstWhere((e)=>e['id']==v))),
+      DropdownButtonFormField<int>(value:to,decoration:const InputDecoration(labelText:'إلى المخزن'),items:warehouses.where((e)=>e['id']!=selectedWarehouse).map((e)=>DropdownMenuItem(value:e['id'] as int,child:Text(e['name'].toString()))).toList(),onChanged:(v)=>setDialog(()=>to=v!)),
+      TextField(controller:qty,keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الكمية')),
+      TextField(controller:note,decoration:const InputDecoration(labelText:'ملاحظات')),
+    ])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تنفيذ التحويل'))]))));
+    if(ok==true){try{await StoreDb.instance.transferStock(productId:product['id'] as int,fromWarehouseId:selectedWarehouse!,toWarehouseId:to,qty:int.parse(qty.text),note:note.text.trim());await load();widget.changed();if(mounted)toast(context,'تم التحويل بنجاح.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
+    qty.dispose();note.dispose();
+  }
+  @override Widget build(BuildContext context){
+    if(loading)return const Center(child:CircularProgressIndicator());
+    return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
+      Row(children:[const Expanded(child:Text('توزيع المخزون على المخازن',style:TextStyle(fontSize:21,fontWeight:FontWeight.bold))),FilledButton.icon(onPressed:transfer,icon:const Icon(Icons.swap_horiz),label:const Text('تحويل'))]),
+      const SizedBox(height:10),
+      DropdownButtonFormField<int>(value:selectedWarehouse,decoration:const InputDecoration(labelText:'اختر المخزن'),items:warehouses.map((e)=>DropdownMenuItem(value:e['id'] as int,child:Text(e['name'].toString()))).toList(),onChanged:(v){if(v!=null){setState(()=>selectedWarehouse=v);load();}}),
+      const SizedBox(height:10),
+      Card(child:Padding(padding:const EdgeInsets.all(12),child:Text('عدد الأصناف: ${products.length} • إجمالي الكميات في المخزن: ${products.fold<int>(0,(s,e)=>s+(e['warehouse_qty'] as int))}',style:const TextStyle(fontWeight:FontWeight.bold)))),
+      ...products.map((e)=>Card(child:ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['name'].toString()),subtitle:Text('كود: ${e['sku']} • إجمالي كل المخازن: ${e['total_qty']}'),trailing:Text((e['warehouse_qty'] as int).toString(),style:const TextStyle(fontSize:18,fontWeight:FontWeight.bold))))),
+      const SizedBox(height:14),const Text('آخر تحويلات المخزون',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
+      ...transfers.take(30).map((e)=>ListTile(dense:true,leading:const Icon(Icons.swap_horiz),title:Text('${e['product_name']} • ${e['qty']} قطعة'),subtitle:Text('مخزن ${e['from_warehouse_id']} ← مخزن ${e['to_warehouse_id']} • ${e['created_at']}'))),
+    ]));
+  }
+}
+
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;final String appName;final ValueChanged<String> changeAppName;final String? logoPath;final VoidCallback changeLogo;final String? backgroundPath;final VoidCallback changeBackground,clearBackground;
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
@@ -1349,7 +1439,7 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.5.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.7.0'),
       subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
