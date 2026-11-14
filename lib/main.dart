@@ -84,7 +84,7 @@ Future<void> checkRemoteAdminAnnouncement() async {
     final id=(item['id']??'').toString();
     if(id.isEmpty||prefs.getString('last_admin_announcement_id')==id)return;
     await AppNotificationService.instance.initialize();
-    await AppNotificationService.instance.showUpdateNotification(title:(item['title']??'إعلان جديد من APP LOL').toString(),body:(item['body']??'افتح البرنامج لعرض التفاصيل.').toString());
+    await AppNotificationService.instance.showUpdateNotification(title:(item['title']??'إعلان جديد من APP LOL').toString(),body:(item['body']??'افتح البرنامج لعرض التفاصيل.').toString(),payload:'admin_announcement:$id');
     await prefs.setString('last_admin_announcement_id',id);
   }catch(_){}finally{client.close(force:true);}
 }
@@ -967,7 +967,7 @@ class HomePage extends StatefulWidget {
 }
 class _HomePageState extends State<HomePage> {
   int tab=10, refreshId=0; bool assistantCreateInvoice=false; int? notificationInvoiceId; StreamSubscription<String?>? _notificationTapSubscription;
-  @override void initState(){super.initState();_notificationTapSubscription=AppNotificationService.instance.taps.listen((payload){if(!mounted)return;setState((){if(payload!=null&&payload.startsWith('invoice:')){notificationInvoiceId=int.tryParse(payload.substring(8));tab=14;refreshId++;}else if(payload!=null&&payload.startsWith('stock:')){tab=1;refreshId++;}else if(payload=='app_update'){tab=9;}else{tab=0;}});});}
+  @override void initState(){super.initState();_notificationTapSubscription=AppNotificationService.instance.taps.listen((payload){if(!mounted)return;setState((){if(payload!=null&&payload.startsWith('invoice:')){notificationInvoiceId=int.tryParse(payload.substring(8));tab=14;refreshId++;}else if(payload!=null&&payload.startsWith('stock:')){tab=1;refreshId++;}else if(payload=='app_update'){tab=9;}else if(payload!=null&&payload.startsWith('admin_announcement:')){tab=9;refreshId++;}else{tab=0;}});});}
   @override void dispose(){_notificationTapSubscription?.cancel();super.dispose();}
   void refresh(){setState(()=>refreshId++);unawaited(syncLocalNotifications());}
   @override Widget build(BuildContext context) {
