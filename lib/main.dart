@@ -1690,12 +1690,26 @@ class SettingsPage extends StatelessWidget {
         try{
           final status=await updater.checkForUpdate();
           if(status==UpdateStatus.upToDate){if(context.mounted)toast(context,'أنت تستخدم أحدث تحديث متاح.');return;}
-          if(status==UpdateStatus.restartRequired){if(context.mounted)toast(context,'تم تنزيل تحديث بالفعل. أغلق التطبيق وافتحه مرة أخرى لتطبيقه.');return;}
+          if(status==UpdateStatus.restartRequired){if(context.mounted)toast(context,'التحديث جاهز. أغلق التطبيق وافتحه مرة أخرى لتطبيقه.');return;}
           if(status==UpdateStatus.unavailable){if(context.mounted)toast(context,'خدمة التحديث غير متاحة حالياً.');return;}
+          final manifest=await fetchUpdateManifest();
+          final version=(manifest?['release_version']??'تحديث برمجي').toString();
+          final patch=(manifest?['patch_number']??'—').toString();
+          final size=(manifest?['size_label']??formatUpdateSize(manifest?['size_bytes'])).toString();
+          final notes=(manifest?['notes']??'تحسينات وإصلاحات للبرنامج.').toString();
           final accepted=await showDialog<bool>(context:context,builder:(d)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
             shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
             title:const Row(children:[Icon(Icons.system_update_alt),SizedBox(width:8),Text('تحديث جديد متاح')]),
-            content:const Text('يوجد تحديث برمجي صغير متاح. سيتم تنزيله الآن، ثم يُطبّق عند إعادة فتح التطبيق. التحديثات التي تتطلب تغييراً في مكونات أندرويد أو الأذونات تحتاج إصدار APK جديداً.'),
+            content:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,mainAxisSize:MainAxisSize.min,children:[
+              Text('الإصدار: $version',style:const TextStyle(fontWeight:FontWeight.w800)),
+              Text('رقم التحديث: $patch'),
+              Text('الحجم التقريبي: $size'),
+              const Divider(height:22),
+              const Text('ملاحظات التحديث',style:TextStyle(fontWeight:FontWeight.bold)),
+              Text(notes),
+              const SizedBox(height:10),
+              const Text('هذا تحديث Dart صغير. إذا احتاج التغيير إلى تعديل أندرويد أو إضافة صلاحيات أو مكونات أصلية، فسيكون إصدار APK جديداً مطلوباً.',style:TextStyle(fontSize:12,color:Colors.grey))
+            ])),
             actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('لاحقاً')),FilledButton.icon(onPressed:()=>Navigator.pop(d,true),icon:const Icon(Icons.download),label:const Text('تنزيل التحديث'))]
           )));
           if(accepted==true){await updater.update();if(context.mounted)toast(context,'اكتمل تنزيل التحديث. أغلق التطبيق وافتحه لتطبيق النسخة الجديدة.');}
@@ -1709,6 +1723,31 @@ class SettingsPage extends StatelessWidget {
   ]);
 }
 
+
+Future<Map<String,dynamic>?> fetchUpdateManifest() async {
+  final client=HttpClient();
+  try {
+    final request=await client.getUrl(Uri.parse('https://raw.githubusercontent.com/aa25791113-web/my-app-inventory/premium-redesign-v1/update_manifest.json')).timeout(const Duration(seconds:8));
+    request.headers.set(HttpHeaders.cacheControlHeader,'no-cache');
+    final response=await request.close().timeout(const Duration(seconds:8));
+    if(response.statusCode!=HttpStatus.ok)return null;
+    final body=await response.transform(utf8.decoder).join();
+    final value=jsonDecode(body);
+    if(value is Map<String,dynamic>)return value;
+    return null;
+  } catch (_) {
+    return null;
+  } finally {
+    client.close(force:true);
+  }
+}
+String formatUpdateSize(Object? value){
+  final bytes=(value as num?)?.toDouble();
+  if(bytes==null||bytes<=0)return 'غير متاح';
+  if(bytes<1024)return '${bytes.toStringAsFixed(0)} بايت';
+  if(bytes<1024*1024)return '${(bytes/1024).toStringAsFixed(1)} كيلوبايت';
+  return '${(bytes/(1024*1024)).toStringAsFixed(2)} ميجابايت';
+}
 
 Future<void> printTextReport(BuildContext context,String title,List<String> lines) async {
   try {
