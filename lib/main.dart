@@ -2662,7 +2662,7 @@ class _ShortagesPageState extends State<ShortagesPage>{
   Widget _shortagePill(String label,IconData icon)=>Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:6),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(10)),child:Row(mainAxisSize:MainAxisSize.min,children:[Icon(icon,size:13,color:Theme.of(context).colorScheme.primary),const SizedBox(width:4),Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w700))]));
 }
 
-).hasMatch(raw))return null;
+
   return Color(0xFF000000|int.parse(raw,radix:16));
 }
 
