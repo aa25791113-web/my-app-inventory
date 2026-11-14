@@ -428,7 +428,7 @@ class StoreDb {
       final newTotal=(newSubtotal-discount).clamp(0,double.infinity).toDouble();
       final oldTotal=(invoice['total'] as num).toDouble();final delta=newTotal-oldTotal;
       await txn.update('invoices',{'subtotal':newSubtotal,'discount_amount':discount,'total':newTotal},where:'id=?',whereArgs:[invoiceId]);
-      if(delta>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':invoice['customer_id'],'entry_type':'debit','amount':delta,'note':'إضافة أصناف إلى فاتورة ${invoice['invoice_no']}','created_at':DateTime.now().toIso8601String(),'reference':'${invoice['invoice_no']}-ADD-${DateTime.now().microsecondsSinceEpoch}'});
+      if(delta>0&&invoice['customer_id']!=null)await txn.insert('party_ledger',{'party_type':'customer','party_id':invoice['customer_id'],'entry_type':'debit','amount':delta,'note':'إضافة أصناف إلى فاتورة ${invoice['invoice_no']}','created_at':DateTime.now().toIso8601String(),'reference':'${invoice['invoice_no']}-ADD-${DateTime.now().microsecondsSinceEpoch}'});
       await txn.insert('activity_log',{'action':'إضافة أصناف لفاتورة','details':'${invoice['invoice_no']} | ${items.length} صنف | ${addedSubtotal.toStringAsFixed(2)}','created_at':DateTime.now().toIso8601String()});
     });
   }
