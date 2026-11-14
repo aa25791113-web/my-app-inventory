@@ -455,14 +455,15 @@ class StoreDb {
       final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':customerId,'customer_name':name,'customer_phone':phone,'subtotal':subtotal,'discount_value':0,'discount_mode':'amount','discount_amount':0,'total':subtotal,'paid':paid,'note':'فاتورة مجمعة من صفحة المبيعات','created_at':now});
       await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'debit','amount':subtotal,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});
       if(paid>0){await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});await txn.insert('invoice_payments',{'invoice_id':invoiceId,'amount':paid,'paid_at':now,'note':'دفعة عند إصدار الفاتورة'});}
-      final grouped=<String,Map<String,Object?>>{};
-      for(final sale in sales){final key='${sale['product_id']}|${sale['unit_price']}';final existing=grouped[key];if(existing==null){grouped[key]={'product_id':sale['product_id'],'product_name':sale['product_name'],'qty':sale['qty'],'unit_price':sale['unit_price'],'total':sale['total']};}else{existing['qty']=(existing['qty'] as int)+(sale['qty'] as int);existing['total']=(existing['total'] as num).toDouble()+(sale['total'] as num).toDouble();}}
       for(final sale in sales){
         final id=sale['id'] as int;
         await txn.delete('party_ledger',where:'reference=?',whereArgs:['operation:'+id.toString()]);
         await txn.update('operations',{'party_id':customerId,'party_name':name,'note':'فاتورة $invoiceNo • '+(sale['note']??'').toString()},where:'id=?',whereArgs:[id]);
+        final productRows=await txn.rawQuery('SELECT p.supplier_id,COALESCE(s.name,\'\') AS supplier_name FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.id=?',[sale['product_id']]);
+        final supplierId=productRows.isEmpty?null:productRows.first['supplier_id'] as int?;
+        final supplierName=productRows.isEmpty?'':productRows.first['supplier_name'].toString();
+        await txn.insert('invoice_items',{'invoice_id':invoiceId,'product_id':sale['product_id'],'product_name':sale['product_name'],'qty':sale['qty'],'unit_price':sale['unit_price'],'total':sale['total'],'supplier_id':supplierId,'supplier_name':supplierName,'added_at':sale['created_at']??now});
       }
-      for(final item in grouped.values){await txn.insert('invoice_items',{'invoice_id':invoiceId,...item});}
       await txn.insert('activity_log',{'action':'دمج مبيعات في فاتورة','details':'$invoiceNo | $name | عدد الأصناف: ${sales.length} | الإجمالي: $subtotal','created_at':now});
     });
   }
