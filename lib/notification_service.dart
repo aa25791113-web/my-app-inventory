@@ -217,7 +217,7 @@ class AppNotificationService {
       }
 
       liveIds.add(id);
-      final createdRaw = (invoice['created_at'] ?? '').toString();
+      final createdRaw = (invoice['reminder_base_at'] ?? invoice['created_at'] ?? '').toString();
       DateTime createdAt;
       try {
         createdAt = DateTime.parse(createdRaw).toLocal();
