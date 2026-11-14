@@ -362,7 +362,7 @@ class StoreDb {
       int? resolvedCustomerId=customerId;
       if(resolvedCustomerId==null){
         final phone=customerPhone.trim();
-        final matches=phone.isNotEmpty?await txn.query('customers',where:'phone=?',whereArgs:[phone],limit:1):await txn.query('customers',where:'name=?',whereArgs:[customerName.trim()],limit:1);
+        var matches=phone.isNotEmpty?await txn.query('customers',where:'phone=?',whereArgs:[phone],limit:1):<Map<String,Object?>>[];if(matches.isEmpty){matches=await txn.query('customers',where:'name=? COLLATE NOCASE',whereArgs:[customerName.trim()],limit:1);}
         if(matches.isNotEmpty){resolvedCustomerId=matches.first['id'] as int; if(phone.isNotEmpty)await txn.update('customers',{'phone':phone},where:'id=?',whereArgs:[resolvedCustomerId]);}
         else{resolvedCustomerId=await txn.insert('customers',{'name':customerName.trim(),'phone':phone,'email':'','address':'','notes':'أُضيف تلقائياً من فاتورة بيع','balance':0});}
       }
@@ -400,7 +400,7 @@ class StoreDb {
       final subtotal=sales.fold<double>(0,(sum,e)=>sum+(e['total'] as num).toDouble());
       if(paid<0||paid>subtotal)throw Exception('راجع المبلغ المدفوع.');
       final phone=customerPhone.trim();final name=customerName.trim();
-      final matches=phone.isNotEmpty?await txn.query('customers',where:'phone=?',whereArgs:[phone],limit:1):await txn.query('customers',where:'name=?',whereArgs:[name],limit:1);
+      var matches=phone.isNotEmpty?await txn.query('customers',where:'phone=?',whereArgs:[phone],limit:1):<Map<String,Object?>>[];if(matches.isEmpty){matches=await txn.query('customers',where:'name=? COLLATE NOCASE',whereArgs:[name],limit:1);}
       int customerId;
       if(matches.isNotEmpty){customerId=matches.first['id'] as int;if(phone.isNotEmpty)await txn.update('customers',{'phone':phone},where:'id=?',whereArgs:[customerId]);}
       else{customerId=await txn.insert('customers',{'name':name,'phone':phone,'email':'','address':'','notes':'أُضيف تلقائياً من فاتورة مبيعات مجمعة','balance':0});}
