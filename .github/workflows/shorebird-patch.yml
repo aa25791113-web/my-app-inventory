@@ -101,7 +101,7 @@ jobs:
               '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
           ]:
               if permission not in xml:
-                  xml, count = re.subn(r"(<manifest\\b[^>]*>)", r"\\1\\n    " + permission, xml, count=1)
+                  xml, count = re.subn(r"(<manifest\b[^>]*>)", r"\1\n    " + permission, xml, count=1)
                   if count != 1:
                       raise SystemExit("Could not add Android permission: " + permission)
           receivers = """    <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
@@ -114,7 +114,7 @@ jobs:
                   </intent-filter>
               </receiver>"""
           if "ScheduledNotificationReceiver" not in xml:
-              xml, count = re.subn(r"(<application\\b[^>]*>)", r"\\1\\n" + receivers, xml, count=1)
+              xml, count = re.subn(r"(<application\b[^>]*>)", r"\1\n" + receivers, xml, count=1)
               if count != 1:
                   raise SystemExit("Could not register notification receivers in AndroidManifest.xml")
           manifest.write_text(xml)
