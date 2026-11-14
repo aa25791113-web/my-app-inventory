@@ -1,5 +1,8 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'notification_service.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
 import 'package:qr_flutter/qr_flutter.dart';
@@ -33,6 +36,7 @@ Future<void> main() async {
     databaseFactory = databaseFactoryFfi;
   }
   await StoreDb.instance.init();
+  await AppNotificationService.instance.initialize();
   runApp(const MyApp());
 }
 
@@ -601,6 +605,52 @@ class StoreDb {
     });
     return file.path;
   }
+}
+
+Future<void> syncLocalNotifications({bool forceInvoiceReschedule=false}) async {
+  try {
+    final prefs=await SharedPreferences.getInstance();
+    if(!(prefs.getBool('notifications_enabled')??false))return;
+    final db=StoreDb.instance.database;
+    if(db==null)return;
+    final products=await db.query('products',where:'archived=0');
+    final invoices=await StoreDb.instance.invoices();
+    await AppNotificationService.instance.syncStockAlerts(products);
+    await AppNotificationService.instance.syncInvoiceReminders(
+      invoices,
+      reminderDays:prefs.getInt('invoice_reminder_days')??7,
+      forceReschedule:forceInvoiceReschedule,
+    );
+  } catch (_) {}
+}
+
+Future<void> checkForOnlineUpdateNotification() async {
+  try {
+    if(!Platform.isAndroid)return;
+    final prefs=await SharedPreferences.getInstance();
+    if(!(prefs.getBool('notifications_enabled')??false)||
+       !(prefs.getBool('update_alerts')??true))return;
+    final updater=ShorebirdUpdater();
+    if(!updater.isAvailable)return;
+    final manifest=await fetchUpdateManifest();
+    if(manifest==null)return;
+    final status=await updater.checkForUpdate();
+    final key='${manifest['release_version']??''}:${manifest['patch_number']??''}';
+    final last=prefs.getString('last_update_notification_key');
+    if(status==UpdateStatus.outdated||status==UpdateStatus.restartRequired){
+      if(last!=key){
+        final notes=(manifest['notes']??'تحسينات وإصلاحات جديدة.').toString();
+        final title=status==UpdateStatus.restartRequired?'التحديث جاهز للتطبيق':'تحديث جديد متاح';
+        final body=status==UpdateStatus.restartRequired
+          ?'تم تنزيل التحديث. أغلق البرنامج وافتحه مرة أخرى لتطبيقه. $notes'
+          :'يتوفر تحديث برمجي جديد. افتح البرنامج لمعرفة التفاصيل. $notes';
+        await AppNotificationService.instance.showUpdateNotification(title:title,body:body);
+        await prefs.setString('last_update_notification_key',key);
+      }
+    } else if(last==null) {
+      await prefs.setString('last_update_notification_key',key);
+    }
+  } catch (_) {}
 }
 
 class MyApp extends StatefulWidget {
