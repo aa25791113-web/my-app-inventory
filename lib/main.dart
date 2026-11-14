@@ -1271,7 +1271,7 @@ class _MovementPageState extends State<MovementPage> {
   List<Map<String,Object?>> rows=[];
   final Set<int> selectedIds={};\n  double collected=0;
   @override void initState(){super.initState();load();}
-  Future<void> load() async {final r=await StoreDb.instance.movements(widget.kind);final cash=widget.kind=='sale'?await StoreDb.instance.collectedSales():0.0;if(mounted)setState(()=>{rows=r,collected=cash});}
+  Future<void> load() async {final r=await StoreDb.instance.movements(widget.kind);final cash=widget.kind=='sale'?await StoreDb.instance.collectedSales():0.0;if(mounted)setState((){rows=r;collected=cash;});}
   Future<void> mergeSelected() async {
     final chosen=rows.where((e)=>selectedIds.contains(e['id']) && !(e['note']??'').toString().startsWith('فاتورة ')).toList();
     if(chosen.isEmpty){toast(context,'حدد عمليات بيع مستقلة غير مرتبطة بفواتير.');return;}
