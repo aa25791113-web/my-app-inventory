@@ -890,7 +890,7 @@ class _HomePageState extends State<HomePage> {
       QuickSearchPage(key:ValueKey('q'+refreshId.toString())),
       CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
-      const PremiumAssistantPage(),
+      PremiumAssistantPage(onNavigate:(page)=>setState(()=>tab=page)),
       InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh),
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       const ScientificCalculatorPage(),
@@ -1501,7 +1501,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     final e=widget.invoice;final total=n(e['total']),paid=n(e['paid']),due=(total-paid).clamp(0,double.infinity).toDouble(),subtotal=n(e['subtotal']),discount=n(e['discount_amount']);
     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(12),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:640,maxHeight:MediaQuery.of(context).size.height*.94),child:Column(children:[
       Padding(padding:const EdgeInsets.fromLTRB(18,12,18,6),child:Row(children:[const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900))),IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close))])),
-      Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(12),child:RepaintBoundary(key:captureKey,child:Container(width:560,padding:const EdgeInsets.all(22),color:Colors.white,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(12),child:RepaintBoundary(key:captureKey,child:Container(width:math.min(MediaQuery.of(context).size.width-70,560),padding:const EdgeInsets.all(22),color:Colors.white,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         Container(padding:const EdgeInsets.all(20),decoration:const BoxDecoration(gradient:LinearGradient(colors:[Color(0xFF092D3A),Color(0xFF087F68)]),borderRadius:BorderRadius.all(Radius.circular(18))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:Colors.white24,borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.inventory_2_rounded,color:Color(0xFFFFD47A),size:27)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('ＡＰＰ ＬＯＬ',style:TextStyle(color:Colors.white,fontSize:19,fontWeight:FontWeight.w900,letterSpacing:1)),Text('إدارة المبيعات والمخزون',style:TextStyle(color:Colors.white70,fontSize:11))])),const Text('فاتورة بيع',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900))]),
           const SizedBox(height:16),Text(e['invoice_no'].toString(),style:const TextStyle(color:Color(0xFFFFD47A),fontWeight:FontWeight.w900,fontSize:18)),const SizedBox(height:4),Text(formatDateTime(e['created_at']),style:const TextStyle(color:Colors.white70,fontSize:12)),
