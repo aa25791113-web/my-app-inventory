@@ -73,12 +73,12 @@ jobs:
               raise SystemExit("Android app Gradle file was not generated")
           source = gradle.read_text()
           source, _ = re.subn(
-              r'(?m)^(\\s*minSdk\\s*=\\s*)(flutter\\.minSdkVersion|\\d+)',
+              r'(?m)^(\s*minSdk\s*=\s*)(flutter\.minSdkVersion|\d+)',
               lambda m: m.group(0) if m.group(2).isdigit() and int(m.group(2)) >= 23 else m.group(1) + '23',
               source, count=1
           )
           source, _ = re.subn(
-              r'(?m)^(\\s*minSdkVersion\\s+)(flutter\\.minSdkVersion|\\d+)',
+              r'(?m)^(\s*minSdkVersion\s+)(flutter\.minSdkVersion|\d+)',
               lambda m: m.group(0) if m.group(2).isdigit() and int(m.group(2)) >= 23 else m.group(1) + '23',
               source, count=1
           )
