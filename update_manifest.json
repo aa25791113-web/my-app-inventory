@@ -1,9 +1,9 @@
 {
-  "release_version": "3.9.0+41",
+  "release_version": "3.9.1+42",
   "patch_number": 0,
   "track": "stable",
-  "size_bytes": 40083032,
-  "size_label": "38.23 ميجابايت",
+  "size_bytes": 41657878,
+  "size_label": "39.73 ميجابايت",
   "notes": "إصدار جديد يتضمن تحسينات وإصلاحات.",
-  "published_at": "2026-11-14T20:09:44.548987+00:00"
+  "published_at": "2026-11-14T20:35:12.411514+00:00"
 }
