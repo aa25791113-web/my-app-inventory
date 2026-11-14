@@ -374,7 +374,7 @@ class StoreDb {
       final count=Sqflite.firstIntValue(await txn.rawQuery('SELECT COUNT(*) FROM invoices'))??0;
       final invoiceNo='INV-${DateTime.now().year}-${(count+1).toString().padLeft(5,'0')}';
       final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':resolvedCustomerId,'customer_name':customerName.trim(),'customer_phone':customerPhone.trim(),'subtotal':subtotal,'discount_value':discountValue,'discount_mode':discountPercent?'percent':'amount','discount_amount':discount,'total':total,'paid':paid,'note':note,'created_at':now});
-      if(resolvedCustomerId!=null){if(total>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':resolvedCustomerId,'entry_type':'debit','amount':total,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});if(paid>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':resolvedCustomerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});}
+      if(total>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':resolvedCustomerId,'entry_type':'debit','amount':total,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});if(paid>0){await txn.insert('party_ledger',{'party_type':'customer','party_id':resolvedCustomerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});await txn.insert('invoice_payments',{'invoice_id':invoiceId,'amount':paid,'paid_at':now,'note':'دفعة عند إصدار الفاتورة'});}
       for(final item in items){final id=item['product_id'] as int;final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();final line=q*price;
         final current=(await txn.query('products',columns:['qty'],where:'id=?',whereArgs:[id])).first['qty'] as int;
         await txn.rawInsert('INSERT OR IGNORE INTO warehouse_stock(product_id,warehouse_id,qty) VALUES(?,1,?)',[id,current]);
@@ -387,6 +387,36 @@ class StoreDb {
         await txn.insert('operations',{'kind':'sale','product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':line,'note':'فاتورة '+invoiceNo,'created_at':now,'cost_price':item['cost_price']??0,'party_id':resolvedCustomerId,'party_name':customerName.trim(),'warehouse_id':1});
       }
       await txn.insert('activity_log',{'action':'إصدار فاتورة','details':invoiceNo+' | '+customerName+' | '+total.toString(),'created_at':now});
+    });
+  }
+  Future<void> createInvoiceFromSales({required List<int> operationIds,required String customerName,required String customerPhone,required double paid}) async {
+    if(operationIds.isEmpty)throw Exception('حدد عملية بيع واحدة على الأقل.');
+    if(customerName.trim().isEmpty)throw Exception('اكتب اسم العميل.');
+    await database!.transaction((txn) async {
+      final marks=List.filled(operationIds.length,'?').join(',');
+      final sales=await txn.rawQuery("SELECT * FROM operations WHERE kind='sale' AND id IN ($marks) ORDER BY id",operationIds);
+      if(sales.length!=operationIds.toSet().length)throw Exception('بعض عمليات البيع المحددة غير موجودة.');
+      if(sales.any((e)=>(e['note']??'').toString().startsWith('فاتورة ')))throw Exception('العمليات المرتبطة بفاتورة موجودة لا يمكن دمجها مرة أخرى.');
+      final subtotal=sales.fold<double>(0,(sum,e)=>sum+(e['total'] as num).toDouble());
+      if(paid<0||paid>subtotal)throw Exception('راجع المبلغ المدفوع.');
+      final phone=customerPhone.trim();final name=customerName.trim();
+      final matches=phone.isNotEmpty?await txn.query('customers',where:'phone=?',whereArgs:[phone],limit:1):await txn.query('customers',where:'name=?',whereArgs:[name],limit:1);
+      int customerId;
+      if(matches.isNotEmpty){customerId=matches.first['id'] as int;if(phone.isNotEmpty)await txn.update('customers',{'phone':phone},where:'id=?',whereArgs:[customerId]);}
+      else{customerId=await txn.insert('customers',{'name':name,'phone':phone,'email':'','address':'','notes':'أُضيف تلقائياً من فاتورة مبيعات مجمعة','balance':0});}
+      final count=Sqflite.firstIntValue(await txn.rawQuery('SELECT COUNT(*) FROM invoices'))??0;
+      final invoiceNo='INV-${DateTime.now().year}-${(count+1).toString().padLeft(5,'0')}';
+      final now=DateTime.now().toIso8601String();
+      final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':customerId,'customer_name':name,'customer_phone':phone,'subtotal':subtotal,'discount_value':0,'discount_mode':'amount','discount_amount':0,'total':subtotal,'paid':paid,'note':'فاتورة مجمعة من صفحة المبيعات','created_at':now});
+      await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'debit','amount':subtotal,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});
+      if(paid>0){await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});await txn.insert('invoice_payments',{'invoice_id':invoiceId,'amount':paid,'paid_at':now,'note':'دفعة عند إصدار الفاتورة'});}
+      for(final sale in sales){
+        final id=sale['id'] as int;
+        await txn.delete('party_ledger',where:'reference=?',whereArgs:['operation:'+id.toString()]);
+        await txn.update('operations',{'party_id':customerId,'party_name':name,'note':'فاتورة $invoiceNo • بيع سابق'},where:'id=?',whereArgs:[id]);
+        await txn.insert('invoice_items',{'invoice_id':invoiceId,'product_id':sale['product_id'],'product_name':sale['product_name'],'qty':sale['qty'],'unit_price':sale['unit_price'],'total':sale['total']});
+      }
+      await txn.insert('activity_log',{'action':'دمج مبيعات في فاتورة','details':'$invoiceNo | $name | عدد الأصناف: ${sales.length} | الإجمالي: $subtotal','created_at':now});
     });
   }
   Future<List<Map<String,Object?>>> invoicePayments(int id)=>database!.query('invoice_payments',where:'invoice_id=?',whereArgs:[id],orderBy:'id DESC');
@@ -1232,8 +1262,19 @@ class MovementPage extends StatefulWidget {
 }
 class _MovementPageState extends State<MovementPage> {
   List<Map<String,Object?>> rows=[];
+  final Set<int> selectedIds={};
   @override void initState(){super.initState();load();}
   Future<void> load() async {final r=await StoreDb.instance.movements(widget.kind);if(mounted)setState(()=>rows=r);}
+  Future<void> mergeSelected() async {
+    final chosen=rows.where((e)=>selectedIds.contains(e['id']) && !(e['note']??'').toString().startsWith('فاتورة ')).toList();
+    if(chosen.isEmpty){toast(context,'حدد عمليات بيع مستقلة غير مرتبطة بفواتير.');return;}
+    final name=TextEditingController(),phone=TextEditingController();
+    final total=chosen.fold<double>(0,(s,e)=>s+(e['total'] as num).toDouble());
+    final paid=TextEditingController(text:total.toStringAsFixed(2));
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:const Text('إنشاء فاتورة مجمعة'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[Text('عدد عمليات البيع: ${chosen.length} • الإجمالي: ${money(total)}'),TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل *')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)')),TextField(controller:paid,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المحصّل'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إنشاء الفاتورة'))])));
+    if(ok==true){try{await StoreDb.instance.createInvoiceFromSales(operationIds:chosen.map((e)=>e['id'] as int).toList(),customerName:name.text,customerPhone:phone.text,paid:double.parse(paid.text));selectedIds.clear();await load();widget.changed();if(mounted)toast(context,'تم إنشاء فاتورة مجمعة دون خصم المخزون مرة أخرى.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
+    name.dispose();phone.dispose();paid.dispose();
+  }
   Future<void> add() async {
     final ps=await StoreDb.instance.products();if(!mounted)return;
     if(ps.isEmpty){toast(context,'أضف منتجاً أولاً.');return;}
@@ -1243,6 +1284,7 @@ class _MovementPageState extends State<MovementPage> {
   @override Widget build(BuildContext context) {
     final sale=widget.kind=='sale';final total=rows.fold<double>(0,(s,e)=>s+(e['total'] as num).toDouble());
     return Column(children:[
+      if(sale && selectedIds.isNotEmpty) Padding(padding:const EdgeInsets.fromLTRB(12,8,12,0),child:Card(child:ListTile(leading:const Icon(Icons.receipt_long,color:Colors.teal),title:Text('تم تحديد ${selectedIds.length} عملية بيع'),subtitle:const Text('ادمج المنتجات المحددة في فاتورة واحدة'),trailing:FilledButton.icon(onPressed:mergeSelected,icon:const Icon(Icons.merge_type),label:const Text('إنشاء فاتورة'))))),
       Card(child:ListTile(leading:Icon(sale?Icons.point_of_sale:Icons.shopping_cart),title:Text(sale?'إجمالي المبيعات':'إجمالي المشتريات'),
         subtitle:Text(money(total),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
         trailing:Row(mainAxisSize:MainAxisSize.min,children:[
@@ -1254,7 +1296,7 @@ class _MovementPageState extends State<MovementPage> {
         ]))),
       Expanded(child:rows.isEmpty?Center(child:Text(sale?'لا توجد مبيعات مسجلة':'لا توجد مشتريات مسجلة'))
         :ListView.builder(itemCount:rows.length,itemBuilder:(c,i){final e=rows[i];final dt=DateTime.tryParse(e['created_at'] as String? ?? '');
-          return Card(child:ListTile(leading:CircleAvatar(child:Icon(sale?Icons.south_west:Icons.north_east)),
+          final selectable=sale && !(e['note']??'').toString().startsWith('فاتورة ');return Card(child:ListTile(leading:selectable?Checkbox(value:selectedIds.contains(e['id']),onChanged:(v)=>setState((){if(v==true){selectedIds.add(e['id'] as int);}else{selectedIds.remove(e['id'] as int);}})):CircleAvatar(child:Icon(sale?Icons.south_west:Icons.north_east)),
             title:Text(e['product_name'] as String),subtitle:Text(e['qty'].toString()+' × '+money(e['unit_price'])+' • '+(dt?.toLocal().toString().substring(0,16)??'')+'\n'+(e['party_name']??'').toString()+' • '+e['note'].toString()),
             isThreeLine:true,
             trailing:PopupMenuButton<String>(
@@ -1558,11 +1600,14 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
     void beginPage() {
       recorder=ui.PictureRecorder();
       canvas=ui.Canvas(recorder!);
-      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
-      final heading=TextPainter(text:TextSpan(text:title,style:const TextStyle(fontSize:42,fontWeight:FontWeight.bold,color:Color(0xFF111111))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
+      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=const ui.Color(0xFFF4F8F6));
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,h-56),const ui.Radius.circular(34)),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,190),const ui.Radius.circular(34)),ui.Paint()..color=const ui.Color(0xFF087F68));
+      canvas!.drawRect(const ui.Rect.fromLTWH(28,150,w-56,218),ui.Paint()..color=const ui.Color(0xFF087F68));
+      final heading=TextPainter(text:TextSpan(text:title,style:const TextStyle(fontSize:42,fontWeight:FontWeight.bold,color:Color(0xFFFFFFFF))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
       heading.layout(maxWidth:w-2*pad);
       heading.paint(canvas!,Offset(pad,pad));
-      final date=TextPainter(text:TextSpan(text:'تاريخ الطباعة: ${DateTime.now().toLocal().toString().substring(0,16)}',style:const TextStyle(fontSize:22,color:Color(0xFF555555))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
+      final date=TextPainter(text:TextSpan(text:'تاريخ الطباعة: ${DateTime.now().toLocal().toString().substring(0,16)}',style:const TextStyle(fontSize:22,color:Color(0xFFE2F4EF))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
       date.layout(maxWidth:w-2*pad);date.paint(canvas!,Offset(pad,pad+heading.height+18));
       y=pad+heading.height+date.height+65;
     }
@@ -1578,8 +1623,9 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       final painter=TextPainter(text:TextSpan(text:line,style:const TextStyle(fontSize:27,color:Color(0xFF161616))),textDirection:TextDirection.rtl,textAlign:TextAlign.right);
       painter.layout(maxWidth:w-2*pad);
       if(y+painter.height+24>h-pad) { await finishPage(); beginPage(); }
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18),const ui.Radius.circular(12)),ui.Paint()..color=const ui.Color(0xFFF0F6F3));
       painter.paint(canvas!,Offset(pad,y));
-      y+=painter.height+24;
+      y+=painter.height+28;
     }
     await finishPage();
     final document=pw.Document();
