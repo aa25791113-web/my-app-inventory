@@ -179,9 +179,6 @@ jobs:
           else
             echo "SHOREBIRD_READY=false" >> "$GITHUB_ENV"
           fi
-          if [ "$SHOREBIRD_READY" = "false" ] && [ -f shorebird.yaml ]; then
-            echo "SHOREBIRD_READY=true" >> "$GITHUB_ENV"
-          fi
           python - <<'PY'
           from pathlib import Path
           config = Path("shorebird.yaml")
