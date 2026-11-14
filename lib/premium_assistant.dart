@@ -23,13 +23,11 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   static const secureStorage=FlutterSecureStorage();
 
   Future<void> _loadAiConfig() async {
-    final prefs=await SharedPreferences.getInstance();
     onlineConfigured=((await secureStorage.read(key:apiKeyStore))??'').trim().isNotEmpty;
     if(mounted)setState((){});
   }
 
   Future<void> _showAiSettings() async {
-    final prefs=await SharedPreferences.getInstance();
     final controller=TextEditingController(text:(await secureStorage.read(key:apiKeyStore))??'');
     final result=await showDialog<String?>(context:context,builder:(ctx)=>AlertDialog(
       title:const Text('إعداد الذكاء الاصطناعي'),
@@ -56,7 +54,6 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   }
 
   Future<String?> _onlineAnswer(String question) async {
-    final prefs=await SharedPreferences.getInstance();
     final key=((await secureStorage.read(key:apiKeyStore))??'').trim();
     if(key.isEmpty)return null;
     final recent=msgs.take(msgs.isEmpty?0:msgs.length-1).toList();
@@ -94,7 +91,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       final answer=parts.map((p)=>(p['text']??'').toString()).where((s)=>s.isNotEmpty).join('\n').trim();
       return answer.isEmpty?null:answer;
     }catch(e){
-      return 'مش قادر أوصل لخدمة الذكاء الاصطناعي حالياً. اتأكد من الإنترنت، وهكمل معاك بالمساعد المحلي لحد ما الاتصال يرجع.';
+      return 'تعذر الاتصال بخدمة الذكاء الاصطناعي. اتأكد من الإنترنت.\n\n${_answer(question)}';
     }finally{client.close(force:true);}
   }
   @override void initState(){super.initState();load();_loadAiConfig();}
