@@ -482,7 +482,10 @@ class StoreDb {
   Future<List<Map<String,Object?>>> movements([String? kind]) => database!.query('operations',
     where:kind == null ? null : 'kind=?',whereArgs:kind == null ? null : [kind],orderBy:'id DESC');
 
-  Future<List<Map<String,Object?>>> invoices({bool pendingOnly=false})=>database!.query('invoices',where:pendingOnly?'total>paid':null,orderBy:'id DESC');
+  Future<List<Map<String,Object?>>> invoices({bool pendingOnly=false}) async {
+    final where=pendingOnly?'WHERE i.total>i.paid':'';
+    return database!.rawQuery("SELECT i.*,COALESCE((SELECT MAX(p.paid_at) FROM invoice_payments p WHERE p.invoice_id=i.id),i.created_at) AS reminder_base_at FROM invoices i $where ORDER BY i.id DESC");
+  }
   Future<List<Map<String,Object?>>> invoiceItems(int id)=>database!.query('invoice_items',where:'invoice_id=?',whereArgs:[id],orderBy:'id');
   Future<List<Map<String,Object?>>> shortageGroups() async => database!.rawQuery("SELECT p.id AS product_id,p.name AS product_name,p.sku,p.qty,p.min_qty,p.unit,p.supplier_id,COALESCE(s.name,'بدون مورد') AS supplier_name,COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0) AS sold_qty FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.archived=0 AND p.min_qty>0 AND p.qty<=p.min_qty ORDER BY supplier_name,p.name");
   Future<void> createInvoice({required String customerName,required String customerPhone,required int? customerId,required List<Map<String,Object?>> items,required double discountValue,required bool discountPercent,required double paid,required String note}) async {
