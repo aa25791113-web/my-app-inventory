@@ -1864,7 +1864,7 @@ class _NotificationSettingsCardState extends State<NotificationSettingsCard>{
             child:DropdownButtonFormField<int>(
               value:reminderDays,
               decoration:const InputDecoration(labelText:'التذكير بعد مرور',prefixIcon:Icon(Icons.schedule_rounded)),
-              items:const [1,3,5,7,10,14,21,30].map((d)=>DropdownMenuItem(value:d,child:Text('$d \${d==1?'يوم':'أيام'}'))).toList(),
+              items:const [1,3,5,7,10,14,21,30].map((d)=>DropdownMenuItem(value:d,child:Text('$d ${d==1?'يوم':'أيام'}'))).toList(),
               onChanged:setDays,
             ),
           ),
