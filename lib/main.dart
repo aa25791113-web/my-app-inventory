@@ -2060,19 +2060,48 @@ class SettingsPage extends StatelessWidget {
       subtitle:const Text('البحث عن تحديثات صغيرة وتنزيلها داخل التطبيق دون ملف APK عندما يكون التحديث متوافقاً.'),
       trailing:const Icon(Icons.chevron_left),
       onTap:()async{
-        final updater=ShorebirdUpdater();
-        if(!updater.isAvailable){toast(context,'التحديثات السحابية ستعمل بعد تثبيت أول إصدار مهيأ بنظام التحديث.');return;}
         try{
+          final manifest=await fetchUpdateManifest();
+          if(manifest!=null){
+            final packageInfo=await PackageInfo.fromPlatform();
+            final installedVersion='${packageInfo.version}+${packageInfo.buildNumber}';
+            final remoteVersion=(manifest['release_version']??'').toString();
+            if(remoteVersion.isNotEmpty&&remoteVersion!=installedVersion){
+              final size=(manifest['size_label']??formatUpdateSize(manifest['size_bytes'])).toString();
+              final notes=(manifest['notes']??'إصدار جديد يتضمن تحسينات وإصلاحات.').toString();
+              await showDialog<void>(context:context,builder:(d)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+                shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
+                title:const Row(children:[Icon(Icons.system_update_alt),SizedBox(width:8),Text('إصدار كامل جديد متاح')]),
+                content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+                  Text('الإصدار: $remoteVersion',style:const TextStyle(fontWeight:FontWeight.w800)),
+                  Text('الحجم التقريبي: $size'),
+                  const Divider(height:22),
+                  const Text('ملاحظات الإصدار',style:TextStyle(fontWeight:FontWeight.bold)),
+                  Text(notes),
+                  const SizedBox(height:10),
+                  const Text('هذا الإصدار يتضمن تغييرات تحتاج ملف APK كامل. لا يمكن تثبيته كتحديث صغير؛ يلزم تنزيل النسخة الجديدة وتثبيتها.',style:TextStyle(fontSize:12,color:Colors.grey)),
+                ]),
+                actions:[FilledButton(onPressed:()=>Navigator.pop(d),child:const Text('حسنًا'))],
+              )));
+              return;
+            }
+          }
+          final updater=ShorebirdUpdater();
+          if(!updater.isAvailable){toast(context,'التحديثات الصغيرة ستعمل بعد تثبيت أول إصدار مهيأ بنظام Shorebird.');return;}
           final status=await updater.checkForUpdate();
           if(status==UpdateStatus.upToDate){if(context.mounted)toast(context,'أنت تستخدم أحدث تحديث متاح.');return;}
-          if(status==UpdateStatus.restartRequired){if(context.mounted)toast(context,'التحديث جاهز. أغلق التطبيق وافتحه مرة أخرى لتطبيقه.');return;}
+          if(status==UpdateStatus.restartRequired){
+            final prefs=await SharedPreferences.getInstance();
+            if(manifest!=null)await prefs.setString('last_update_notification_key','patch:${manifest['release_version']??''}:${manifest['patch_number']??''}');
+            if(context.mounted)toast(context,'التحديث جاهز. أغلق البرنامج وافتحه مرة أخرى لتطبيقه.');
+            return;
+          }
           if(status==UpdateStatus.unavailable){if(context.mounted)toast(context,'خدمة التحديث غير متاحة حالياً.');return;}
-          final fetchedManifest=await fetchUpdateManifest();
-          final manifest=fetchedManifest?['track']=='stable'?fetchedManifest:null;
-          final version=(manifest?['release_version']??'تحديث برمجي').toString();
-          final patch=(manifest?['patch_number']??'—').toString();
-          final size=(manifest?['size_label']??formatUpdateSize(manifest?['size_bytes'])).toString();
-          final notes=(manifest?['notes']??'تحسينات وإصلاحات للبرنامج.').toString();
+          final stableManifest=manifest?['track']=='stable'?manifest:null;
+          final version=(stableManifest?['release_version']??'تحديث برمجي').toString();
+          final patch=(stableManifest?['patch_number']??'—').toString();
+          final size=(stableManifest?['size_label']??formatUpdateSize(stableManifest?['size_bytes'])).toString();
+          final notes=(stableManifest?['notes']??'تحسينات وإصلاحات للبرنامج.').toString();
           final accepted=await showDialog<bool>(context:context,builder:(d)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
             shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
             title:const Row(children:[Icon(Icons.system_update_alt),SizedBox(width:8),Text('تحديث جديد متاح')]),
@@ -2088,7 +2117,12 @@ class SettingsPage extends StatelessWidget {
             ])),
             actions:[TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('لاحقاً')),FilledButton.icon(onPressed:()=>Navigator.pop(d,true),icon:const Icon(Icons.download),label:const Text('تنزيل التحديث'))]
           )));
-          if(accepted==true){await updater.update();if(context.mounted)toast(context,'اكتمل تنزيل التحديث. أغلق التطبيق وافتحه لتطبيق النسخة الجديدة.');}
+          if(accepted==true){
+            await updater.update();
+            final prefs=await SharedPreferences.getInstance();
+            if(stableManifest!=null)await prefs.setString('last_update_notification_key','patch:${stableManifest['release_version']??''}:${stableManifest['patch_number']??''}');
+            if(context.mounted)toast(context,'اكتمل تنزيل التحديث. أغلق البرنامج وافتحه لتطبيق النسخة الجديدة.');
+          }
         }catch(e){if(context.mounted)toast(context,'تعذر التحقق من التحديث: ${e.toString().replaceFirst('Exception: ','')}');}
       }
     )),
