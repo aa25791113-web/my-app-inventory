@@ -4,6 +4,13 @@ concurrency:
   cancel-in-progress: true
 on:
   workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "ملاحظات الإصدار التي ستظهر في إشعار التحديث"
+        required: false
+        type: string
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -171,6 +178,46 @@ jobs:
             exit 1
           fi
           shorebird release android --artifact apk --target-platform android-arm64
+      - name: Publish version and release notes for in-app update alerts
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          python - <<'PY'
+          import json, os, re
+          from datetime import datetime, timezone
+          from pathlib import Path
+          pubspec = Path("pubspec.yaml").read_text()
+          match = re.search(r"(?m)^version:\\s*([^\\s]+)", pubspec)
+          if not match:
+              raise SystemExit("Could not read version from pubspec.yaml")
+          version = match.group(1)
+          apks = list(Path("build/app/outputs/flutter-apk").glob("*.apk"))
+          if not apks:
+              raise SystemExit("Shorebird release succeeded but no APK artifact was found.")
+          size_bytes = sum(p.stat().st_size for p in apks)
+          if size_bytes < 1024:
+              size_label = f"{size_bytes} بايت"
+          elif size_bytes < 1024 * 1024:
+              size_label = f"{size_bytes / 1024:.1f} كيلوبايت"
+          else:
+              size_label = f"{size_bytes / (1024 * 1024):.2f} ميجابايت"
+          manifest = {
+              "release_version": version,
+              "patch_number": 0,
+              "track": "stable",
+              "size_bytes": size_bytes,
+              "size_label": size_label,
+              "notes": os.environ.get("RELEASE_NOTES", "").strip() or "إصدار جديد يتضمن تحسينات وإصلاحات.",
+              "published_at": datetime.now(timezone.utc).isoformat()
+          }
+          Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update_manifest.json
+          git commit -m "Publish Android release metadata"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
         with:
           name: my-app-shorebird-android-apk-arm64
