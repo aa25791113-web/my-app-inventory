@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:package_info_plus/package_info_plus.dart';
 import 'notification_service.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
@@ -630,20 +631,34 @@ Future<void> checkForOnlineUpdateNotification() async {
     final prefs=await SharedPreferences.getInstance();
     if(!(prefs.getBool('notifications_enabled')??false)||
        !(prefs.getBool('update_alerts')??true))return;
-    final updater=ShorebirdUpdater();
-    if(!updater.isAvailable)return;
     final manifest=await fetchUpdateManifest();
     if(manifest==null)return;
-    final status=await updater.checkForUpdate();
-    final key='${manifest['release_version']??''}:${manifest['patch_number']??''}';
+    final packageInfo=await PackageInfo.fromPlatform();
+    final installedVersion='${packageInfo.version}+${packageInfo.buildNumber}';
+    final remoteVersion=(manifest['release_version']??'').toString();
     final last=prefs.getString('last_update_notification_key');
+    if(remoteVersion.isNotEmpty&&remoteVersion!=installedVersion){
+      final key='apk:$remoteVersion';
+      if(last!=key){
+        await AppNotificationService.instance.showUpdateNotification(
+          title:'إصدار جديد من البرنامج متاح',
+          body:'الإصدار $remoteVersion يتطلب تنزيل ملف APK وتثبيته. افتح البرنامج لمراجعة تفاصيل التحديث.',
+        );
+        await prefs.setString('last_update_notification_key',key);
+      }
+      return;
+    }
+    final updater=ShorebirdUpdater();
+    if(!updater.isAvailable)return;
+    final status=await updater.checkForUpdate();
+    final key='patch:${manifest['release_version']??''}:${manifest['patch_number']??''}';
     if(status==UpdateStatus.outdated||status==UpdateStatus.restartRequired){
       if(last!=key){
         final notes=(manifest['notes']??'تحسينات وإصلاحات جديدة.').toString();
-        final title=status==UpdateStatus.restartRequired?'التحديث جاهز للتطبيق':'تحديث جديد متاح';
+        final title=status==UpdateStatus.restartRequired?'التحديث جاهز للتطبيق':'تحديث برمجي جديد متاح';
         final body=status==UpdateStatus.restartRequired
           ?'تم تنزيل التحديث. أغلق البرنامج وافتحه مرة أخرى لتطبيقه. $notes'
-          :'يتوفر تحديث برمجي جديد. افتح البرنامج لمعرفة التفاصيل. $notes';
+          :'يتوفر تحديث برمجي صغير. افتح البرنامج لمعرفة التفاصيل. $notes';
         await AppNotificationService.instance.showUpdateNotification(title:title,body:body);
         await prefs.setString('last_update_notification_key',key);
       }
@@ -1262,7 +1277,7 @@ class _InvoicePageState extends State<InvoicePage>{
   Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);if(mounted)setState(()=>rows=r);}
   Future<void> create()async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;if(products.isEmpty){toast(context,'أضف منتجات أولاً.');return;}final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers,suppliers:suppliers));if(result==true){await load();widget.changed();}}
    Future<void> append(Map<String,Object?> invoice)async{final products=await StoreDb.instance.products();final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:const [],suppliers:suppliers,invoice:invoice));if(result==true){await load();widget.changed();}}
-  Future<void> pay(Map<String,Object?> invoice)async{final c=TextEditingController();final due=(invoice['total'] as num).toDouble()-(invoice['paid'] as num).toDouble();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('تحصيل دفعة • ${invoice['invoice_no']}'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'المبلغ المتبقي: ${money(due)}')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تأكيد التحصيل'))])));if(ok==true){try{await StoreDb.instance.addInvoicePayment(invoice['id'] as int,double.parse(c.text));await load();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}c.dispose();}
+  Future<void> pay(Map<String,Object?> invoice)async{final c=TextEditingController();final due=(invoice['total'] as num).toDouble()-(invoice['paid'] as num).toDouble();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('تحصيل دفعة • ${invoice['invoice_no']}'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'المبلغ المتبقي: ${money(due)}')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تأكيد التحصيل'))])));if(ok==true){try{await StoreDb.instance.addInvoicePayment(invoice['id'] as int,double.parse(c.text));await load();widget.changed();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}c.dispose();}
   Future<void> details(Map<String,Object?> e)async{final items=await StoreDb.instance.invoiceItems(e['id'] as int);if(!mounted)return;final total=(e['total'] as num).toDouble(),paid=(e['paid'] as num).toDouble();await showDialog(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(title:Text('فاتورة ${e['invoice_no']}'),content:SizedBox(width:460,child:SingleChildScrollView(child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Text('العميل: ${e['customer_name']}'),if((e['customer_phone']??'').toString().trim().isNotEmpty)Text('الهاتف: ${e['customer_phone']}'),Text('التاريخ: ${e['created_at']}'),const Divider(),...items.map((x)=>ListTile(dense:true,title:Text(x['product_name'].toString()),subtitle:Text('${x['qty']} × ${money(x['unit_price'])} • ${x['supplier_name']??'بدون مورد'}\nأضيف: ${formatDateTime(x['added_at']??e['created_at'])}'),isThreeLine:true,trailing:Text(money(x['total'])))),const Divider(),Text('الإجمالي: ${money(total)}'),Text('المدفوع: ${money(paid)}'),Text('المتبقي: ${money(total-paid)}',style:const TextStyle(fontWeight:FontWeight.bold)),if((e['note']??'').toString().isNotEmpty)Text('ملاحظات: ${e['note']}')]))),actions:[TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق')),OutlinedButton.icon(onPressed:(){Navigator.pop(ctx);append(e);},icon:const Icon(Icons.add_shopping_cart),label:const Text('إضافة أصناف')),FilledButton.icon(onPressed:()=>printTextReport(context,'فاتورة بيع • ${e['invoice_no']}', ['MY APP — فاتورة بيع','رقم الفاتورة: ${e['invoice_no']}','العميل: ${e['customer_name']}',if((e['customer_phone']??'').toString().trim().isNotEmpty)'الهاتف: ${e['customer_phone']}','التاريخ: ${e['created_at']}','--------------------------------',...items.map((x)=>'${x['product_name']} | ${x['qty']} × ${money(x['unit_price'])} = ${money(x['total'])} | المورد: ${x['supplier_name']??'بدون مورد'} | أضيف: ${formatDateTime(x['added_at']??e['created_at'])}'),'الإجمالي قبل الخصم: ${money(e['subtotal'])}','الخصم: ${money(e['discount_amount'])}','الإجمالي النهائي: ${money(total)}','المدفوع: ${money(paid)}','المتبقي: ${money(total-paid)}','ملاحظات: ${e['note']}','شكراً لتعاملكم معنا']),icon:const Icon(Icons.picture_as_pdf),label:const Text('طباعة / PDF'))])));}
   @override Widget build(BuildContext context)=>Column(children:[Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:Text(widget.pendingOnly?'الفواتير المستحقة':'فواتير البيع',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))),IconButton(onPressed:load,icon:const Icon(Icons.refresh)),if(!widget.pendingOnly)FilledButton.icon(onPressed:create,icon:const Icon(Icons.add),label:const Text('فاتورة جديدة'))])),Expanded(child:rows.isEmpty?Center(child:Text(widget.pendingOnly?'لا توجد مبالغ مستحقة حالياً.':'لا توجد فواتير بعد.')):ListView.builder(itemCount:rows.length,itemBuilder:(ctx,i){final e=rows[i];final total=(e['total'] as num).toDouble(),paid=(e['paid'] as num).toDouble(),due=total-paid;return Card(child:ListTile(leading:CircleAvatar(child:Icon(due>0?Icons.pending_actions:Icons.receipt_long)),title:Text('${e['invoice_no']} • ${e['customer_name']}'),subtitle:Text('الإجمالي: ${money(total)} • المدفوع: ${money(paid)} • المتبقي: ${money(due)}\n${e['created_at']}'),isThreeLine:true,onTap:()=>details(e),trailing:PopupMenuButton<String>(onSelected:(v){if(v=='pay')pay(e);else details(e);},itemBuilder:(_)=>[const PopupMenuItem(value:'details',child:Text('تفاصيل وطباعة')),if(due>0)const PopupMenuItem(value:'pay',child:Text('تسجيل دفعة'))])));} ))]);
 }
