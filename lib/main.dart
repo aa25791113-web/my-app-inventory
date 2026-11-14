@@ -1928,6 +1928,7 @@ class _NotificationSettingsCardState extends State<NotificationSettingsCard>{
     await syncLocalNotifications(forceInvoiceReschedule:true);
   }
   @override Widget build(BuildContext context){
+    if(!Platform.isAndroid)return const Card(child:ListTile(leading:Icon(Icons.notifications_off_outlined),title:Text('إشعارات الهاتف'),subtitle:Text('تنبيهات الهاتف متاحة في نسخة Android فقط.')));
     final active=permissionGranted&&enabled;
     return Card(
       clipBehavior:Clip.antiAlias,
@@ -2096,7 +2097,7 @@ class SettingsPage extends StatelessWidget {
           if(status==UpdateStatus.upToDate){if(context.mounted)toast(context,'أنت تستخدم أحدث تحديث متاح.');return;}
           if(status==UpdateStatus.restartRequired){
             final prefs=await SharedPreferences.getInstance();
-            if(manifest!=null)await prefs.setString('last_update_notification_key','patch:${manifest['release_version']??''}:${manifest['patch_number']??''}');
+            if(manifest!=null&&manifest['track']=='stable')await prefs.setString('last_update_notification_key','patch:${manifest['release_version']??''}:${manifest['patch_number']??''}');
             if(context.mounted)toast(context,'التحديث جاهز. أغلق البرنامج وافتحه مرة أخرى لتطبيقه.');
             return;
           }
