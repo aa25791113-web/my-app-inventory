@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
@@ -13,6 +14,8 @@ class AppNotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
+  final StreamController<String?> _tapController = StreamController<String?>.broadcast();
+  Stream<String?> get taps => _tapController.stream;
 
   static const int _stockBaseId = 1100000;
   static const int _invoiceBaseId = 2200000;
@@ -36,7 +39,7 @@ class AppNotificationService {
     );
     await _plugin.initialize(
       settings,
-      onDidReceiveNotificationResponse: (response) {},
+      onDidReceiveNotificationResponse: (response) => _tapController.add(response.payload),
     );
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
