@@ -2001,7 +2001,7 @@ class _NotificationSettingsCardState extends State<NotificationSettingsCard>{
         SwitchListTile(
           secondary:const Icon(Icons.system_update_alt),
           title:const Text('إشعار توفر تحديث جديد'),
-          subtitle:const Text('يتحقق عند توفر الإنترنت أثناء تشغيل التطبيق أو عند فتحه'),
+          subtitle:const Text('يتحقق فور عودة الاتصال أثناء الاستخدام، ويعيد الفحص في الخلفية كل فترة حتى لو أغلقت البرنامج'),
           value:updates,
           onChanged:active?(v)=>setOption('update_alerts',v):null,
         ),
