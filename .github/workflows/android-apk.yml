@@ -274,18 +274,17 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit release metadata
-        continue-on-error: true
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${GITHUB_REF_NAME}"
+          git reset --mixed "origin/${GITHUB_REF_NAME}"
           git add update_manifest.json
           if [ -f shorebird.yaml ]; then
-            git add shorebird.yaml pubspec.yaml
+            git add shorebird.yaml
           fi
           git commit -m "Publish Android release metadata"
-          git fetch origin "${GITHUB_REF_NAME}"
-          git rebase "origin/${GITHUB_REF_NAME}"
           git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
         with:
