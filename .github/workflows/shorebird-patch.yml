@@ -1,5 +1,10 @@
 name: Publish Shorebird Android patch
 on:
+  push:
+    branches:
+      - premium-redesign-v1
+    paths:
+      - .github/patch-ready
   workflow_dispatch:
     inputs:
       release_version:
@@ -183,8 +188,8 @@ jobs:
         shell: bash
         env:
           INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
-          INPUT_TRACK: ${{ inputs.track }}
-          INPUT_NOTES: ${{ inputs.release_notes }}
+          INPUT_TRACK: ${{ inputs.track || 'stable' }}
+          INPUT_NOTES: ${{ inputs.release_notes || 'تحسينات وإصلاحات للبرنامج.' }}
         run: |
           if [ -z "$SHOREBIRD_TOKEN" ]; then
             echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
