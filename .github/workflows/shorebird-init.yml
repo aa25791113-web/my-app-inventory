@@ -1,6 +1,11 @@
 name: Initialize Shorebird updates
 on:
   workflow_dispatch:
+    inputs:
+      org_id:
+        description: "Optional Shorebird organization ID if the account belongs to multiple organizations"
+        required: false
+        type: string
 permissions:
   contents: write
 jobs:
@@ -8,6 +13,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+      INPUT_ORG_ID: ${{ inputs.org_id }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -33,7 +39,11 @@ jobs:
             echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
             exit 1
           fi
-          shorebird init --display-name "MY APP"
+          if [ -n "$INPUT_ORG_ID" ]; then
+            shorebird init --org-id "$INPUT_ORG_ID" --display-name "MY APP"
+          else
+            shorebird init --display-name "MY APP"
+          fi
           python - <<'PY'
           from pathlib import Path
           p = Path("shorebird.yaml")
