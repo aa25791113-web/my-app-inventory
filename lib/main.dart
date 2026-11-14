@@ -814,6 +814,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     load();
+    unawaited(registerAdminDevice());
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!Platform.isAndroid) return;
       final prefs = await SharedPreferences.getInstance();
@@ -835,6 +836,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state){
     if(state==AppLifecycleState.resumed){
+      unawaited(registerAdminDevice());
       unawaited(syncLocalNotifications());
       unawaited(checkForOnlineUpdateNotification());
     }
@@ -2690,6 +2692,33 @@ Future<void> checkRemoteAdminAnnouncement() async {
     );
     await prefs.setString('last_admin_announcement_id',id);
   }catch(_){}finally{client.close(force:true);}
+}
+
+Future<void> registerAdminDevice() async {
+  if(!Platform.isAndroid)return;
+  final prefs=await SharedPreferences.getInstance();
+  var token=prefs.getString('app_lol_admin_device_token');
+  if(token==null||token.length<32){
+    final random=math.Random.secure();
+    token=List.generate(48,(_)=>random.nextInt(16).toRadixString(16)).join();
+    await prefs.setString('app_lol_admin_device_token',token);
+  }
+  HttpClient? client;
+  try{
+    final info=await PackageInfo.fromPlatform();
+    client=HttpClient();
+    final request=await client.postUrl(Uri.parse('$_adminSupabaseUrl/rest/v1/rpc/touch_app_device')).timeout(const Duration(seconds:6));
+    request.headers.set('apikey',_adminSupabaseKey);
+    request.headers.set(HttpHeaders.authorizationHeader,'Bearer $_adminSupabaseKey');
+    request.headers.contentType=ContentType.json;
+    request.write(jsonEncode({
+      'p_device_token':token,
+      'p_platform':Platform.operatingSystem,
+      'p_app_version':'${info.version}+${info.buildNumber}',
+    }));
+    final response=await request.close().timeout(const Duration(seconds:6));
+    await response.drain<void>();
+  }catch(_){}finally{client?.close(force:true);}
 }
 
 @pragma('vm:entry-point')
