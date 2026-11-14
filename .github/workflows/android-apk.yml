@@ -154,6 +154,27 @@ jobs:
           print("Verified Android camera and internet permissions in manifest")
           PY
       - run: flutter pub get
+      - name: Initialize Shorebird app configuration
+        shell: bash
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
+          fi
+          if [ ! -f shorebird.yaml ]; then
+            shorebird init --org-id 62776 --display-name "MY APP"
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          config = Path("shorebird.yaml")
+          if not config.exists():
+              raise SystemExit("Shorebird initialization did not create shorebird.yaml")
+          source = config.read_text()
+          if "auto_update:" not in source:
+              source = source.rstrip() + "\nauto_update: false\n"
+          config.write_text(source)
+          print("Shorebird configuration is ready for controlled in-app patch updates.")
+          PY
       - name: Align Android plugin compile SDK versions
         shell: bash
         run: |
@@ -225,7 +246,7 @@ jobs:
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update_manifest.json
+          git add update_manifest.json shorebird.yaml pubspec.yaml
           git commit -m "Publish Android release metadata"
           git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
