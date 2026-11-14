@@ -1,0 +1,4 @@
+APP LOL invoice workflow update
+Release: 3.9.5+46
+Track: stable
+Features: suspend and resume multiple invoices; edit saved invoices; save invoice as PNG or PDF; separate print action; payment method labels and icons.
