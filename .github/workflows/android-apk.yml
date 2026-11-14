@@ -222,16 +222,6 @@ jobs:
             exit 1
           fi
           shorebird release android --artifact apk --target-platform android-arm64
-      - name: Publish downloadable APK on GitHub Releases
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: app-${{ github.run_number }}
-          name: APP LOL Android ${{ github.run_number }}
-          body: "نسخة Android رسمية من APP LOL — مبنية عبر Shorebird."
-          files: build/app/outputs/flutter-apk/app-lol-android-arm64.apk
-          overwrite_files: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish version and release notes for in-app update alerts
         shell: bash
         env:
@@ -273,6 +263,16 @@ jobs:
           }
           Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
           PY
+      - name: Publish downloadable APK on GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-${{ github.run_number }}
+          name: APP LOL Android ${{ github.run_number }}
+          body: "نسخة Android رسمية من APP LOL — مبنية عبر Shorebird."
+          files: build/app/outputs/flutter-apk/app-lol-android-arm64.apk
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add update_manifest.json
