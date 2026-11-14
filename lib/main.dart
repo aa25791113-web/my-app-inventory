@@ -1532,6 +1532,7 @@ class InvoiceEditor extends StatefulWidget{
 class _InvoiceEditorState extends State<InvoiceEditor>{
   final List<Map<String,Object?>> items=[];
   final discount=TextEditingController(text:'0'),paid=TextEditingController(text:'0'),note=TextEditingController(),customerName=TextEditingController(),customerPhone=TextEditingController();
+  int? customerId;
   bool percent=false,saving=false;
   double get subtotal=>items.fold<double>(0,(s,e)=>s+((e['qty'] as int? ?? 0)*(e['unit_price'] as num? ?? 0).toDouble()));
   double get discountAmount{final v=double.tryParse(discount.text)??0;return (percent?subtotal*v/100:v).clamp(0,subtotal).toDouble();}
@@ -1563,9 +1564,16 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
     }
     if(widget.invoice==null&&(paidValue<0||paidValue>total)){toast(context,'راجع المبلغ المدفوع؛ لا يمكن أن يتجاوز إجمالي الفاتورة.');return;}
     setState(()=>saving=true);
-    try{if(widget.invoice!=null){await StoreDb.instance.appendInvoiceItems(widget.invoice!['id'] as int,items);}else{await StoreDb.instance.createInvoice(customerName:customerName.text.trim(),customerPhone:customerPhone.text.trim(),customerId:null,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:paidValue,note:note.text);}if(mounted)Navigator.pop(context,true);}
+    try{if(widget.invoice!=null){await StoreDb.instance.appendInvoiceItems(widget.invoice!['id'] as int,items);}else{await StoreDb.instance.createInvoice(customerName:customerName.text.trim(),customerPhone:customerPhone.text.trim(),customerId:customerId,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:paidValue,note:note.text);}if(mounted)Navigator.pop(context,true);}
     catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>saving=false);}
   }
+  Widget _searchField({required List<String> options,required String label,required String initialValue,required ValueChanged<String> onSelected,ValueChanged<String>? onChanged})=>Autocomplete<String>(
+    initialValue:TextEditingValue(text:initialValue),
+    optionsBuilder:(value){final q=value.text.trim().toLowerCase();if(q.isEmpty)return const Iterable<String>.empty();return options.where((x)=>x.toLowerCase().startsWith(q)||x.toLowerCase().contains(q)).take(10);},
+    onSelected:onSelected,
+    fieldViewBuilder:(context,controller,focusNode,onSubmitted)=>TextField(controller:controller,focusNode:focusNode,onChanged:onChanged,onSubmitted:(_)=>onSubmitted(),decoration:InputDecoration(labelText:label,prefixIcon:const Icon(Icons.search_rounded),suffixIcon:controller.text.isEmpty?null:IconButton(icon:const Icon(Icons.close_rounded),onPressed:(){controller.clear();onChanged?.call('');focusNode.requestFocus();}))),
+    optionsViewBuilder:(context,onSelect,options){final values=options.toList();return Align(alignment:Alignment.topRight,child:Material(elevation:8,color:Theme.of(context).colorScheme.surface,borderRadius:BorderRadius.circular(14),child:ConstrainedBox(constraints:const BoxConstraints(maxHeight:240,minWidth:260),child:ListView.separated(padding:const EdgeInsets.all(7),shrinkWrap:true,itemCount:values.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(context,index)=>ListTile(dense:true,leading:const Icon(Icons.search_rounded,size:18),title:Text(values[index],maxLines:1,overflow:TextOverflow.ellipsis),onTap:()=>onSelect(values[index]))))));},
+  );
   Widget _sectionTitle(String title,IconData icon)=>Padding(padding:const EdgeInsets.only(bottom:9),child:Row(children:[Icon(icon,size:18,color:Theme.of(context).colorScheme.primary),const SizedBox(width:8),Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:14))]));
   Widget _moneyBox(String label,String value,{bool strong=false,Color? color})=>Expanded(child:Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:10),decoration:BoxDecoration(color:strong?Theme.of(context).colorScheme.primaryContainer:Theme.of(context).colorScheme.surfaceContainerLow,borderRadius:BorderRadius.circular(13),border:Border.all(color:Theme.of(context).colorScheme.outlineVariant.withOpacity(.45))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant)),const SizedBox(height:5),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:strong?15:12,fontWeight:FontWeight.w900,color:color??Theme.of(context).colorScheme.onSurface))])));
   @override Widget build(BuildContext context){
@@ -1578,7 +1586,7 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
       ])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         if(widget.invoice==null)...[_sectionTitle('بيانات العميل',Icons.person_outline_rounded),Row(children:[
-          Expanded(flex:3,child:TextField(controller:customerName,decoration:const InputDecoration(labelText:'اسم العميل',hintText:'عميل نقدي أو اسم العميل',prefixIcon:Icon(Icons.person_outline)))),
+          Expanded(flex:3,child:_searchField(options:widget.customers.map((x)=>x['name'].toString()).toList(),initialValue:customerName.text,label:'ابحث عن العميل أو اكتب اسمه',onChanged:(v){customerName.text=v;customerId=null;},onSelected:(name){final found=widget.customers.where((x)=>x['name'].toString()==name).toList();setState((){customerName.text=name;if(found.isNotEmpty){customerId=found.first['id'] as int?;customerPhone.text=(found.first['phone']??'').toString();}});})),
           const SizedBox(width:9),Expanded(flex:2,child:TextField(controller:customerPhone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف',prefixIcon:Icon(Icons.phone_outlined)))),
         ]),const SizedBox(height:18)],
         Row(children:[Expanded(child:_sectionTitle('أصناف الفاتورة',Icons.shopping_bag_outlined)),FilledButton.icon(onPressed:available.isEmpty?null:addItem,icon:const Icon(Icons.add_rounded),label:const Text('إضافة صنف'))]),
@@ -1588,14 +1596,14 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
           final options=widget.products.where((p)=>(p['qty'] as int? ?? 0)>0||p['id']==e['product_id']).toList();
           return Container(key:ValueKey('invoice-row-$i'),margin:const EdgeInsets.only(bottom:10),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:cs.surface,borderRadius:BorderRadius.circular(17),border:Border.all(color:cs.outlineVariant.withOpacity(.75)),boxShadow:[BoxShadow(color:cs.shadow.withOpacity(.035),blurRadius:9,offset:const Offset(0,3))]),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
             Row(children:[Container(width:28,height:28,alignment:Alignment.center,decoration:BoxDecoration(color:cs.primaryContainer,borderRadius:BorderRadius.circular(9)),child:Text('${i+1}',style:TextStyle(color:cs.primary,fontWeight:FontWeight.w900))),const SizedBox(width:8),const Expanded(child:Text('بيانات الصنف',style:TextStyle(fontWeight:FontWeight.w900,fontSize:12))),IconButton(visualDensity:VisualDensity.compact,tooltip:'حذف الصنف',onPressed:()=>setState(()=>items.removeAt(i)),icon:const Icon(Icons.delete_outline_rounded,color:Colors.redAccent))]),
-            DropdownButtonFormField<int>(value:e['product_id'] as int?,isExpanded:true,decoration:const InputDecoration(labelText:'اسم الصنف',prefixIcon:Icon(Icons.inventory_2_outlined)),items:options.map((p)=>DropdownMenuItem<int>(value:p['id'] as int,child:Text('${p['name']} • متاح ${p['qty']}'))).toList(),onChanged:(id)=>changeProduct(i,id)),
+            _searchField(options:options.map((p)=>p['name'].toString()).toList(),initialValue:(e['product_name']??'').toString(),label:'اكتب أول حروف اسم الصنف للبحث',onSelected:(name){final found=options.where((p)=>p['name'].toString()==name).toList();if(found.isNotEmpty)changeProduct(i,found.first['id'] as int);}),
             const SizedBox(height:9),
             Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
               Expanded(child:TextFormField(key:ValueKey('invoice-qty-$i-${e['product_id']}'),initialValue:qty.toString(),keyboardType:TextInputType.number,decoration:const InputDecoration(labelText:'الكمية',prefixIcon:Icon(Icons.numbers)),onChanged:(v)=>changeQty(i,v))),
               const SizedBox(width:8),Expanded(flex:2,child:TextFormField(key:ValueKey('invoice-price-$i-${e['product_id']}'),initialValue:price.toStringAsFixed(2),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'سعر الوحدة',prefixIcon:Icon(Icons.payments_outlined)),onChanged:(v)=>changePrice(i,v))),
               const SizedBox(width:8),Expanded(child:Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:12),decoration:BoxDecoration(color:cs.primaryContainer.withOpacity(.65),borderRadius:BorderRadius.circular(13)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('الإجمالي',style:TextStyle(fontSize:10,color:cs.onSurfaceVariant)),const SizedBox(height:4),Text(money(lineTotal),maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:12,fontWeight:FontWeight.w900,color:cs.primary))]))),
             ]),
-            const SizedBox(height:8),DropdownButtonFormField<int?>(value:e['supplier_id'] as int?,isExpanded:true,decoration:const InputDecoration(labelText:'المورد (اختياري)',prefixIcon:Icon(Icons.local_shipping_outlined)),items:[const DropdownMenuItem<int?>(value:null,child:Text('بدون مورد')),...widget.suppliers.map((sp)=>DropdownMenuItem<int?>(value:sp['id'] as int,child:Text(sp['name'].toString())))],onChanged:(id)=>changeSupplier(i,id)),
+            const SizedBox(height:8),_searchField(options:widget.suppliers.map((sp)=>sp['name'].toString()).toList(),initialValue:(e['supplier_name']??'').toString(),label:'ابحث عن المورد (اختياري)',onSelected:(name){final found=widget.suppliers.where((sp)=>sp['name'].toString()==name).toList();if(found.isNotEmpty)changeSupplier(i,found.first['id'] as int);}),
             Align(alignment:Alignment.centerLeft,child:Text('المتاح بالمخزن: $availableQty قطعة',style:TextStyle(fontSize:10,color:qty>availableQty?cs.error:cs.onSurfaceVariant))),
           ]));
         }),
