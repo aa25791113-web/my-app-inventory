@@ -1988,7 +1988,7 @@ class _NotificationSettingsCardState extends State<NotificationSettingsCard>{
         SwitchListTile(
           secondary:const Icon(Icons.receipt_long_outlined),
           title:const Text('تذكير الفواتير المتأخرة'),
-          subtitle:Text('تذكير محلي بعد مرور $reminderDays يوم على الفاتورة إذا بقي مبلغ مستحق'),
+          subtitle:Text('تذكير محلي بعد $reminderDays يوم من إصدار الفاتورة أو آخر دفعة إذا بقي مبلغ مستحق'),
           value:invoices,
           onChanged:active?(v)=>setOption('invoice_alerts',v):null,
         ),
