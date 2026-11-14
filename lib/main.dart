@@ -865,6 +865,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? logoPath;
   String? backgroundPath;
   Color? remoteBackgroundColor,remoteSurfaceColor;
+  String? remoteLogoUrl,remoteBackgroundUrl;
   @override void initState(){
     super.initState();
     WidgetsBinding.instance.addObserver(this);
@@ -912,12 +913,16 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final brand=remote['brand'] is Map?Map<String,dynamic>.from(remote['brand'] as Map):<String,dynamic>{};
     final theme=remote['theme'] is Map?Map<String,dynamic>.from(remote['theme'] as Map):<String,dynamic>{};
     final remoteName=(brand['name']??'').toString().trim();
+    final logoUrl=(brand['logo_url']??'').toString().trim();
+    final backgroundUrl=(theme['background_url']??'').toString().trim();
     final primary=_remoteHexColor(theme['primary']);
     final background=_remoteHexColor(theme['background']);
     final surface=_remoteHexColor(theme['surface']);
     final modeValue=(theme['mode']??'').toString();
     setState((){
       if(remoteName.isNotEmpty)appName=remoteName;
+      if(logoUrl.startsWith('https://'))remoteLogoUrl=logoUrl;
+      if(backgroundUrl.startsWith('https://'))remoteBackgroundUrl=backgroundUrl;
       if(primary!=null)seedColor=primary;
       if(background!=null)remoteBackgroundColor=background;
       if(surface!=null)remoteSurfaceColor=surface;
@@ -952,12 +957,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   );
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:appName,
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
-    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground));
+    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground,remoteLogoUrl:remoteLogoUrl,remoteBackgroundUrl:remoteBackgroundUrl));
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground});
-  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo; final String? backgroundPath; final VoidCallback changeBackground,clearBackground;
+  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground,this.remoteLogoUrl,this.remoteBackgroundUrl});
+  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo; final String? backgroundPath; final VoidCallback changeBackground,clearBackground; final String? remoteLogoUrl,remoteBackgroundUrl;
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
@@ -994,7 +999,7 @@ class _HomePageState extends State<HomePage> {
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-            if(widget.logoPath!=null&&File(widget.logoPath!).existsSync()) Padding(padding:const EdgeInsets.only(bottom:8),child:Image.file(File(widget.logoPath!),height:58,fit:BoxFit.contain,errorBuilder:(c,e,st)=>const Icon(Icons.store,size:42))),
+            if(widget.remoteLogoUrl?.isNotEmpty==true) Padding(padding:const EdgeInsets.only(bottom:8),child:Image.network(widget.remoteLogoUrl!,height:58,fit:BoxFit.contain,errorBuilder:(c,e,st)=>const Icon(Icons.store,size:42))) else if(widget.logoPath!=null&&File(widget.logoPath!).existsSync()) Padding(padding:const EdgeInsets.only(bottom:8),child:Image.file(File(widget.logoPath!),height:58,fit:BoxFit.contain,errorBuilder:(c,e,st)=>const Icon(Icons.store,size:42))),
             Text(widget.appName,style:const TextStyle(fontSize:25,fontWeight:FontWeight.w900)),
             const Text('نظام إدارة المخزون والمبيعات')
           ])),
@@ -1008,7 +1013,10 @@ class _HomePageState extends State<HomePage> {
         const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))]),
         actions:[IconButton(tooltip:'مساعد البرنامج',onPressed:()=>setState(()=>tab=13),icon:const Icon(Icons.support_agent)),const SizedBox(width:6)]),
       body:Stack(children:[
-        if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Stack(fit:StackFit.expand,children:[
+        if(widget.remoteBackgroundUrl?.isNotEmpty==true) Positioned.fill(child:Stack(fit:StackFit.expand,children:[
+          Opacity(opacity:.16,child:Image.network(widget.remoteBackgroundUrl!,fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
+          DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Theme.of(context).scaffoldBackgroundColor.withOpacity(.70),Theme.of(context).scaffoldBackgroundColor.withOpacity(.90)]))),
+        ])) else if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Stack(fit:StackFit.expand,children:[
           Opacity(opacity:.16,child:Image.file(File(widget.backgroundPath!),fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
           DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Theme.of(context).scaffoldBackgroundColor.withOpacity(.70),Theme.of(context).scaffoldBackgroundColor.withOpacity(.90)]))),
         ])),
