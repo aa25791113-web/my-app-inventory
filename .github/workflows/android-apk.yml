@@ -167,7 +167,20 @@ jobs:
             exit 1
           fi
           if [ ! -f shorebird.yaml ]; then
-            shorebird init --org-id 62776 --display-name "MY APP"
+            echo "Initializing Shorebird app in organization 62776..."
+            if timeout 120s shorebird init --org-id 62776 --display-name "MY APP" --json; then
+              echo "Shorebird initialization command completed."
+            else
+              echo "::warning::Shorebird initialization was unavailable; continuing with a standard Android APK build."
+            fi
+          fi
+          if [ -f shorebird.yaml ]; then
+            echo "SHOREBIRD_READY=true" >> "$GITHUB_ENV"
+          else
+            echo "SHOREBIRD_READY=false" >> "$GITHUB_ENV"
+          fi
+          if [ "$SHOREBIRD_READY" = "false" ] && [ -f shorebird.yaml ]; then
+            echo "SHOREBIRD_READY=true" >> "$GITHUB_ENV"
           fi
           python - <<'PY'
           from pathlib import Path
@@ -208,12 +221,16 @@ jobs:
       - run: dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos
       - name: Publish Shorebird-enabled Android release APK
+        if: env.SHOREBIRD_READY == 'true'
         run: |
           if [ -z "$SHOREBIRD_TOKEN" ]; then
             echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
             exit 1
           fi
           shorebird release android --artifact apk --target-platform android-arm64
+      - name: Build standard Android APK if Shorebird is unavailable
+        if: env.SHOREBIRD_READY != 'true'
+        run: flutter build apk --release --target-platform android-arm64
       - name: Publish version and release notes for in-app update alerts
         shell: bash
         env:
@@ -251,7 +268,10 @@ jobs:
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add update_manifest.json shorebird.yaml pubspec.yaml
+          git add update_manifest.json
+          if [ -f shorebird.yaml ]; then
+            git add shorebird.yaml pubspec.yaml
+          fi
           git commit -m "Publish Android release metadata"
           git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
