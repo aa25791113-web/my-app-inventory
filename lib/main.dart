@@ -415,14 +415,14 @@ class StoreDb {
       for(final sale in sales){
         final id=sale['id'] as int;
         await txn.delete('party_ledger',where:'reference=?',whereArgs:['operation:'+id.toString()]);
-        await txn.update('operations',{'party_id':customerId,'party_name':name,'note':'فاتورة $invoiceNo • بيع سابق'},where:'id=?',whereArgs:[id]);
+        await txn.update('operations',{'party_id':customerId,'party_name':name,'note':'فاتورة $invoiceNo • '+(sale['note']??'').toString()},where:'id=?',whereArgs:[id]);
       }
       for(final item in grouped.values){await txn.insert('invoice_items',{'invoice_id':invoiceId,...item});}
       await txn.insert('activity_log',{'action':'دمج مبيعات في فاتورة','details':'$invoiceNo | $name | عدد الأصناف: ${sales.length} | الإجمالي: $subtotal','created_at':now});
     });
   }
   Future<double> collectedSales() async {
-    final direct=await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS amount FROM operations WHERE kind='sale' AND note NOT LIKE 'فاتورة %'");
+    final direct=await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS amount FROM operations WHERE kind='sale' AND party_id IS NULL AND note NOT LIKE 'فاتورة %'");
     final invoices=await database!.rawQuery("SELECT COALESCE(SUM(paid),0) AS amount FROM invoices");
     return (direct.first['amount'] as num).toDouble()+(invoices.first['amount'] as num).toDouble();
   }
