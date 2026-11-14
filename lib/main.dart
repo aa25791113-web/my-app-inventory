@@ -865,7 +865,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String appName = 'APP LOL';
   String? logoPath;
   String? backgroundPath;
-  Color? remoteBackgroundColor,remoteSurfaceColor;
+  Color? remoteBackgroundColor,remoteSurfaceColor,remoteAccentColor;
   String? remoteLogoUrl,remoteBackgroundUrl;
   @override void initState(){
     super.initState();
@@ -917,6 +917,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final logoUrl=(brand['logo_url']??'').toString().trim();
     final backgroundUrl=(theme['background_url']??'').toString().trim();
     final primary=_remoteHexColor(theme['primary']);
+    final accent=_remoteHexColor(theme['accent']);
     final background=_remoteHexColor(theme['background']);
     final surface=_remoteHexColor(theme['surface']);
     final modeValue=(theme['mode']??'').toString();
@@ -925,6 +926,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if(logoUrl.startsWith('https://'))remoteLogoUrl=logoUrl;
       if(backgroundUrl.startsWith('https://'))remoteBackgroundUrl=backgroundUrl;
       if(primary!=null)seedColor=primary;
+      if(accent!=null)remoteAccentColor=accent;
       if(background!=null)remoteBackgroundColor=background;
       if(surface!=null)remoteSurfaceColor=surface;
       if(modeValue=='dark')mode=ThemeMode.dark;
@@ -944,7 +946,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> changeBackground() async { final picked=await FilePicker.platform.pickFiles(type:FileType.image); if(picked==null||picked.files.isEmpty||picked.files.first.path==null)return; final source=File(picked.files.first.path!); final dir=await getApplicationSupportDirectory(); final ext=p.extension(source.path); final target=File(p.join(dir.path,'my_app_background'+(ext.isEmpty?'.png':ext))); await source.copy(target.path); final prefs=await SharedPreferences.getInstance(); await prefs.setString('backgroundPath',target.path); if(mounted)setState(()=>backgroundPath=target.path); }
   Future<void> clearBackground() async { final prefs=await SharedPreferences.getInstance(); await prefs.remove('backgroundPath'); if(mounted)setState(()=>backgroundPath=null); }
   ThemeData makeTheme(Brightness b)=>ThemeData(
-    useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b),
+    useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b).copyWith(secondary:remoteAccentColor),
     scaffoldBackgroundColor:remoteBackgroundColor??(b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8)),
     cardTheme:CardThemeData(color:remoteSurfaceColor??(b==Brightness.dark?const Color(0xFF192630):Colors.white),elevation:b==Brightness.dark?0:1,margin:const EdgeInsets.symmetric(horizontal:10,vertical:7),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20),side:BorderSide(color:b==Brightness.dark?const Color(0xFF293A45):const Color(0xFFE8EDF1)))),
     appBarTheme:AppBarTheme(centerTitle:false,elevation:0,scrolledUnderElevation:0,backgroundColor:b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8),surfaceTintColor:Colors.transparent,titleTextStyle:TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:b==Brightness.dark?Colors.white:const Color(0xFF17252D))),
