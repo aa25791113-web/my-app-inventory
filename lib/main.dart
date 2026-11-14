@@ -1058,7 +1058,10 @@ class _HomePageState extends State<HomePage> {
           ])),
         Expanded(child:ListView.builder(itemCount:labels.length,itemBuilder:(c,i)=>ListTile(selected:tab==i,leading:Icon(icons[i]),title:Text(labels[i]),
           onTap:(){Navigator.pop(context);setState(()=>tab=i);}))),
-        const Padding(padding:EdgeInsets.all(12),child:Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)))
+        Padding(padding:const EdgeInsets.all(12),child:Column(children:[
+          const Text('يعمل محلياً دون إنترنت',style:TextStyle(fontSize:12)),
+          if(widget.remoteOwner?.isNotEmpty==true)Text('إدارة بواسطة ${widget.remoteOwner}',style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+        ]))
       ]))),
       appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer())),
         title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
