@@ -56,5 +56,6 @@ flutter_launcher_icons:
     icon_size: 48
 
 dependency_overrides:
-  # flutter_launcher_icons pulls image 4.11.0; pin archive to the compatible API used by that release.
-  archive: 4.0.8
+  # image 4.13.x calls ZLibDecoder.decodeLazy; archive added that API in 4.4.0.
+  # Keep this pinned to the first compatible release to avoid the 4.0.x API mismatch.
+  archive: 4.4.0
