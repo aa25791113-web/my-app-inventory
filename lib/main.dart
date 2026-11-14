@@ -1982,43 +1982,42 @@ class _ExpensePageState extends State<ExpensePage> {
 }
 class ReportsPage extends StatefulWidget {const ReportsPage({super.key});@override State<ReportsPage> createState()=>_ReportsPageState();}
 class _ReportsPageState extends State<ReportsPage> {
-  Map<String,Object?> data={};List<Map<String,Object?>> products=[];List<Map<String,Object?>> ops=[];
+  Map<String,Object?> data={};List<Map<String,Object?>> products=[];List<Map<String,Object?>> ops=[];bool loading=true;
   @override void initState(){super.initState();load();}
-  Future<void> load() async {final d=await StoreDb.instance.summary();final p=await StoreDb.instance.products();final o=await StoreDb.instance.movements();
-    if(mounted) setState(() { data=d; products=p; ops=o; });}
-  Widget tile(String title,String value,IconData icon)=>Card(child:ListTile(leading:Icon(icon),title:Text(title),trailing:Text(value,style:const TextStyle(fontWeight:FontWeight.bold))));
-  @override Widget build(BuildContext context)=>RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
-    const Text('التقارير والجرد',style:TextStyle(fontSize:22,fontWeight:FontWeight.bold)),
-    FilledButton.icon(onPressed:()=>printTextReport(context,'التقرير المالي وتقرير المخزون',[
-      'تاريخ التقرير: ${DateTime.now().toLocal()}',
-      'عدد المنتجات: ${data['count']??0}',
-      'إجمالي الوحدات: ${data['qty']??0}',
-      'قيمة المخزون: ${money(data['stock'])}',
-      'إجمالي المبيعات: ${money(data['sales'])}',
-      'إجمالي المشتريات: ${money(data['buys'])}',
-      'الربح التقديري قبل المصروفات: ${money(data['profit'])}',
-      'المصروفات: ${money(data['expense_total'])}',
-      'الربح بعد المصروفات: ${money(((data['profit'] as num?)??0)-((data['expense_total'] as num?)??0))}',
-      'صافي الحركة النقدية: ${money(((data['sales'] as num?)??0)-((data['buys'] as num?)??0))}',
-      'تفاصيل المخزون:',
-      ...products.map((e)=>'${e['name']} | الكمية: ${e['qty']} | تكلفة الوحدة: ${money(e['buy'])} | إجمالي التكلفة: ${money((e['qty'] as int)*(e['buy'] as num).toDouble())}'),
-      'عدد الحركات المسجلة: ${ops.length}',
-      ...ops.map((e)=>'${e['kind']=='sale'?'بيع':'شراء'} | ${e['product_name']} | ${e['qty']} × ${money(e['unit_price'])} | الإجمالي: ${money(e['total'])} | ${e['created_at']}')
-    ]),icon:const Icon(Icons.print),label:const Text('طباعة التقرير الكامل')),
-    tile('قيمة المخزون بسعر الشراء',money(data['stock']),Icons.warehouse_outlined),
-    tile('إجمالي المبيعات',money(data['sales']),Icons.trending_up),
-    tile('إجمالي المشتريات',money(data['buys']),Icons.shopping_bag_outlined),
-    tile('الربح التقديري قبل المصروفات',money(data['profit']),Icons.auto_graph),
-    tile('إجمالي المصروفات',money(data['expense_total']),Icons.payments_outlined),
-    tile('الربح بعد المصروفات',money(((data['profit'] as num?)??0)-((data['expense_total'] as num?)??0)),Icons.account_balance),
-    tile('صافي الحركة النقدية',money(((data['sales'] as num?)??0)-((data['buys'] as num?)??0)),Icons.account_balance),
-    const SizedBox(height:10),const Text('الجرد الحالي',style:TextStyle(fontSize:18,fontWeight:FontWeight.bold)),
-    ...products.map((e)=>ListTile(dense:true,title:Text(e['name'] as String),subtitle:Text('الكمية '+e['qty'].toString()+' • تكلفة الوحدة '+money(e['buy'])),
-      trailing:Text(money((e['qty'] as int)*(e['buy'] as num).toDouble())))),
-    const Divider(),Text('عدد الحركات المسجلة: '+ops.length.toString()),
-  ]));
+  Future<void> load() async {final d=await StoreDb.instance.summary();final p=await StoreDb.instance.products();final o=await StoreDb.instance.movements();if(mounted)setState((){data=d;products=p;ops=o;loading=false;});}
+  double n(Object? value)=>(value as num?)?.toDouble()??0;
+  Widget _metric(String title,String value,IconData icon,{Color? tint})=>Expanded(child:Container(padding:const EdgeInsets.all(13),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surface,borderRadius:BorderRadius.circular(17),border:Border.all(color:Theme.of(context).colorScheme.outlineVariant.withOpacity(.6)),boxShadow:[BoxShadow(color:Theme.of(context).colorScheme.shadow.withOpacity(.035),blurRadius:10,offset:const Offset(0,3))]),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Container(width:34,height:34,decoration:BoxDecoration(color:(tint??Theme.of(context).colorScheme.primary).withOpacity(.12),borderRadius:BorderRadius.circular(11)),child:Icon(icon,color:tint??Theme.of(context).colorScheme.primary,size:18)),const SizedBox(height:9),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:15)),const SizedBox(height:3),Text(title,style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant))])));
+  Widget _section(String title,String subtitle,IconData icon)=>Padding(padding:const EdgeInsets.fromLTRB(2,18,2,9),child:Row(children:[Container(width:35,height:35,decoration:BoxDecoration(color:Theme.of(context).colorScheme.primaryContainer,borderRadius:BorderRadius.circular(11)),child:Icon(icon,color:Theme.of(context).colorScheme.primary,size:18)),const SizedBox(width:9),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(title,style:const TextStyle(fontSize:15,fontWeight:FontWeight.w900)),Text(subtitle,style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant))]))]));
+  List<String> _reportLines(){final profit=n(data['profit']),expenses=n(data['expense_total']);return ['تاريخ التقرير: ${DateTime.now().toLocal()}','عدد المنتجات: ${data['count']??0}','إجمالي الوحدات: ${data['qty']??0}','قيمة المخزون بسعر الشراء: ${money(data['stock'])}','إجمالي المبيعات: ${money(data['sales'])}','إجمالي المشتريات: ${money(data['buys'])}','الربح التقديري قبل المصروفات: ${money(profit)}','المصروفات: ${money(expenses)}','صافي الربح بعد المصروفات: ${money(profit-expenses)}','صافي الحركة النقدية: ${money(n(data['sales'])-n(data['buys']))}','تفاصيل المخزون:',...products.map((e)=>'${e['name']} | الكمية: ${e['qty']} | تكلفة الوحدة: ${money(e['buy'])} | قيمة المخزون: ${money((e['qty'] as int)*(e['buy'] as num).toDouble())}'),'عدد الحركات: ${ops.length}',...ops.map((e)=>'${e['kind']=='sale'?'بيع':'شراء'} | ${e['product_name']} | ${e['qty']} × ${money(e['unit_price'])} | الإجمالي: ${money(e['total'])} | ${e['created_at']}')];}
+  @override Widget build(BuildContext context){
+    final cs=Theme.of(context).colorScheme;final profit=n(data['profit'])-n(data['expense_total']);final low=products.where((p)=>(p['min_qty'] as int? ?? 0)>0&&(p['qty'] as int? ?? 0)<=(p['min_qty'] as int? ?? 0)).length;
+    return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.fromLTRB(14,14,14,30),children:[
+      Container(padding:const EdgeInsets.all(19),decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[cs.primary,cs.tertiary]),borderRadius:BorderRadius.circular(23),boxShadow:[BoxShadow(color:cs.primary.withOpacity(.18),blurRadius:20,offset:const Offset(0,7))]),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:Colors.white.withOpacity(.16),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.analytics_rounded,color:Color(0xFFFFD47A),size:25)),const SizedBox(width:11),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('مركز التقارير',style:TextStyle(color:Colors.white,fontSize:21,fontWeight:FontWeight.w900)),Text('نظرة واضحة على أداء النشاط والمخزون',style:TextStyle(color:Colors.white70,fontSize:11))])),IconButton(onPressed:load,tooltip:'تحديث التقارير',icon:const Icon(Icons.refresh_rounded,color:Colors.white))]),
+        const SizedBox(height:15),Row(children:[Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[const Text('صافي الربح التقديري',style:TextStyle(color:Colors.white70,fontSize:11)),const SizedBox(height:5),Text(money(profit),style:const TextStyle(color:Colors.white,fontSize:24,fontWeight:FontWeight.w900))])),Container(padding:const EdgeInsets.symmetric(horizontal:11,vertical:8),decoration:BoxDecoration(color:Colors.white.withOpacity(.14),borderRadius:BorderRadius.circular(12)),child:Text(DateFormat('yyyy/MM/dd').format(DateTime.now()),style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w800,fontSize:11)))]),
+        const SizedBox(height:14),Wrap(spacing:8,runSpacing:8,children:[_heroChip('المبيعات ${money(data['sales'])}'),_heroChip('المصروفات ${money(data['expense_total'])}'),_heroChip('النواقص $low')]),
+      ]),
+      if(loading)const Padding(padding:EdgeInsets.all(28),child:Center(child:CircularProgressIndicator())),
+      _section('ملخص النشاط','أهم الأرقام في مكان واحد',Icons.dashboard_customize_outlined),
+      Row(children:[_metric('قيمة المخزون',money(data['stock']),Icons.warehouse_outlined),const SizedBox(width:9),_metric('إجمالي الوحدات',(data['qty']??0).toString(),Icons.inventory_2_outlined,tint:const Color(0xFF2879B9))]),
+      const SizedBox(height:9),Row(children:[_metric('المبيعات',money(data['sales']),Icons.trending_up,tint:const Color(0xFF17845D)),const SizedBox(width:9),_metric('المشتريات',money(data['buys']),Icons.shopping_bag_outlined,tint:const Color(0xFFB7791F))]),
+      const SizedBox(height:9),Row(children:[_metric('المصروفات',money(data['expense_total']),Icons.payments_outlined,tint:const Color(0xFFB45353)),const SizedBox(width:9),_metric('عدد الأصناف',(data['count']??0).toString(),Icons.category_outlined,tint:const Color(0xFF6C63B5))]),
+      _section('التقارير والتصدير','اطبع أو احفظ تقريراً بتنسيق جاهز',Icons.file_present_outlined),
+      Card(clipBehavior:Clip.antiAlias,child:Column(children:[
+        ListTile(leading:const CircleAvatar(child:Icon(Icons.picture_as_pdf_outlined)),title:const Text('التقرير المالي والمخزون',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:const Text('ملخص مالي + تفاصيل المنتجات والحركات'),trailing:const Icon(Icons.chevron_left),onTap:()=>printTextReport(context,'التقرير المالي والمخزون',_reportLines())),
+        const Divider(height:1),
+        ListTile(leading:const CircleAvatar(child:Icon(Icons.inventory_2_outlined)),title:const Text('تقرير جرد المخزون',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:const Text('كل صنف وكميته وتكلفته وقيمته الحالية'),trailing:const Icon(Icons.chevron_left),onTap:()=>printTextReport(context,'تقرير جرد المخزون',['تاريخ الجرد: ${DateTime.now().toLocal()}','عدد الأصناف: ${products.length}',...products.map((e)=>'${e['name']} | الكمية: ${e['qty']} ${e['unit']} | سعر الشراء: ${money(e['buy'])} | قيمة الرصيد: ${money((e['qty'] as int)*(e['buy'] as num).toDouble())}') ])),
+        const Divider(height:1),
+        ListTile(leading:const CircleAvatar(child:Icon(Icons.swap_horiz_rounded)),title:const Text('تقرير حركة البيع والشراء',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${ops.length} حركة مسجلة'),trailing:const Icon(Icons.chevron_left),onTap:()=>printTextReport(context,'تقرير حركة البيع والشراء',['عدد الحركات: ${ops.length}',...ops.map((e)=>'${e['kind']=='sale'?'بيع':'شراء'} | ${e['product_name']} | الكمية ${e['qty']} | سعر الوحدة ${money(e['unit_price'])} | الإجمالي ${money(e['total'])} | ${e['created_at']}') ])),
+      ])),
+      _section('مراجعة المخزون','الأصناف المسجلة حالياً',Icons.list_alt_rounded),
+      if(products.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(20),child:Text('لا توجد منتجات لعرضها بعد.'))),
+      ...products.take(100).map((e){final qty=e['qty'] as int? ?? 0;final min=e['min_qty'] as int? ?? 0;final value=qty*(e['buy'] as num? ?? 0).toDouble();final warning=min>0&&qty<=min;return Card(child:ListTile(leading:CircleAvatar(backgroundColor:warning?const Color(0xFFFFF1D8):cs.primaryContainer,child:Icon(warning?Icons.warning_amber_rounded:Icons.inventory_2_outlined,color:warning?const Color(0xFF9A6200):cs.primary)),title:Text(e['name'].toString(),style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text('الكود ${e['sku']} • ${qty} ${e['unit']} • تكلفة الوحدة ${money(e['buy'])}'),trailing:Column(mainAxisAlignment:MainAxisAlignment.center,crossAxisAlignment:CrossAxisAlignment.end,children:[Text(money(value),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:11)),Text(warning?'قريب من النفاد':'قيمة الرصيد',style:TextStyle(fontSize:9,color:warning?cs.error:cs.onSurfaceVariant))])));}),
+      if(products.length>100)Padding(padding:const EdgeInsets.all(8),child:Text('يتم عرض أول 100 صنف في الشاشة، لكن التقرير المطبوع يشمل كل الأصناف.',style:TextStyle(color:cs.onSurfaceVariant,fontSize:11))),
+    ]));
+  }
+  Widget _heroChip(String label)=>Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:7),decoration:BoxDecoration(color:Colors.white.withOpacity(.13),borderRadius:BorderRadius.circular(10),border:Border.all(color:Colors.white.withOpacity(.12))),child:Text(label,style:const TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.w700)));
 }
-
 
 class WarehouseStockPage extends StatefulWidget {
   const WarehouseStockPage({super.key,required this.changed});
