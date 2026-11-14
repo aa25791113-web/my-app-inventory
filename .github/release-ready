@@ -9,3 +9,4 @@ Retry final Android APK after fixing the Shorebird fallback guard.
 Retry APK build with archive 4.0.8 compatibility pin; do not cancel an active release.
 
 Build retry after pinning archive 4.4.0 for image decodeLazy compatibility.
+APP LOL premium refresh: invoice design, PNG exports, supplier shortages, notification permission, assistant navigation, launcher branding. Build Android ARM64 APK.
