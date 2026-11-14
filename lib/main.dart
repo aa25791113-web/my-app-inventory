@@ -1637,8 +1637,8 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
   void addItem(){
     final available=widget.products.where((p)=>(p['qty'] as int? ?? 0)>0).toList();
     if(available.isEmpty){toast(context,'لا توجد كميات متاحة للبيع.');return;}
-    final p=available.first;final supplier=widget.suppliers.where((x)=>x['id']==p['supplier_id']).toList();
-    setState(()=>items.add({'product_id':p['id'],'product_name':p['name'],'qty':1,'unit_price':(p['sell'] as num? ?? 0).toDouble()/math.max(1,(p['package_size'] as int? ?? 1)),'cost_price':p['buy'],'supplier_id':p['supplier_id'],'supplier_name':supplier.isEmpty?'':supplier.first['name'],'added_at':DateTime.now().toIso8601String()}));
+    // Start with an empty searchable row instead of silently inserting the first catalog item.
+    setState(()=>items.add({'product_id':null,'product_name':'','qty':1,'unit_price':0.0,'cost_price':0,'supplier_id':null,'supplier_name':'','added_at':DateTime.now().toIso8601String()}));
   }
   void changeProduct(int index,int? id){
     if(id==null)return;final p=widget.products.firstWhere((x)=>x['id']==id);final supplier=widget.suppliers.where((x)=>x['id']==p['supplier_id']).toList();
@@ -1939,15 +1939,20 @@ class _MovementPageState extends State<MovementPage> {
   Future<void> mergeSelected() async {
     final chosen=rows.where((e)=>selectedIds.contains(e['id']) && !(e['note']??'').toString().startsWith('فاتورة ')).toList();
     if(chosen.isEmpty){toast(context,'حدد عمليات بيع مستقلة غير مرتبطة بفواتير.');return;}
-    final customerKeys=chosen.map((e)=>(e['party_id']??(e['party_name']??'').toString()).toString()).where((x)=>x.isNotEmpty&&x!='null').toSet();
-    if(customerKeys.length>1){toast(context,'حدد عمليات البيع الخاصة بعميل واحد فقط لإنشاء فاتورة مجمعة.');return;}
+    final customerKeys=chosen.map((e){
+      final id=e['party_id'];
+      if(id!=null)return 'id:$id';
+      final name=(e['party_name']??'').toString().trim().toLowerCase();
+      return name.isEmpty?'cash':'name:$name';
+    }).toSet();
+    if(customerKeys.length>1){toast(context,'حدد عمليات البيع الخاصة بعميل واحد فقط. لا يمكن دمج مبيعات نقدية مع مبيعات عميل آخر.');return;}
     final customers=await StoreDb.instance.parties('customers');
     final suggestedName=(chosen.first['party_name']??'').toString();
     final matched=customers.where((c)=>c['name'].toString()==suggestedName).toList();
     final name=TextEditingController(text:suggestedName),phone=TextEditingController(text:matched.isEmpty?'':(matched.first['phone']??'').toString());
     final total=chosen.fold<double>(0,(s,e)=>s+(e['total'] as num).toDouble());
     final paid=TextEditingController(text:total.toStringAsFixed(2));
-    final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إنشاء فاتورة مجمعة'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[Text('عدد عمليات البيع: ${chosen.length} • الإجمالي: ${money(total)}'),TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل *')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)')),TextField(controller:paid,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المحصّل'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إنشاء الفاتورة'))])));
+    final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إنشاء فاتورة مجمعة'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[Text('عدد عمليات البيع: ${chosen.length} • الإجمالي: ${money(total)}'),const SizedBox(height:8),Text('راجع الأصناف المحددة قبل إصدار الفاتورة. سيتم الحفاظ على الأسعار والكميات المسجلة.' ,style:TextStyle(fontSize:12)),TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل *')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)')),TextField(controller:paid,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المحصّل'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إنشاء الفاتورة'))])));
     if(ok==true){try{await StoreDb.instance.createInvoiceFromSales(operationIds:chosen.map((e)=>e['id'] as int).toList(),customerName:name.text,customerPhone:phone.text,paid:double.parse(paid.text));selectedIds.clear();await load();await syncLocalNotifications();widget.changed();if(mounted)toast(context,'تم إنشاء فاتورة مجمعة دون خصم المخزون مرة أخرى.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
     name.dispose();phone.dispose();paid.dispose();
   }
