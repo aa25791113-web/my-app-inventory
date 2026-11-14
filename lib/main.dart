@@ -127,21 +127,7 @@ void updateBackgroundDispatcher() {
         return true;
       }
 
-      final client = HttpClient();
-      Map<String, dynamic>? manifest;
-      try {
-        final uri = Uri.parse(_updateManifestUrl).replace(
-          queryParameters: {'v': DateTime.now().millisecondsSinceEpoch.toString()},
-        );
-        final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
-        final response = await request.close().timeout(const Duration(seconds: 12));
-        if (response.statusCode == HttpStatus.ok) {
-          final decoded = jsonDecode(await response.transform(utf8.decoder).join());
-          if (decoded is Map<String, dynamic>) manifest = decoded;
-        }
-      } finally {
-        client.close(force: true);
-      }
+      final manifest = await fetchUpdateManifest();
       if (manifest == null || manifest['track'] != 'stable') return true;
 
       final packageInfo = await PackageInfo.fromPlatform();
