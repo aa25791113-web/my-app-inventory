@@ -1,0 +1,11 @@
+Final Android release trigger.
+This marker is intentionally required for a one-time controlled APK build.
+
+Retry final release after adding a bounded Shorebird initialization and standard APK fallback.
+
+Run isolated resilient APK workflow.
+Retry final Android APK after fixing the Shorebird fallback guard.
+
+Retry APK build with archive 4.0.8 compatibility pin; do not cancel an active release.
+
+Build retry after pinning archive 4.4.0 for image decodeLazy compatibility.

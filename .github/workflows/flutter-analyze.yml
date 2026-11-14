@@ -1,0 +1,19 @@
+name: Validate Flutter source (no APK build)
+on:
+  push:
+    branches:
+      - premium-redesign-v1
+  workflow_dispatch:
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Resolve dependencies
+        run: flutter pub get
+      - name: Analyze Dart and Flutter source
+        run: flutter analyze --no-fatal-infos

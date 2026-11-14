@@ -1,10 +1,10 @@
 name: my_app_inventory
-description: Offline-first Arabic inventory manager for Android and Windows.
+description: APP LOL — Arabic offline inventory, sales and invoice manager.
 publish_to: "none"
-version: 3.5.0+36
+version: 3.8.0+40
 
 environment:
-  sdk: ">=3.4.0 <4.0.0"
+  sdk: ">=3.5.0 <4.0.0"
 
 dependencies:
   flutter:
@@ -25,6 +25,14 @@ dependencies:
   pdf: ^3.11.3
   printing: ^5.14.2
   url_launcher: ^6.3.2
+  shorebird_code_push: ^2.0.7
+  flutter_local_notifications: ^19.5.0
+  flutter_timezone: ^5.1.1
+  timezone: ^0.10.1
+  connectivity_plus: ^6.1.4
+  package_info_plus: ^8.3.1
+  workmanager: ^0.10.10
+  math_expressions: ^2.6.0
 
 dev_dependencies:
   flutter_test:
@@ -39,10 +47,15 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: assets/launcher_icon.png
-  adaptive_icon_background: '#087F68'
+  adaptive_icon_background: '#062B3B'
   adaptive_icon_foreground: assets/launcher_icon.png
   min_sdk_android: 21
   windows:
     generate: true
     image_path: assets/launcher_icon.png
     icon_size: 48
+
+dependency_overrides:
+  # image 4.13.x calls ZLibDecoder.decodeLazy; archive added that API in 4.4.0.
+  # Keep this pinned to the first compatible release to avoid the 4.0.x API mismatch.
+  archive: 4.4.0

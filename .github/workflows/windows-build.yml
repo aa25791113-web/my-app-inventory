@@ -4,9 +4,6 @@ concurrency:
   cancel-in-progress: true
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
-    paths: ["lib/**", "pubspec.yaml", "tool/**", "assets/**", "installer.iss", ".github/workflows/windows-build.yml"]
 jobs:
   build:
     runs-on: windows-latest
@@ -17,9 +14,16 @@ jobs:
           channel: stable
           cache: true
       - run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
-      - name: Remove generated sample test
+      - name: Remove only Flutter's generated sample test
         shell: pwsh
-        run: if (Test-Path test) { Remove-Item test -Recurse -Force }
+        run: |
+          @'
+          from pathlib import Path
+          sample = Path('test/widget_test.dart')
+          if sample.exists() and 'package:material_ui/material_ui.dart' in sample.read_text():
+              sample.unlink()
+              print('Removed incompatible Flutter template test; project tests are preserved.')
+          '@ | python -
       - name: Generate branded icons and Windows metadata
         shell: pwsh
         run: |

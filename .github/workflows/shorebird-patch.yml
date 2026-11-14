@@ -1,0 +1,275 @@
+name: Publish Shorebird Android patch
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Shorebird release version to patch (leave blank for latest)"
+        required: false
+        type: string
+      release_notes:
+        description: "Short release notes shown inside the app"
+        required: false
+        type: string
+      track:
+        description: "Patch track"
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - staging
+          - beta
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+      - name: Prepare generated Android project
+        run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
+      - name: Set Android compile SDK to 36
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          target = next((p for p in candidates if p.exists()), None)
+          if target is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          source = target.read_text()
+          updated, count = re.subn(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', source, count=1)
+          if count == 0:
+              updated, count = re.subn(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', source, count=1)
+          if count == 0:
+              updated, count = re.subn(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', source, count=1)
+          if count == 0:
+              raise SystemExit(f"Could not locate compileSdk setting in {target}")
+          target.write_text(updated)
+          PY
+      - name: Configure Android notification permissions and scheduler
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          gradle = next((p for p in candidates if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          source = gradle.read_text()
+          source, _ = re.subn(
+              r'(?m)^(\s*minSdk\s*=\s*)(flutter\.minSdkVersion|\d+)',
+              lambda m: m.group(0) if m.group(2).isdigit() and int(m.group(2)) >= 23 else m.group(1) + '23',
+              source, count=1
+          )
+          source, _ = re.subn(
+              r'(?m)^(\s*minSdkVersion\s+)(flutter\.minSdkVersion|\d+)',
+              lambda m: m.group(0) if m.group(2).isdigit() and int(m.group(2)) >= 23 else m.group(1) + '23',
+              source, count=1
+          )
+          if gradle.suffix == ".kts":
+              if "isCoreLibraryDesugaringEnabled" not in source:
+                  source, count = re.subn(r"compileOptions\s*\{", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", source, count=1)
+                  if count == 0:
+                      source, count = re.subn(r"android\s*\{", "android {\n    compileOptions { isCoreLibraryDesugaringEnabled = true }", source, count=1)
+                  if count == 0:
+                      raise SystemExit("Could not enable core library desugaring")
+              dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          else:
+              if "coreLibraryDesugaringEnabled true" not in source:
+                  source, count = re.subn(r"compileOptions\s*\{", "compileOptions {\n        coreLibraryDesugaringEnabled true", source, count=1)
+                  if count == 0:
+                      source, count = re.subn(r"android\s*\{", "android {\n    compileOptions { coreLibraryDesugaringEnabled true }", source, count=1)
+                  if count == 0:
+                      raise SystemExit("Could not enable core library desugaring")
+              dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          if dependency not in source:
+              if re.search(r"dependencies\s*\{", source):
+                  source = re.sub(r"dependencies\s*\{", lambda m: m.group(0) + "\n    " + dependency, source, count=1)
+              else:
+                  source += "\ndependencies {\n    " + dependency + "\n}\n"
+          gradle.write_text(source)
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+          for permission in [
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+              '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
+          ]:
+              if permission not in xml:
+                  xml, count = re.subn(r"(<manifest\b[^>]*>)", r"\1\n    " + permission, xml, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not add Android permission: " + permission)
+          receivers = """    <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+              <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                  <intent-filter>
+                      <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                      <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                      <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                  </intent-filter>
+              </receiver>"""
+          if "ScheduledNotificationReceiver" not in xml:
+              xml, count = re.subn(r"(<application\b[^>]*>)", r"\1\n" + receivers, xml, count=1)
+              if count != 1:
+                  raise SystemExit("Could not register notification receivers in AndroidManifest.xml")
+          manifest.write_text(xml)
+          print("Configured notification permission, boot rescheduling and Java desugaring")
+          PY
+      - name: Generate app icon and required permissions
+        run: |
+          python -m pip install --quiet pillow
+          python tool/generate_icon.py
+          sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          source = manifest.read_text()
+          for permission in [
+              '<uses-permission android:name="android.permission.CAMERA" />',
+              '<uses-permission android:name="android.permission.INTERNET" />',
+          ]:
+              if permission not in source:
+                  source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not insert permission: " + permission)
+          manifest.write_text(source)
+          PY
+      - run: flutter pub get
+      - name: Align Android plugin compile SDK versions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          roots = [Path("android"), Path.home() / ".pub-cache" / "hosted" / "pub.dev"]
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("build.gradle*"):
+                  try:
+                      source = path.read_text()
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  updated = re.sub(r'(?m)^(\s*compileSdk\s*=\s*)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', source)
+                  updated = re.sub(r'(?m)^(\s*compileSdk\s+)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
+                  updated = re.sub(r'(?m)^(\s*compileSdkVersion\s+)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
+                  if updated != source:
+                      path.write_text(updated)
+          PY
+      - run: dart run flutter_launcher_icons
+      - name: Verify Shorebird credentials
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
+          fi
+      - name: Publish Dart-only update patch
+        shell: bash
+        env:
+          INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
+          INPUT_TRACK: ${{ inputs.track }}
+          INPUT_NOTES: ${{ inputs.release_notes }}
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
+          fi
+          if [ -n "$INPUT_RELEASE_VERSION" ]; then
+            RELEASE_VERSION="$INPUT_RELEASE_VERSION"
+          else
+            RELEASE_VERSION=$(python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("pubspec.yaml").read_text()
+          match = re.search(r"(?m)^version:\s*([^\s]+)", text)
+          if not match:
+              raise SystemExit("Could not read app version from pubspec.yaml")
+          print(match.group(1))
+          PY
+          )
+          fi
+          export RELEASE_VERSION
+          shorebird patch android --release-version "$RELEASE_VERSION" --track "$INPUT_TRACK" --json > shorebird_patch.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          def walk(value):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      if key == "patch_number" and isinstance(item, int):
+                          return item
+                      found = walk(item)
+                      if found is not None:
+                          return found
+              elif isinstance(value, list):
+                  for item in value:
+                      found = walk(item)
+                      if found is not None:
+                          return found
+              return None
+          result = json.loads(Path("shorebird_patch.json").read_text())
+          number = walk(result)
+          if number is None:
+              raise SystemExit("Patch was published but its patch number was not found in JSON output.")
+          Path("patch_number.txt").write_text(str(number))
+          PY
+          PATCH_NUMBER=$(cat patch_number.txt)
+          shorebird patches info --release-version "$RELEASE_VERSION" --patch-number "$PATCH_NUMBER" --json > shorebird_patch_info.json
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          info = json.loads(Path("shorebird_patch_info.json").read_text())
+          def collect(value, sizes):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      if key in ("size_bytes", "size", "bytes") and isinstance(item, (int, float)) and item > 0:
+                          sizes.append(int(item))
+                      else:
+                          collect(item, sizes)
+              elif isinstance(value, list):
+                  for item in value:
+                      collect(item, sizes)
+          sizes = []
+          collect(info, sizes)
+          size_bytes = sum(sizes) if sizes else None
+          if size_bytes is None:
+              size_label = "غير متاح"
+          elif size_bytes < 1024:
+              size_label = f"{size_bytes} بايت"
+          elif size_bytes < 1024 * 1024:
+              size_label = f"{size_bytes / 1024:.1f} كيلوبايت"
+          else:
+              size_label = f"{size_bytes / (1024 * 1024):.2f} ميجابايت"
+          manifest = {
+              "release_version": os.environ["RELEASE_VERSION"],
+              "patch_number": int(Path("patch_number.txt").read_text()),
+              "track": os.environ["INPUT_TRACK"],
+              "size_bytes": size_bytes,
+              "size_label": size_label,
+              "notes": os.environ.get("INPUT_NOTES", "").strip() or "تحسينات وإصلاحات للبرنامج.",
+              "published_at": datetime.now(timezone.utc).isoformat()
+          }
+          Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update_manifest.json
+          git commit -m "Update in-app release notes and patch metadata"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
