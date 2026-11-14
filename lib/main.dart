@@ -364,7 +364,7 @@ class StoreDb {
 
   Future<List<Map<String,Object?>>> invoices({bool pendingOnly=false})=>database!.query('invoices',where:pendingOnly?'total>paid':null,orderBy:'id DESC');
   Future<List<Map<String,Object?>>> invoiceItems(int id)=>database!.query('invoice_items',where:'invoice_id=?',whereArgs:[id],orderBy:'id');
-  Future<List<Map<String,Object?>>> shortageGroups() async => database!.rawQuery("SELECT p.id AS product_id,p.name AS product_name,p.sku,p.qty,p.min_qty,p.unit,p.supplier_id,COALESCE(s.name,'بدون مورد') AS supplier_name,COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0) AS sold_qty FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.archived=0 AND p.qty<=p.min_qty AND COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0)>0 ORDER BY supplier_name,p.name");
+  Future<List<Map<String,Object?>>> shortageGroups() async => database!.rawQuery("SELECT p.id AS product_id,p.name AS product_name,p.sku,p.qty,p.min_qty,p.unit,p.supplier_id,COALESCE(s.name,'بدون مورد') AS supplier_name,COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0) AS sold_qty FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.archived=0 AND p.min_qty>0 AND p.qty<=p.min_qty ORDER BY supplier_name,p.name");
   Future<void> createInvoice({required String customerName,required String customerPhone,required int? customerId,required List<Map<String,Object?>> items,required double discountValue,required bool discountPercent,required double paid,required String note}) async {
     if(items.isEmpty)throw Exception('أضف صنفاً واحداً على الأقل.');
     if(customerName.trim().isEmpty)throw Exception('اكتب اسم العميل لإصدار الفاتورة.');
@@ -1822,7 +1822,7 @@ class _ShortagesPageState extends State<ShortagesPage>{
    ])),
    const SizedBox(height:10),
    if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
-   if(!loading&&rows.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.inventory_2_outlined,size:42),SizedBox(height:8),Text('لا توجد نواقص حالياً',style:TextStyle(fontWeight:FontWeight.bold)),Text('تظهر هنا المنتجات التي لها مبيعات ووصل رصيدها إلى حد التنبيه أو أقل.')]))),
+   if(!loading&&rows.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.inventory_2_outlined,size:42),SizedBox(height:8),Text('لا توجد نواقص حالياً',style:TextStyle(fontWeight:FontWeight.bold)),Text('تظهر هنا المنتجات التي وصل رصيدها إلى حد التنبيه أو أقل، سواء تم بيعها أم لا.')]))),
    ...groups.entries.map((g){final sold=g.value.fold<int>(0,(v,e)=>v+(e['sold_qty'] as int));return Card(clipBehavior:Clip.antiAlias,child:ExpansionTile(leading:CircleAvatar(child:Icon(g.key=='بدون مورد'?Icons.help_outline:Icons.local_shipping_outlined)),title:Text(g.key,style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${g.value.length} منتج ناقص • إجمالي المباع: $sold'),children:g.value.map((e){final qty=e['qty'] as int,min=e['min_qty'] as int,soldQty=e['sold_qty'] as int;return ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('مباع: $soldQty • المتبقي: $qty ${e['unit']} • حد التنبيه: $min\nالمطلوب للوصول لحد التنبيه: ${math.max(min-qty,0)}'),isThreeLine:true,trailing:Text('كود ${e['sku']}',style:Theme.of(context).textTheme.labelSmall));}).toList()));})
   ]));
  }
