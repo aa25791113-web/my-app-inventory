@@ -1844,7 +1844,12 @@ class _MovementPageState extends State<MovementPage> {
   Future<void> mergeSelected() async {
     final chosen=rows.where((e)=>selectedIds.contains(e['id']) && !(e['note']??'').toString().startsWith('فاتورة ')).toList();
     if(chosen.isEmpty){toast(context,'حدد عمليات بيع مستقلة غير مرتبطة بفواتير.');return;}
-    final name=TextEditingController(),phone=TextEditingController();
+    final customerKeys=chosen.map((e)=>(e['party_id']??(e['party_name']??'').toString()).toString()).where((x)=>x.isNotEmpty&&x!='null').toSet();
+    if(customerKeys.length>1){toast(context,'حدد عمليات البيع الخاصة بعميل واحد فقط لإنشاء فاتورة مجمعة.');return;}
+    final customers=await StoreDb.instance.parties('customers');
+    final suggestedName=(chosen.first['party_name']??'').toString();
+    final matched=customers.where((c)=>c['name'].toString()==suggestedName).toList();
+    final name=TextEditingController(text:suggestedName),phone=TextEditingController(text:matched.isEmpty?'':(matched.first['phone']??'').toString());
     final total=chosen.fold<double>(0,(s,e)=>s+(e['total'] as num).toDouble());
     final paid=TextEditingController(text:total.toStringAsFixed(2));
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إنشاء فاتورة مجمعة'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[Text('عدد عمليات البيع: ${chosen.length} • الإجمالي: ${money(total)}'),TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل *')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)')),TextField(controller:paid,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المحصّل'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إنشاء الفاتورة'))])));
@@ -1868,6 +1873,11 @@ class _MovementPageState extends State<MovementPage> {
             'عدد الحركات: ${rows.length}',
             ...rows.map((e)=>'${e['product_name']} | الكمية: ${e['qty']} | سعر الوحدة: ${money(e['unit_price'])} | الإجمالي: ${money(e['total'])} | الطرف: ${e['party_name']} | التاريخ: ${e['created_at']} | ملاحظات: ${e['note']}')
           ]),icon:const Icon(Icons.print_outlined)),
+          if(sale)PopupMenuButton<String>(tooltip:'خيارات تحديد عمليات البيع',onSelected:(v){final eligible=rows.where((e)=>!(e['note']??'').toString().startsWith('فاتورة ')).map((e)=>e['id'] as int).toSet();setState((){if(v=='all')selectedIds.addAll(eligible);if(v=='clear')selectedIds.clear();});if(v=='invoice')mergeSelected();},itemBuilder:(_)=>const [
+            PopupMenuItem(value:'all',child:ListTile(contentPadding:EdgeInsets.zero,leading:Icon(Icons.select_all),title:Text('تحديد كل المبيعات'))),
+            PopupMenuItem(value:'clear',child:ListTile(contentPadding:EdgeInsets.zero,leading:Icon(Icons.deselect),title:Text('إلغاء التحديد'))),
+            PopupMenuItem(value:'invoice',child:ListTile(contentPadding:EdgeInsets.zero,leading:Icon(Icons.receipt_long),title:Text('إنشاء فاتورة للمحدد'))),
+          ]),
           FilledButton.icon(onPressed:add,icon:const Icon(Icons.add),label:Text(sale?'بيع':'شراء'))
         ]))),
       Expanded(child:rows.isEmpty?Center(child:Text(sale?'لا توجد مبيعات مسجلة':'لا توجد مشتريات مسجلة'))
