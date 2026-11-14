@@ -2246,7 +2246,7 @@ class SettingsPage extends StatelessWidget {
     )),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 3.9.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 3.9.1'),
       subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
