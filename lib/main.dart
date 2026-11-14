@@ -125,6 +125,8 @@ void updateBackgroundDispatcher() {
         return true;
       }
 
+      // Admin announcements must be checked independently from release manifests.
+      await checkRemoteAdminAnnouncement();
       final manifest = await fetchUpdateManifest();
       if (manifest == null || manifest['track'] != 'stable') return true;
 
@@ -159,7 +161,6 @@ void updateBackgroundDispatcher() {
           AndroidFlutterLocalNotificationsPlugin>();
       final permitted = await android?.areNotificationsEnabled() ?? true;
       if (!permitted) return true;
-      await checkRemoteAdminAnnouncement();
       await android?.createNotificationChannel(
         const AndroidNotificationChannel(
           'app_updates',
