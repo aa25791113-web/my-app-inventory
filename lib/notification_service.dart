@@ -219,7 +219,7 @@ class AppNotificationService {
       } catch (_) {
         continue;
       }
-      final fingerprint = '$days:$createdRaw';
+      final fingerprint = '$days:$createdRaw:$total:$paid';
       final stored = prefs.getString('invoice_reminder_schedule_$id');
       if (!forceReschedule && stored == fingerprint) continue;
 
