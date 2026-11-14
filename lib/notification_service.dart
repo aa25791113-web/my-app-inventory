@@ -192,6 +192,11 @@ class AppNotificationService {
           await _plugin.cancel(item.id);
         }
       }
+      for (final key in prefs.getKeys()) {
+        if (key.startsWith('invoice_reminder_schedule_')) {
+          await prefs.remove(key);
+        }
+      }
       return;
     }
 
