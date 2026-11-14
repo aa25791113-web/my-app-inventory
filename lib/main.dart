@@ -410,14 +410,21 @@ class StoreDb {
       final invoiceId=await txn.insert('invoices',{'invoice_no':invoiceNo,'customer_id':customerId,'customer_name':name,'customer_phone':phone,'subtotal':subtotal,'discount_value':0,'discount_mode':'amount','discount_amount':0,'total':subtotal,'paid':paid,'note':'فاتورة مجمعة من صفحة المبيعات','created_at':now});
       await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'debit','amount':subtotal,'note':'فاتورة بيع $invoiceNo','created_at':now,'reference':invoiceNo});
       if(paid>0){await txn.insert('party_ledger',{'party_type':'customer','party_id':customerId,'entry_type':'credit','amount':paid,'note':'مدفوع عند إصدار الفاتورة','created_at':now,'reference':invoiceNo});await txn.insert('invoice_payments',{'invoice_id':invoiceId,'amount':paid,'paid_at':now,'note':'دفعة عند إصدار الفاتورة'});}
+      final grouped=<String,Map<String,Object?>>{};
+      for(final sale in sales){final key='${sale['product_id']}|${sale['unit_price']}';final existing=grouped[key];if(existing==null){grouped[key]={'product_id':sale['product_id'],'product_name':sale['product_name'],'qty':sale['qty'],'unit_price':sale['unit_price'],'total':sale['total']};}else{existing['qty']=(existing['qty'] as int)+(sale['qty'] as int);existing['total']=(existing['total'] as num).toDouble()+(sale['total'] as num).toDouble();}}
       for(final sale in sales){
         final id=sale['id'] as int;
         await txn.delete('party_ledger',where:'reference=?',whereArgs:['operation:'+id.toString()]);
         await txn.update('operations',{'party_id':customerId,'party_name':name,'note':'فاتورة $invoiceNo • بيع سابق'},where:'id=?',whereArgs:[id]);
-        await txn.insert('invoice_items',{'invoice_id':invoiceId,'product_id':sale['product_id'],'product_name':sale['product_name'],'qty':sale['qty'],'unit_price':sale['unit_price'],'total':sale['total']});
       }
+      for(final item in grouped.values){await txn.insert('invoice_items',{'invoice_id':invoiceId,...item});}
       await txn.insert('activity_log',{'action':'دمج مبيعات في فاتورة','details':'$invoiceNo | $name | عدد الأصناف: ${sales.length} | الإجمالي: $subtotal','created_at':now});
     });
+  }
+  Future<double> collectedSales() async {
+    final direct=await database!.rawQuery("SELECT COALESCE(SUM(total),0) AS amount FROM operations WHERE kind='sale' AND note NOT LIKE 'فاتورة %'");
+    final invoices=await database!.rawQuery("SELECT COALESCE(SUM(paid),0) AS amount FROM invoices");
+    return (direct.first['amount'] as num).toDouble()+(invoices.first['amount'] as num).toDouble();
   }
   Future<List<Map<String,Object?>>> invoicePayments(int id)=>database!.query('invoice_payments',where:'invoice_id=?',whereArgs:[id],orderBy:'id DESC');
   Future<void> addInvoicePayment(int id,double amount) async {
@@ -1262,9 +1269,9 @@ class MovementPage extends StatefulWidget {
 }
 class _MovementPageState extends State<MovementPage> {
   List<Map<String,Object?>> rows=[];
-  final Set<int> selectedIds={};
+  final Set<int> selectedIds={};\n  double collected=0;
   @override void initState(){super.initState();load();}
-  Future<void> load() async {final r=await StoreDb.instance.movements(widget.kind);if(mounted)setState(()=>rows=r);}
+  Future<void> load() async {final r=await StoreDb.instance.movements(widget.kind);final cash=widget.kind=='sale'?await StoreDb.instance.collectedSales():0.0;if(mounted)setState(()=>{rows=r,collected=cash});}
   Future<void> mergeSelected() async {
     final chosen=rows.where((e)=>selectedIds.contains(e['id']) && !(e['note']??'').toString().startsWith('فاتورة ')).toList();
     if(chosen.isEmpty){toast(context,'حدد عمليات بيع مستقلة غير مرتبطة بفواتير.');return;}
@@ -1286,7 +1293,7 @@ class _MovementPageState extends State<MovementPage> {
     return Column(children:[
       if(sale && selectedIds.isNotEmpty) Padding(padding:const EdgeInsets.fromLTRB(12,8,12,0),child:Card(child:ListTile(leading:const Icon(Icons.receipt_long,color:Colors.teal),title:Text('تم تحديد ${selectedIds.length} عملية بيع'),subtitle:const Text('ادمج المنتجات المحددة في فاتورة واحدة'),trailing:FilledButton.icon(onPressed:mergeSelected,icon:const Icon(Icons.merge_type),label:const Text('إنشاء فاتورة'))))),
       Card(child:ListTile(leading:Icon(sale?Icons.point_of_sale:Icons.shopping_cart),title:Text(sale?'إجمالي المبيعات':'إجمالي المشتريات'),
-        subtitle:Text(money(total),style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold)),
+        subtitle:Text(sale?'قيمة البيع: ${money(total)} • المحصّل: ${money(collected)} • المتبقي: ${money((total-collected).clamp(0,double.infinity))}':money(total),style:const TextStyle(fontSize:16,fontWeight:FontWeight.bold)),
         trailing:Row(mainAxisSize:MainAxisSize.min,children:[
           IconButton(tooltip:'طباعة سجل الحركات',onPressed:()=>printTextReport(context,sale?'تقرير المبيعات':'تقرير المشتريات',[
             'عدد الحركات: ${rows.length}',
