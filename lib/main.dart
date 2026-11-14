@@ -491,7 +491,7 @@ class StoreDb {
     return database!.rawQuery("SELECT i.*,COALESCE((SELECT MAX(p.paid_at) FROM invoice_payments p WHERE p.invoice_id=i.id),i.created_at) AS reminder_base_at FROM invoices i $where ORDER BY i.id DESC");
   }
   Future<List<Map<String,Object?>>> invoiceItems(int id)=>database!.query('invoice_items',where:'invoice_id=?',whereArgs:[id],orderBy:'id');
-  Future<List<Map<String,Object?>>> shortageGroups() async => database!.rawQuery("SELECT p.id AS product_id,p.name AS product_name,p.sku,p.qty,p.min_qty,p.unit,p.supplier_id,COALESCE(s.name,'بدون مورد') AS supplier_name,COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0) AS sold_qty,MAX(COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0),p.min_qty-p.qty,0) AS suggested_qty FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.archived=0 AND ((p.min_qty>0 AND p.qty<=p.min_qty) OR EXISTS(SELECT 1 FROM operations o WHERE o.product_id=p.id AND o.kind='sale')) ORDER BY supplier_name,p.name");
+  Future<List<Map<String,Object?>>> shortageGroups() async => database!.rawQuery("SELECT p.id AS product_id,p.name AS product_name,p.sku,p.qty,p.min_qty,p.unit,p.supplier_id,COALESCE(s.name,'بدون مورد') AS supplier_name,COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0) AS sold_qty,MAX(COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0),p.min_qty-p.qty,0) AS suggested_qty FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.archived=0 AND ((p.min_qty>0 AND p.qty<=p.min_qty) OR EXISTS(SELECT 1 FROM operations o WHERE o.product_id=p.id AND o.kind='sale')) ORDER BY CASE WHEN supplier_name='بدون مورد' THEN 1 ELSE 0 END,supplier_name,p.name");
   Future<void> createInvoice({required String customerName,required String customerPhone,required int? customerId,required List<Map<String,Object?>> items,required double discountValue,required bool discountPercent,required double paid,required String note}) async {
     if(items.isEmpty)throw Exception('أضف صنفاً واحداً على الأقل.');
     if(customerName.trim().isEmpty)throw Exception('اكتب اسم العميل لإصدار الفاتورة.');
@@ -1137,7 +1137,7 @@ class _AssistantPageState extends State<AssistantPage> {
   final input=TextEditingController();
   List<Map<String,Object?>> results=[];
   bool busy=false;
-  String reply='أنا مساعد MY APP. اسألني عن أي صفحة أو اطلب تنفيذ مهمة داخل البرنامج.';
+  String reply='أنا مساعد APP LOL. اسألني عن أي صفحة أو اطلب تنفيذ مهمة داخل البرنامج.';
   @override void dispose(){input.dispose();super.dispose();}
   String understand(String raw){
     var v=raw.trim().replaceAll(RegExp(r'[؟?!،,.]+$'),'').replaceAll(RegExp(r'\s+'),' ');
@@ -1185,7 +1185,7 @@ class _AssistantPageState extends State<AssistantPage> {
     final v=q.toLowerCase();
     if(q=='تحية')return 'أهلاً بيك يا صاحبي! عامل إيه؟ 😄 قولّي محتاج تعمل إيه في البرنامج وأنا أساعدك خطوة بخطوة.';
     if(RegExp(r'^(شكرا|شكراً|تسلم|حبيبي|كتر خيرك|تمام يا|جامد)').hasMatch(v))return 'تحت أمرك! لو في حاجة تانية في البرنامج قولّي عليها.';
-    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد MY APP المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';
+    if(RegExp(r'^(مين انت|انت مين|من انت|عرفني بنفسك)').hasMatch(v))return 'أنا مساعد APP LOL المحلي. أقدر أشرحلك البرنامج، أبحث في منتجاتك، أفتح الصفحات، وأساعدك في عمليات المخزون بعد ما أراجع التفاصيل وأخد موافقتك. شغلي الحالي بدون إنترنت، فمش نموذج ذكاء اصطناعي سحابي ولا عندي بحث مباشر في الويب.';
     if(RegExp(r'^(عامل ايه|عامل إيه|ازيك|إزيك)').hasMatch(v))return 'زي الفل وجاهز أساعدك 😄 إنت محتاج إيه النهارده؟';
     if(RegExp(r'^(احسب|احسبلي|حاسبة)\s*').hasMatch(v)){final expression=q.replaceFirst(RegExp(r'^(احسب|احسبلي|حاسبة)\s*'),'');try{return 'الناتج: '+SimpleCalculator.evaluate(expression).toStringAsFixed(2);}catch(e){return 'مش قادر أحسبها بالشكل ده. اكتب العملية بأرقام وعلامات زي: احسب (20*5)+10';}}
     return null;
@@ -1339,13 +1339,13 @@ class _AssistantPageState extends State<AssistantPage> {
   }
   Future<void> contactSupport()async{
     const phone='584263545601';
-    final message=Uri.encodeComponent('مرحباً فريق دعم MY APP 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.8.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
+    final message=Uri.encodeComponent('مرحباً فريق دعم APP LOL 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.8.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
     final uri=Uri.parse('https://wa.me/$phone?text=$message');
     if(!await launchUrl(uri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح واتساب. تأكد من تثبيته أو افتح الرابط من المتصفح.');
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
     Card(color:Theme.of(context).colorScheme.primaryContainer,child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      Row(children:[const CircleAvatar(child:Icon(Icons.support_agent)),const SizedBox(width:10),const Expanded(child:Text('مساعد MY APP',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)))]),
+      Row(children:[const CircleAvatar(child:Icon(Icons.support_agent)),const SizedBox(width:10),const Expanded(child:Text('مساعد APP LOL',style:TextStyle(fontSize:21,fontWeight:FontWeight.w900)))]),
       const SizedBox(height:8),const Text('مساعد محلي بالمصري: يشرح صفحات البرنامج، يفتحها، يبحث عن المنتجات وينفذ أوامر المخزون والمبيعات والمشتريات والمصروفات والمهام بعد موافقتك. لا يحتاج إنترنت للوظائف المحلية، لكنه ليس نموذجاً عاماً مفتوحاً ولا يبحث في الويب.'),
       const SizedBox(height:12),Text(reply),
     ]))),
@@ -2235,7 +2235,7 @@ class SettingsPage extends StatelessWidget {
     )),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 3.8.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 3.9.0'),
       subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
