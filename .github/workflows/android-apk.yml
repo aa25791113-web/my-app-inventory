@@ -140,7 +140,7 @@ jobs:
         run: |
           python -m pip install --quiet pillow
           python tool/generate_icon.py
-          sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="my_app_inventory"/android:label="APP LOL"/' android/app/src/main/AndroidManifest.xml
           python - <<'PY'
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
