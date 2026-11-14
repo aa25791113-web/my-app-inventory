@@ -2323,7 +2323,6 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
         final zip=archive.Archive();
         for(var i=0;i<images.length;i++){zip.addFile(archive.ArchiveFile('APP_LOL_Report_Page_${i+1}.png',images[i].length,images[i]));}
         final encoded=archive.ZipEncoder().encode(zip);
-        if(encoded==null)throw Exception('تعذر ضغط صفحات التقرير.');
         path=await FilePicker.platform.saveFile(dialogTitle:'حفظ صفحات التقرير كصور',fileName:'APP_LOL_Report_Images.zip',type:FileType.custom,allowedExtensions:['zip'],bytes:Uint8List.fromList(encoded));
       }
       if(context.mounted)toast(context,path==null?'تم إلغاء الحفظ.':images.length==1?'تم حفظ التقرير كصورة PNG.':'تم حفظ كل صفحات التقرير كصور PNG داخل ملف ZIP.');
