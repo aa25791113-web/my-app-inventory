@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:archive/archive.dart' as archive;
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:workmanager/workmanager.dart';
@@ -2304,11 +2305,33 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       y+=painter.height+28;
     }
     await finishPage();
-    final document=pw.Document();
-    for(final bytes in images) {
-      document.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:pw.EdgeInsets.zero,build:(_)=>pw.Image(pw.MemoryImage(bytes),fit:pw.BoxFit.fill)));
+    final choice=await showDialog<String>(context:context,builder:(dialogContext)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
+      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
+      title:const Row(children:[Icon(Icons.file_present_outlined),SizedBox(width:8),Text('تصدير التقرير')]),
+      content:Text('التقرير جاهز في ${images.length} صفحة. اختار الصيغة المناسبة للحفظ أو الطباعة.'),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(dialogContext,'cancel'),child:const Text('إلغاء')),
+        OutlinedButton.icon(onPressed:()=>Navigator.pop(dialogContext,'images'),icon:const Icon(Icons.image_outlined),label:const Text('حفظ كصور PNG')),
+        FilledButton.icon(onPressed:()=>Navigator.pop(dialogContext,'pdf'),icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('PDF / طباعة')),
+      ],
+    )));
+    if(choice=='images'){
+      String? path;
+      if(images.length==1){
+        path=await FilePicker.platform.saveFile(dialogTitle:'حفظ التقرير كصورة',fileName:'APP_LOL_Report.png',type:FileType.custom,allowedExtensions:['png'],bytes:images.first);
+      }else{
+        final zip=archive.Archive();
+        for(var i=0;i<images.length;i++){zip.addFile(archive.ArchiveFile('APP_LOL_Report_Page_${i+1}.png',images[i].length,images[i]));}
+        final encoded=archive.ZipEncoder().encode(zip);
+        if(encoded==null)throw Exception('تعذر ضغط صفحات التقرير.');
+        path=await FilePicker.platform.saveFile(dialogTitle:'حفظ صفحات التقرير كصور',fileName:'APP_LOL_Report_Images.zip',type:FileType.custom,allowedExtensions:['zip'],bytes:Uint8List.fromList(encoded));
+      }
+      if(context.mounted)toast(context,path==null?'تم إلغاء الحفظ.':images.length==1?'تم حفظ التقرير كصورة PNG.':'تم حفظ كل صفحات التقرير كصور PNG داخل ملف ZIP.');
+    }else if(choice=='pdf'){
+      final document=pw.Document();
+      for(final bytes in images){document.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:pw.EdgeInsets.zero,build:(_)=>pw.Image(pw.MemoryImage(bytes),fit:pw.BoxFit.fill)));}
+      await Printing.layoutPdf(name:'APP_LOL_Report.pdf',onLayout:(_)=>document.save());
     }
-    await Printing.layoutPdf(name:'MYAPP_Report.pdf',onLayout:(_)=>document.save());
   } catch(e) {
     if(context.mounted) toast(context,'تعذر تجهيز الطباعة: $e');
   }
@@ -2323,23 +2346,79 @@ Future<bool?> ask(BuildContext context,String title,String body)=>showDialog<boo
     FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('تأكيد'))])));
 void toast(BuildContext context,String text)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(text),duration:const Duration(seconds:5)));
 
-class ShortagesPage extends StatefulWidget {const ShortagesPage({super.key});@override State<ShortagesPage> createState()=>_ShortagesPageState();}
-class _ShortagesPageState extends State<ShortagesPage>{
- List<Map<String,Object?>> rows=[];bool loading=true;
- @override void initState(){super.initState();load();}
- Future<void> load()async{if(mounted)setState(()=>loading=true);final r=await StoreDb.instance.shortageGroups();if(mounted)setState((){rows=r;loading=false;});}
- @override Widget build(BuildContext context){
-  final groups=<String,List<Map<String,Object?>>>{};for(final e in rows){final k=(e['supplier_name']??'بدون مورد').toString();(groups[k]??=[]).add(e);}
-  return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
-   Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(22)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-    const Row(children:[Icon(Icons.warning_amber_rounded,color:Colors.white,size:28),SizedBox(width:8),Text('كشف النواقص',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w900))]),
-    const SizedBox(height:8),Text('كل منتج تم بيعه أو وصل إلى حد التنبيه يظهر هنا، مجمّعاً حسب المورد',style:TextStyle(color:Colors.white.withOpacity(.9))),
-    const SizedBox(height:12),Text('عدد المنتجات الناقصة: ${rows.length}',style:const TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.bold))
-   ])),
-   const SizedBox(height:10),
-   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
-   if(!loading&&rows.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.inventory_2_outlined,size:42),SizedBox(height:8),Text('لا توجد نواقص حالياً',style:TextStyle(fontWeight:FontWeight.bold)),Text('تظهر هنا المنتجات التي عليها حركة بيع أو وصلت إلى حد التنبيه، حتى لو ما زال رصيدها أعلى من الحد الأدنى.')]))),
-   ...groups.entries.map((g){final sold=g.value.fold<int>(0,(v,e)=>v+(e['sold_qty'] as int));return Card(clipBehavior:Clip.antiAlias,child:ExpansionTile(leading:CircleAvatar(child:Icon(g.key=='بدون مورد'?Icons.help_outline:Icons.local_shipping_outlined)),title:Text(g.key,style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${g.value.length} منتج ناقص • إجمالي المباع: $sold'),children:g.value.map((e){final qty=e['qty'] as int,min=e['min_qty'] as int,soldQty=e['sold_qty'] as int;return ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('مباع: $soldQty • المتبقي: $qty ${e['unit']} • حد التنبيه: $min\nكمية مقترحة للطلب: ${e['suggested_qty']??math.max(soldQty,min-qty)}'),isThreeLine:true,trailing:Text('كود ${e['sku']}',style:Theme.of(context).textTheme.labelSmall));}).toList()));})
-  ]));
- }
+class ShortagesPage extends StatefulWidget {
+  const ShortagesPage({super.key});
+  @override State<ShortagesPage> createState()=>_ShortagesPageState();
 }
+class _ShortagesPageState extends State<ShortagesPage>{
+  List<Map<String,Object?>> rows=[];
+  bool loading=true;
+  final search=TextEditingController();
+  @override void initState(){super.initState();load();}
+  @override void dispose(){search.dispose();super.dispose();}
+  Future<void> load()async{
+    if(mounted)setState(()=>loading=true);
+    final result=await StoreDb.instance.shortageGroups();
+    if(mounted)setState((){rows=result;loading=false;});
+  }
+  @override Widget build(BuildContext context){
+    final filtered=rows.where((e)=>search.text.trim().isEmpty||e['product_name'].toString().toLowerCase().contains(search.text.trim().toLowerCase())||(e['supplier_name']??'').toString().toLowerCase().contains(search.text.trim().toLowerCase())).toList();
+    final groups=<String,List<Map<String,Object?>>>{};
+    for(final e in filtered){final name=(e['supplier_name']??'بدون مورد').toString();(groups[name]??=[]).add(e);}
+    final keys=groups.keys.toList()..sort((a,b){if(a=='بدون مورد')return 1;if(b=='بدون مورد')return -1;return a.compareTo(b);});
+    final sold=filtered.fold<int>(0,(v,e)=>v+((e['sold_qty'] as num?)?.toInt()??0));
+    final suggested=filtered.fold<int>(0,(v,e)=>v+((e['suggested_qty'] as num?)?.toInt()??0));
+    return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.fromLTRB(14,14,14,28),children:[
+      Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(
+        gradient:const LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[Color(0xFF082D3A),Color(0xFF087F68)]),
+        borderRadius:BorderRadius.circular(24),boxShadow:[BoxShadow(color:Theme.of(context).colorScheme.primary.withOpacity(.18),blurRadius:22,offset:const Offset(0,8))],
+      ),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Row(children:[Container(width:46,height:46,decoration:BoxDecoration(color:Colors.white.withOpacity(.14),borderRadius:BorderRadius.circular(15)),child:const Icon(Icons.inventory_2_rounded,color:Color(0xFFFFD47A),size:26)),const SizedBox(width:12),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('كشف النواقص',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w900)),Text('APP LOL • متابعة التوريد',style:TextStyle(color:Colors.white70,fontSize:11))]))]),
+        const SizedBox(height:10),const Text('كل صنف تم بيعه أو وصل إلى حد التنبيه يظهر هنا، ومترتب حسب المورد لتجهيز طلبات الشراء.',style:TextStyle(color:Colors.white,fontSize:12,height:1.5)),
+        const SizedBox(height:16),
+        Row(children:[
+          _shortageStat('الأصناف',filtered.length.toString(),Icons.category_outlined),
+          const SizedBox(width:8),
+          _shortageStat('إجمالي المباع',sold.toString(),Icons.trending_up),
+          const SizedBox(width:8),
+          _shortageStat('مقترح الطلب',suggested.toString(),Icons.shopping_bag_outlined),
+        ]),
+      ])),
+      const SizedBox(height:14),
+      TextField(controller:search,onChanged:(_)=>setState((){}),decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'ابحث باسم الصنف أو المورد',suffixIcon:Icon(Icons.tune))),
+      const SizedBox(height:10),
+      if(loading)const Center(child:Padding(padding:EdgeInsets.all(32),child:CircularProgressIndicator())),
+      if(!loading&&filtered.isEmpty)Card(child:Padding(padding:const EdgeInsets.all(28),child:Column(children:[Icon(Icons.inventory_2_outlined,size:46,color:Theme.of(context).colorScheme.primary),const SizedBox(height:10),Text(search.text.isEmpty?'لا توجد نواقص حالياً':'لا توجد نتائج مطابقة',style:const TextStyle(fontWeight:FontWeight.w900,fontSize:16)),const SizedBox(height:4),const Text('أي صنف عليه مبيعات سيظهر هنا، حتى لو كان رصيده أعلى من حد التنبيه.',textAlign:TextAlign.center,style:TextStyle(color:Colors.grey,fontSize:12))]))),
+      ...keys.map((name){
+        final products=groups[name]!;
+        final groupSold=products.fold<int>(0,(v,e)=>v+((e['sold_qty'] as num?)?.toInt()??0));
+        final groupSuggested=products.fold<int>(0,(v,e)=>v+((e['suggested_qty'] as num?)?.toInt()??0));
+        return Card(clipBehavior:Clip.antiAlias,child:ExpansionTile(
+          initiallyExpanded:true,
+          tilePadding:const EdgeInsets.symmetric(horizontal:14,vertical:5),
+          leading:CircleAvatar(backgroundColor:name=='بدون مورد'?Theme.of(context).colorScheme.surfaceContainerHighest:Theme.of(context).colorScheme.primaryContainer,child:Icon(name=='بدون مورد'?Icons.help_outline:Icons.local_shipping_outlined)),
+          title:Text(name,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:15)),
+          subtitle:Text('${products.length} صنف • مباع $groupSold • مقترح الطلب $groupSuggested'),
+          children:products.map((e){
+            final qty=(e['qty'] as num?)?.toInt()??0,min=(e['min_qty'] as num?)?.toInt()??0,soldQty=(e['sold_qty'] as num?)?.toInt()??0,suggestedQty=(e['suggested_qty'] as num?)?.toInt()??0;
+            return Container(margin:const EdgeInsets.fromLTRB(10,0,10,9),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerLow,borderRadius:BorderRadius.circular(15),border:Border.all(color:Theme.of(context).dividerColor.withOpacity(.5))),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              Row(children:[Expanded(child:Text(e['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:14))),Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:5),decoration:BoxDecoration(color:const Color(0xFFFFF2D8),borderRadius:BorderRadius.circular(20)),child:Text('اطلب $suggestedQty',style:const TextStyle(color:Color(0xFF995B00),fontWeight:FontWeight.w900,fontSize:11)))]),
+              const SizedBox(height:9),
+              Wrap(spacing:7,runSpacing:7,children:[
+                _shortagePill('مباع $soldQty',Icons.trending_up),
+                _shortagePill('متبقي $qty ${e['unit']}',Icons.inventory_2_outlined),
+                _shortagePill('الحد $min',Icons.flag_outlined),
+              ]),
+              const SizedBox(height:6),
+              Text('كود الصنف: ${e['sku']??'—'}',style:Theme.of(context).textTheme.labelSmall?.copyWith(color:Theme.of(context).colorScheme.onSurfaceVariant)),
+            ]));
+          }).toList(),
+        ));
+      }),
+      if(!loading&&filtered.isNotEmpty)Padding(padding:const EdgeInsets.only(top:8),child:Text('تم تجميع ${filtered.length} صنفاً تحت ${keys.length} مورد. مجموعة «بدون مورد» تضم الأصناف غير المرتبطة بمورد.',style:Theme.of(context).textTheme.bodySmall?.copyWith(color:Theme.of(context).colorScheme.onSurfaceVariant))),
+    ]));
+  }
+  Widget _shortageStat(String label,String value,IconData icon)=>Expanded(child:Container(padding:const EdgeInsets.symmetric(vertical:10,horizontal:7),decoration:BoxDecoration(color:Colors.white.withOpacity(.13),borderRadius:BorderRadius.circular(14),border:Border.all(color:Colors.white.withOpacity(.12))),child:Column(children:[Icon(icon,color:const Color(0xFFFFD47A),size:17),const SizedBox(height:4),Text(value,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:18)),Text(label,style:const TextStyle(color:Colors.white70,fontSize:10),maxLines:1,overflow:TextOverflow.ellipsis)])));
+  Widget _shortagePill(String label,IconData icon)=>Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:6),decoration:BoxDecoration(color:Theme.of(context).colorScheme.surfaceContainerHighest,borderRadius:BorderRadius.circular(10)),child:Row(mainAxisSize:MainAxisSize.min,children:[Icon(icon,size:13,color:Theme.of(context).colorScheme.primary),const SizedBox(width:4),Text(label,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w700))]));
+}
+
