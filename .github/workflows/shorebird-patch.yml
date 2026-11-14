@@ -189,7 +189,7 @@ jobs:
         env:
           INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
           INPUT_TRACK: ${{ inputs.track || 'stable' }}
-          INPUT_NOTES: ${{ inputs.release_notes || 'تحسينات وإصلاحات للبرنامج.' }}
+          INPUT_NOTES: ${{ inputs.release_notes || 'إضافة فواتير معلّقة متعددة مع الاستئناف، وتعديل الفواتير المحفوظة، وحفظ صورة وPDF، وتسجيل طرق الدفع بأيقوناتها.' }}
         run: |
           if [ -z "$SHOREBIRD_TOKEN" ]; then
             echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
