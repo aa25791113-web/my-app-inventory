@@ -866,7 +866,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? logoPath;
   String? backgroundPath;
   Color? remoteBackgroundColor,remoteSurfaceColor,remoteAccentColor;
-  String? remoteLogoUrl,remoteBackgroundUrl;
+  String? remoteLogoUrl,remoteBackgroundUrl,remoteTagline,remoteSupportUrl,remoteWebsiteUrl,remoteOwner;
   @override void initState(){
     super.initState();
     WidgetsBinding.instance.addObserver(this);
@@ -915,6 +915,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     final theme=remote['theme'] is Map?Map<String,dynamic>.from(remote['theme'] as Map):<String,dynamic>{};
     final remoteName=(brand['name']??'').toString().trim();
     final logoUrl=(brand['logo_url']??'').toString().trim();
+    final tagline=(brand['tagline']??'').toString().trim();
+    final support=(brand['support']??'').toString().trim();
+    final website=(brand['website']??'').toString().trim();
+    final owner=(brand['owner']??'').toString().trim();
     final backgroundUrl=(theme['background_url']??'').toString().trim();
     final primary=_remoteHexColor(theme['primary']);
     final accent=_remoteHexColor(theme['accent']);
@@ -924,6 +928,10 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     setState((){
       if(remoteName.isNotEmpty)appName=remoteName;
       if(logoUrl.startsWith('https://'))remoteLogoUrl=logoUrl;
+      if(tagline.isNotEmpty)remoteTagline=tagline;
+      if(support.startsWith('https://'))remoteSupportUrl=support;
+      if(website.startsWith('https://'))remoteWebsiteUrl=website;
+      if(owner.isNotEmpty)remoteOwner=owner;
       if(backgroundUrl.startsWith('https://'))remoteBackgroundUrl=backgroundUrl;
       if(primary!=null)seedColor=primary;
       if(accent!=null)remoteAccentColor=accent;
@@ -960,12 +968,12 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   );
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:appName,
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
-    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground,remoteLogoUrl:remoteLogoUrl,remoteBackgroundUrl:remoteBackgroundUrl));
+    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground,remoteLogoUrl:remoteLogoUrl,remoteBackgroundUrl:remoteBackgroundUrl,remoteTagline:remoteTagline,remoteSupportUrl:remoteSupportUrl,remoteWebsiteUrl:remoteWebsiteUrl,remoteOwner:remoteOwner));
 }
 
 class HomePage extends StatefulWidget {
-  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground,this.remoteLogoUrl,this.remoteBackgroundUrl});
-  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo; final String? backgroundPath; final VoidCallback changeBackground,clearBackground; final String? remoteLogoUrl,remoteBackgroundUrl;
+  const HomePage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground,this.remoteLogoUrl,this.remoteBackgroundUrl,this.remoteTagline,this.remoteSupportUrl,this.remoteWebsiteUrl,this.remoteOwner});
+  final bool dark; final VoidCallback toggle; final Color seedColor; final ValueChanged<int> changeSeed; final String appName; final ValueChanged<String> changeAppName; final String? logoPath; final VoidCallback changeLogo; final String? backgroundPath; final VoidCallback changeBackground,clearBackground; final String? remoteLogoUrl,remoteBackgroundUrl,remoteTagline,remoteSupportUrl,remoteWebsiteUrl,remoteOwner;
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
@@ -1046,7 +1054,7 @@ class _HomePageState extends State<HomePage> {
           child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
             if(widget.remoteLogoUrl?.isNotEmpty==true) Padding(padding:const EdgeInsets.only(bottom:8),child:Image.network(widget.remoteLogoUrl!,height:58,fit:BoxFit.contain,errorBuilder:(c,e,st)=>const Icon(Icons.store,size:42))) else if(widget.logoPath!=null&&File(widget.logoPath!).existsSync()) Padding(padding:const EdgeInsets.only(bottom:8),child:Image.file(File(widget.logoPath!),height:58,fit:BoxFit.contain,errorBuilder:(c,e,st)=>const Icon(Icons.store,size:42))),
             Text(widget.appName,style:const TextStyle(fontSize:25,fontWeight:FontWeight.w900)),
-            const Text('نظام إدارة المخزون والمبيعات')
+            Text(widget.remoteTagline?.isNotEmpty==true?widget.remoteTagline!:'نظام إدارة المخزون والمبيعات')
           ])),
         Expanded(child:ListView.builder(itemCount:labels.length,itemBuilder:(c,i)=>ListTile(selected:tab==i,leading:Icon(icons[i]),title:Text(labels[i]),
           onTap:(){Navigator.pop(context);setState(()=>tab=i);}))),
@@ -1055,8 +1063,8 @@ class _HomePageState extends State<HomePage> {
       appBar:AppBar(leading:Builder(builder:(c)=>IconButton(icon:const Icon(Icons.menu),onPressed:()=>Scaffold.of(c).openDrawer())),
         title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(widget.appName,style:const TextStyle(fontWeight:FontWeight.w900)),
-        const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))]),
-        actions:[IconButton(tooltip:'مساعد البرنامج',onPressed:()=>setState(()=>tab=13),icon:const Icon(Icons.support_agent)),const SizedBox(width:6)]),
+        Text(widget.remoteTagline?.isNotEmpty==true?widget.remoteTagline!:'إدارة المخزون دون إنترنت',style:const TextStyle(fontSize:11))]),
+        actions:[IconButton(tooltip:'الدعم الفني',onPressed:(){final link=widget.remoteSupportUrl;if(link!=null){final uri=Uri.tryParse(link);if(uri!=null)launchUrl(uri,mode:LaunchMode.externalApplication);}else{setState(()=>tab=13);}},icon:const Icon(Icons.support_agent)),if(widget.remoteWebsiteUrl?.isNotEmpty==true)IconButton(tooltip:'موقع التطبيق',onPressed:(){final uri=Uri.tryParse(widget.remoteWebsiteUrl!);if(uri!=null)launchUrl(uri,mode:LaunchMode.externalApplication);},icon:const Icon(Icons.language)),const SizedBox(width:6)]),
       body:Stack(children:[
         if(widget.remoteBackgroundUrl?.isNotEmpty==true) Positioned.fill(child:Stack(fit:StackFit.expand,children:[
           Opacity(opacity:.16,child:Image.network(widget.remoteBackgroundUrl!,fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
