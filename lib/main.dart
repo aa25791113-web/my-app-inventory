@@ -2457,7 +2457,8 @@ class SettingsPage extends StatelessWidget {
             if(remoteVersion.isNotEmpty&&remoteVersion!=installedVersion){
               final size=(manifest['size_label']??formatUpdateSize(manifest['size_bytes'])).toString();
               final notes=(manifest['notes']??'إصدار جديد يتضمن تحسينات وإصلاحات.').toString();
-              await showDialog<void>(context:context,builder:(d)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
+              final apkUrl=(manifest['apk_url']??'').toString();
+              final download=await showDialog<bool>(context:context,builder:(d)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
                 shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
                 title:const Row(children:[Icon(Icons.system_update_alt),SizedBox(width:8),Text('إصدار كامل جديد متاح')]),
                 content:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
@@ -2467,10 +2468,18 @@ class SettingsPage extends StatelessWidget {
                   const Text('ملاحظات الإصدار',style:TextStyle(fontWeight:FontWeight.bold)),
                   Text(notes),
                   const SizedBox(height:10),
-                  const Text('هذا الإصدار يتضمن تغييرات تحتاج ملف APK كامل. لا يمكن تثبيته كتحديث صغير؛ يلزم تنزيل النسخة الجديدة وتثبيتها.',style:TextStyle(fontSize:12,color:Colors.grey)),
+                  const Text('هذا الإصدار يحتاج ملف APK كامل. بعد تنزيله سيطلب Android موافقتك على تثبيت التحديث.',style:TextStyle(fontSize:12,color:Colors.grey)),
                 ]),
-                actions:[FilledButton(onPressed:()=>Navigator.pop(d),child:const Text('حسنًا'))],
+                actions:[
+                  TextButton(onPressed:()=>Navigator.pop(d,false),child:const Text('لاحقًا')),
+                  if(apkUrl.isNotEmpty)FilledButton.icon(onPressed:()=>Navigator.pop(d,true),icon:const Icon(Icons.download),label:const Text('تنزيل APK')),
+                ],
               )));
+              if(download==true&&apkUrl.isNotEmpty){
+                final uri=Uri.tryParse(apkUrl);
+                if(uri!=null&&await canLaunchUrl(uri)){await launchUrl(uri,mode:LaunchMode.externalApplication);}
+                else if(context.mounted){toast(context,'رابط تنزيل APK غير صالح أو غير متاح.');}
+              }
               return;
             }
           }
@@ -2523,6 +2532,23 @@ class SettingsPage extends StatelessWidget {
 
 
 Future<Map<String,dynamic>?> fetchUpdateManifest() async {
+  final remote=await fetchRemoteAdminSettings();
+  final release=remote?['release'];
+  if(release is Map){
+    final version=(release['version']??'').toString().trim();
+    if(version.isNotEmpty){
+      return {
+        'track':'stable',
+        'release_version':version,
+        'patch_number':(release['patch_number'] as num?)?.toInt()??0,
+        'notes':(release['notes']??'تحديث جديد من لوحة المالك.').toString(),
+        'apk_url':(release['apk_url']??'').toString(),
+        'update_type':(release['type']??'shorebird').toString(),
+        'size_bytes':release['size_bytes'],
+        'size_label':release['size_label'],
+      };
+    }
+  }
   final client=HttpClient();
   try {
     final manifestUri=Uri.parse('https://raw.githubusercontent.com/aa25791113-web/my-app-inventory/premium-redesign-v1/update_manifest.json').replace(queryParameters:{'v':DateTime.now().millisecondsSinceEpoch.toString()});
