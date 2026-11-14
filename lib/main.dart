@@ -874,7 +874,9 @@ class HomePage extends StatefulWidget {
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
-  int tab=10, refreshId=0; bool assistantCreateInvoice=false;
+  int tab=10, refreshId=0; bool assistantCreateInvoice=false; int? notificationInvoiceId; StreamSubscription<String?>? _notificationTapSubscription;
+  @override void initState(){super.initState();_notificationTapSubscription=AppNotificationService.instance.taps.listen((payload){if(!mounted)return;setState((){if(payload!=null&&payload.startsWith('invoice:')){notificationInvoiceId=int.tryParse(payload.substring(8));tab=14;refreshId++;}else if(payload!=null&&payload.startsWith('stock:')){tab=1;refreshId++;}else if(payload=='app_update'){tab=9;}else{tab=0;}});});}
+  @override void dispose(){_notificationTapSubscription?.cancel();super.dispose();}
   void refresh(){setState(()=>refreshId++);unawaited(syncLocalNotifications());}
   @override Widget build(BuildContext context) {
     final pages=[
@@ -892,7 +894,7 @@ class _HomePageState extends State<HomePage> {
       CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
       PremiumAssistantPage(onNavigate:(page)=>setState(()=>tab=page),onCreateInvoice:()=>setState((){tab=14;refreshId++;assistantCreateInvoice=true;})),
-      InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh,startNewInvoice:assistantCreateInvoice,onStartNewInvoiceHandled:()=>assistantCreateInvoice=false),
+      InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh,startNewInvoice:assistantCreateInvoice,openInvoiceId:notificationInvoiceId,onStartNewInvoiceHandled:()=>assistantCreateInvoice=false,onOpenInvoiceHandled:()=>notificationInvoiceId=null),
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       const ScientificCalculatorPage(),
       WarehouseStockPage(key:ValueKey('whstock'+refreshId.toString()),changed:refresh),
@@ -1400,10 +1402,11 @@ class _DashboardState extends State<Dashboard> {
 }
 
 class InvoicePage extends StatefulWidget {
-  const InvoicePage({super.key,required this.changed,this.pendingOnly=false,this.startNewInvoice=false,this.onStartNewInvoiceHandled});
+  const InvoicePage({super.key,required this.changed,this.pendingOnly=false,this.startNewInvoice=false,this.openInvoiceId,this.onStartNewInvoiceHandled,this.onOpenInvoiceHandled});
   final VoidCallback changed;
   final bool pendingOnly,startNewInvoice;
-  final VoidCallback? onStartNewInvoiceHandled;
+  final int? openInvoiceId;
+  final VoidCallback? onStartNewInvoiceHandled,onOpenInvoiceHandled;
   @override State<InvoicePage> createState()=>_InvoicePageState();
 }
 class _InvoicePageState extends State<InvoicePage>{
@@ -1418,7 +1421,7 @@ class _InvoicePageState extends State<InvoicePage>{
       });
     }
   }
-  Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);if(mounted)setState(()=>rows=r);}
+  Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);if(!mounted)return;setState(()=>rows=r);final target=widget.openInvoiceId;if(target!=null){final found=r.where((e)=>e['id']==target).toList();widget.onOpenInvoiceHandled?.call();if(found.isNotEmpty){WidgetsBinding.instance.addPostFrameCallback((_) {if(mounted)details(found.first);});}else{toast(context,'الفاتورة المطلوبة لم تعد موجودة أو ليست ضمن هذه القائمة.');}}}
   Future<void> create()async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;if(products.isEmpty){toast(context,'أضف منتجات أولاً.');return;}final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers,suppliers:suppliers));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
    Future<void> append(Map<String,Object?> invoice)async{final products=await StoreDb.instance.products();final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:const [],suppliers:suppliers,invoice:invoice));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
   Future<void> pay(Map<String,Object?> invoice)async{final c=TextEditingController();final due=(invoice['total'] as num).toDouble()-(invoice['paid'] as num).toDouble();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:Text('تحصيل دفعة • ${invoice['invoice_no']}'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'المبلغ المتبقي: ${money(due)}')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تأكيد التحصيل'))])));if(ok==true){try{await StoreDb.instance.addInvoicePayment(invoice['id'] as int,double.parse(c.text));await load();await syncLocalNotifications();widget.changed();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}c.dispose();}
