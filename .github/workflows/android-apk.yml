@@ -162,34 +162,51 @@ jobs:
       - name: Initialize Shorebird app configuration
         shell: bash
         run: |
-          if [ -z "$SHOREBIRD_TOKEN" ]; then
-            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
-            exit 1
+          shorebird_ready=false
+          had_shorebird_config=false
+          if [ -f shorebird.yaml ]; then
+            had_shorebird_config=true
           fi
-          if [ ! -f shorebird.yaml ]; then
+
+          if [ -z "${SHOREBIRD_TOKEN:-}" ]; then
+            echo "::warning::Shorebird credentials are unavailable; continuing with a standard Android APK build."
+          elif [ "$had_shorebird_config" = "true" ]; then
+            shorebird_ready=true
+          else
             echo "Initializing Shorebird app in organization 62776..."
-            if timeout 120s shorebird init --org-id 62776 --display-name "MY APP" --json; then
-              echo "Shorebird initialization command completed."
+            if timeout 300s shorebird init --org-id 62776 --display-name "MY APP" --json; then
+              if [ -f shorebird.yaml ]; then
+                shorebird_ready=true
+                echo "Shorebird initialization completed."
+              else
+                echo "::warning::Shorebird init returned successfully without creating shorebird.yaml; using the standard Flutter build."
+              fi
             else
-              echo "::warning::Shorebird initialization was unavailable; continuing with a standard Android APK build."
+              init_status=$?
+              echo "::warning::Shorebird initialization did not finish successfully (exit $init_status); using the standard Flutter build."
             fi
           fi
-          if [ -f shorebird.yaml ]; then
+
+          if [ "$shorebird_ready" = "true" ]; then
             echo "SHOREBIRD_READY=true" >> "$GITHUB_ENV"
-          else
-            echo "SHOREBIRD_READY=false" >> "$GITHUB_ENV"
-          fi
-          python - <<'PY'
+            python - <<'PY'
           from pathlib import Path
           config = Path("shorebird.yaml")
-          if not config.exists():
-              raise SystemExit("Shorebird initialization did not create shorebird.yaml")
+          if not config.is_file():
+              raise SystemExit("Shorebird was marked ready but shorebird.yaml is missing")
           source = config.read_text()
           if "auto_update:" not in source:
               source = source.rstrip() + "\nauto_update: false\n"
           config.write_text(source)
           print("Shorebird configuration is ready for controlled in-app patch updates.")
           PY
+          else
+            if [ "$had_shorebird_config" = "false" ] && [ -f shorebird.yaml ]; then
+              rm -f shorebird.yaml
+            fi
+            echo "SHOREBIRD_READY=false" >> "$GITHUB_ENV"
+            echo "Standard Flutter APK fallback selected."
+          fi
       - name: Align Android plugin compile SDK versions
         shell: bash
         run: |
