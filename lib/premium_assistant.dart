@@ -215,7 +215,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   @override Widget build(BuildContext context){
     final wide=MediaQuery.of(context).size.width>850;
     final chat=Column(children:[
-      Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(20)),child:const Row(children:[
+      Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(20)),child:Row(children:[
         Icon(Icons.auto_awesome,color:Colors.white,size:28),SizedBox(width:12),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('مساعد APP LOL',style:TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w900)),Text('اسأل عن أي موضوع أو اطلب مساعدة داخل البرنامج',style:TextStyle(color:Colors.white70,fontSize:12))])),
         IconButton(onPressed:_showAiSettings,tooltip:'إعداد الذكاء الاصطناعي',icon:const Icon(Icons.tune,color:Colors.white)),
