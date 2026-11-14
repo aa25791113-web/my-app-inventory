@@ -29,23 +29,24 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
 
   Future<void> _showAiSettings() async {
     final controller=TextEditingController(text:(await secureStorage.read(key:apiKeyStore))??'');
-    final result=await showDialog<String?>(context:context,builder:(ctx)=>AlertDialog(
-      title:const Text('إعداد الذكاء الاصطناعي'),
+    final result=await showDialog<String?>(context:context,builder:(ctx)=>Directionality(textDirection:TextDirection.rtl,child:AlertDialog(
+      shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(24)),
+      title:const Row(children:[Icon(Icons.auto_awesome),SizedBox(width:9),Text('إعداد الذكاء الاصطناعي')]),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
         const Text('بدون مفتاح: المساعد المحلي يظل متاحاً. مع مفتاح Gemini: يقدر يجاوب عن الأسئلة العامة بالمصري ويكمل سياق المحادثة عند اتصال الإنترنت.'),
         const SizedBox(height:12),
         const SelectableText('احصل على مفتاح من Google AI Studio: aistudio.google.com/apikey'),
         const SizedBox(height:12),
-        TextField(controller:controller,obscureText:true,autocorrect:false,enableSuggestions:false,decoration:const InputDecoration(labelText:'مفتاح Gemini API',hintText:'الصق المفتاح هنا',prefixIcon:Icon(Icons.key))),
+        TextField(controller:controller,obscureText:true,autocorrect:false,enableSuggestions:false,decoration:InputDecoration(labelText:'مفتاح Gemini API',hintText:'الصق المفتاح هنا',prefixIcon:const Icon(Icons.key),border:OutlineInputBorder(borderRadius:BorderRadius.circular(14)))),
         const SizedBox(height:8),
         const Text('المفتاح يُحفظ على هذا الجهاز فقط. لا تشاركه مع أحد. استخدام الخدمة قد يخضع لحدود مجانية أو رسوم حسب حساب مزود الخدمة.',style:TextStyle(fontSize:11,color:Colors.grey)),
       ])),
       actions:[
         TextButton(onPressed:()=>Navigator.pop(ctx,null),child:const Text('إلغاء')),
         TextButton(onPressed:()=>Navigator.pop(ctx,''),child:const Text('مسح المفتاح')),
-        FilledButton(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),child:const Text('حفظ')),
+        FilledButton.icon(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),icon:const Icon(Icons.save_outlined),label:const Text('حفظ المفتاح')),
       ],
-    ));
+    )));
     controller.dispose();
     if(result==null)return;
     if(result.isEmpty)await secureStorage.delete(key:apiKeyStore);else await secureStorage.write(key:apiKeyStore,value:result);
@@ -122,11 +123,11 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   }
   String _answer(String raw){
     final q=raw.trim().toLowerCase();
-    if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|أهلا|اهلين|هاي|hi|hello)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\\nأهلاً بيك! أنا مساعد APP LOL المحلي. أقدر أشرح لك استخدام البرنامج، أوجّهك للصفحة المطلوبة، وأساعدك في الحسابات والمخزون والفواتير.';
+    if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|أهلا|اهلين|هاي|hi|hello)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\nأهلاً بيك! أنا مساعد APP LOL المحلي. أقدر أشرح لك استخدام البرنامج، أوجّهك للصفحة المطلوبة، وأساعدك في الحسابات والمخزون والفواتير.';
     if(q.contains('شكرا')||q.contains('متشكر'))return 'العفو، تحت أمرك. لو محتاج تنفّذ حاجة داخل البرنامج اكتبها بصيغة واضحة، وهوجّهك للمكان المناسب.';
     if(q.contains('اسمك')||q.contains('انت مين')||q.contains('إنت مين'))return 'أنا مساعد APP LOL. شغلي أساعدك في فهم البرنامج، وأوصلّك لصفحات الفواتير والمخزون والتقارير والإعدادات، وأشرح لك خطوات العمل.';
     if(q.contains('فاتور')||q.contains('الفواتير')){
-      return 'لإنشاء فاتورة بيع:\\n1) افتح صفحة «الفواتير».\\n2) اضغط «فاتورة جديدة».\\n3) اكتب اسم العميل ورقم هاتفه إن وجد.\\n4) أضف الأصناف وحدد الكمية والسعر والمورد.\\n5) راجع الخصم والمبلغ المدفوع ثم اضغط «حفظ وإصدار الفاتورة».\\nبعد الحفظ افتح الفاتورة لتعاين التصميم، وتحفظها PNG أو تطبعها PDF.';
+      return 'لإنشاء فاتورة بيع:\n1) افتح صفحة «الفواتير».\n2) اضغط «فاتورة جديدة».\n3) اكتب اسم العميل ورقم هاتفه إن وجد.\n4) أضف الأصناف وحدد الكمية والسعر والمورد.\n5) راجع الخصم والمبلغ المدفوع ثم اضغط «حفظ وإصدار الفاتورة».\nبعد الحفظ افتح الفاتورة لتعاين التصميم، وتحفظها PNG أو تطبعها PDF.';
     }
     if(q.contains('النواقص')||q.contains('نواقص')){
       return 'صفحة «النواقص» تجمع المنتجات التي عليها حركة بيع أو وصلت إلى حد التنبيه، وتعرضها في مجموعات حسب المورد. لكل صنف هتلاقي المباع والمتبقي وحد التنبيه والكمية المقترحة للطلب. المنتجات التي ليس لها مورد تظهر تحت «بدون مورد».';
@@ -170,7 +171,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     if(q.contains('جمع')||q.contains('طرح')||q.contains('ضرب')||q.contains('قسمة')||q.contains('نسبة')){
       return 'لو عندك مسألة حسابية اكتبها بالأرقام والعملية المطلوبة. وللحسابات العلمية افتح الآلة العلمية من القائمة. أقدر كمان أوضح لك طريقة حساب النسبة أو هامش الربح خطوة بخطوة.';
     }
-    return 'وصلني سؤالك، لكن مفيش عندي حالياً نموذج لغوي كامل أو اتصال بحث مباشر أقدر أعتمد عليه للإجابة عن أي موضوع عشوائي.\\nأقدر أساعدك محلياً في وظائف APP LOL، الفواتير والمخزون والموردين والعملاء والتقارير والحسابات، وأشرح موضوعات عامة شائعة. اكتب سؤالك بشكل محدد أو قلّي اسم الصفحة اللي عايز تشتغل فيها.';
+    return 'وصلني سؤالك، لكن مفيش عندي حالياً نموذج لغوي كامل أو اتصال بحث مباشر أقدر أعتمد عليه للإجابة عن أي موضوع عشوائي.\nأقدر أساعدك محلياً في وظائف APP LOL، الفواتير والمخزون والموردين والعملاء والتقارير والحسابات، وأشرح موضوعات عامة شائعة. اكتب سؤالك بشكل محدد أو قلّي اسم الصفحة اللي عايز تشتغل فيها.';
   }
   Future<void> send([String? suggested])async{
     final q=(suggested??input.text).trim();if(q.isEmpty||busy)return;
@@ -184,9 +185,9 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     await Future<void>.delayed(const Duration(milliseconds:180));
     if(!mounted)return;
     final route=_route(q);
-    final actionIntent=RegExp(r'(افتح|روح|اذهب|اعرض|وريني|اعمل|اعملي|اعمللي|انشئ|إنشاء|أنشئ|سجل|ضيف|أضف|ادخل|ابدأ)').hasMatch(q);
+    final actionIntent=RegExp(r'(افتح|روح|اذهب|اعرض|وريني|اعمل|اعملي|اعمللي|انشئ|إنشاء|أنشئ|سجل|ضيف|أضف|ادخل|ابدأ|فاتورة جديدة|عايز.*فاتورة|عاوز.*فاتورة)').hasMatch(q);
     final actionRoute=actionIntent?route:null;
-    final createInvoice=actionRoute==14&&RegExp(r'(اعمل|اعمللي|انشئ|إنشاء|جديدة)').hasMatch(q);
+    final createInvoice=actionRoute==14&&RegExp(r'(اعمل|اعمللي|انشئ|إنشاء|جديدة|عايز.*فاتورة|عاوز.*فاتورة)').hasMatch(q);
     if(createInvoice&&widget.onCreateInvoice!=null){widget.onCreateInvoice!.call();}
     else if(actionRoute!=null){widget.onNavigate?.call(actionRoute);}
     String response;
