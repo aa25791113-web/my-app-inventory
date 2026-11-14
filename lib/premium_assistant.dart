@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -19,16 +20,17 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   static const storeKey='assistant_chats_v2';
   static const apiKeyStore='assistant_gemini_api_key';
   static const modelName='gemini-3.5-flash-lite';
+  static const secureStorage=FlutterSecureStorage();
 
   Future<void> _loadAiConfig() async {
     final prefs=await SharedPreferences.getInstance();
-    onlineConfigured=(prefs.getString(apiKeyStore)??'').trim().isNotEmpty;
+    onlineConfigured=((await secureStorage.read(key:apiKeyStore))??'').trim().isNotEmpty;
     if(mounted)setState((){});
   }
 
   Future<void> _showAiSettings() async {
     final prefs=await SharedPreferences.getInstance();
-    final controller=TextEditingController(text:prefs.getString(apiKeyStore)??'');
+    final controller=TextEditingController(text:(await secureStorage.read(key:apiKeyStore))??'');
     final result=await showDialog<String?>(context:context,builder:(ctx)=>AlertDialog(
       title:const Text('إعداد الذكاء الاصطناعي'),
       content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
@@ -48,16 +50,16 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     ));
     controller.dispose();
     if(result==null)return;
-    if(result.isEmpty)await prefs.remove(apiKeyStore);else await prefs.setString(apiKeyStore,result);
+    if(result.isEmpty)await secureStorage.delete(key:apiKeyStore);else await secureStorage.write(key:apiKeyStore,value:result);
     onlineConfigured=result.isNotEmpty;
     if(mounted)setState((){});
   }
 
   Future<String?> _onlineAnswer(String question) async {
     final prefs=await SharedPreferences.getInstance();
-    final key=(prefs.getString(apiKeyStore)??'').trim();
+    final key=((await secureStorage.read(key:apiKeyStore))??'').trim();
     if(key.isEmpty)return null;
-    final recent=msgs.take(msgs.length).toList();
+    final recent=msgs.take(msgs.isEmpty?0:msgs.length-1).toList();
     final contents=<Map<String,dynamic>>[];
     for(final m in recent){
       final role=m['role']=='assistant'?'model':'user';
