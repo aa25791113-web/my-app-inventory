@@ -1,20 +1,47 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter
 from pathlib import Path
-size=1024
-im=Image.new("RGBA",(size,size),(10,12,34,255))
-d=ImageDraw.Draw(im)
-d.rounded_rectangle((36,36,988,988),radius=230,fill=(13,16,48,255),outline=(177,92,255,255),width=24)
-d.rounded_rectangle((70,70,954,954),radius=195,outline=(255,190,72,255),width=8)
-gold=(255,190,72,255); white=(245,247,255,255); purple=(167,92,255,255)
-d.polygon([(245,390),(785,390),(700,650),(330,650)],fill=purple)
-d.line([(245,390),(785,390),(700,650),(330,650),(245,390)],fill=white,width=28,joint="curve")
-d.line([(330,650),(700,650)],fill=gold,width=24)
-for x in (390,500,610): d.line([(x,420),(x+12,615)],fill=white,width=18)
-d.line([(200,300),(285,300),(350,420)],fill=white,width=34)
-d.ellipse((350,690,445,785),fill=gold);d.ellipse((580,690,675,785),fill=gold)
-d.ellipse((375,715,420,760),fill=(13,16,48,255));d.ellipse((605,715,650,760),fill=(13,16,48,255))
-d.polygon([(390,265),(435,185),(510,245),(590,170),(635,270)],fill=gold);d.rectangle((390,270,635,300),fill=gold)
-d.line([(650,360),(730,300),(790,330),(850,245)],fill=purple,width=24)
-d.polygon([(850,245),(785,255),(835,310)],fill=purple)
+import math
+
+S = 1024
+base = Image.new("RGB", (S, S))
+pixels = base.load()
+for y in range(S):
+    for x in range(S):
+        dx, dy = x - S * .48, y - S * .43
+        glow = max(0.0, 1.0 - math.sqrt(dx*dx + dy*dy) / 820)
+        pixels[x, y] = (
+            int(5 + 4 * glow),
+            int(23 + 31 * glow),
+            int(39 + 40 * glow),
+        )
+im = base.convert("RGBA")
+glow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+gd = ImageDraw.Draw(glow)
+gd.ellipse((100, 80, 930, 900), fill=(0, 205, 210, 35))
+glow = glow.filter(ImageFilter.GaussianBlur(95))
+im = Image.alpha_composite(im, glow)
+d = ImageDraw.Draw(im)
+d.rounded_rectangle((35, 35, 989, 989), radius=225, outline=(0, 210, 220, 220), width=17)
+d.rounded_rectangle((62, 62, 962, 962), radius=200, outline=(255, 190, 75, 170), width=5)
+
+# Rising analytics bars
+for x, top, w in [(650, 350, 92), (765, 245, 92), (880, 145, 92)]:
+    d.rounded_rectangle((x, top, x+w, 690), radius=20, fill=(0, 190, 205, 235), outline=(125, 245, 245, 255), width=7)
+
+# Metallic gold A and cyan L monogram
+gold = (255, 195, 85, 255)
+gold_light = (255, 230, 165, 255)
+cyan = (0, 205, 220, 255)
+d.polygon([(170, 690), (365, 230), (510, 230), (685, 690), (565, 690), (445, 390), (285, 690)], fill=gold, outline=gold_light)
+d.polygon([(355, 570), (500, 570), (545, 670), (315, 670)], fill=(7, 35, 49, 255))
+d.polygon([(555, 520), (665, 520), (665, 790), (925, 790), (925, 895), (555, 895)], fill=cyan, outline=(140, 250, 250, 255))
+# Product box
+d.rounded_rectangle((150, 690, 440, 905), radius=22, fill=(235, 164, 50, 255), outline=(255, 225, 160, 255), width=9)
+d.polygon([(150, 690), (290, 625), (505, 690), (440, 745)], fill=(255, 205, 105, 255), outline=(255, 235, 185, 255))
+d.line((290, 630, 290, 905), fill=(8, 48, 61, 255), width=17)
+d.line((355, 790, 395, 830, 465, 750), fill=(5, 43, 55, 255), width=25)
+# Gold orbit sweep
+d.arc((70, 245, 970, 960), start=198, end=344, fill=(255, 204, 103, 255), width=27)
+d.ellipse((477, 920, 545, 988), fill=(255, 196, 78, 230))
 Path("assets").mkdir(exist_ok=True)
-im.save("assets/launcher_icon.png")
+im.convert("RGB").save("assets/launcher_icon.png", quality=95)
