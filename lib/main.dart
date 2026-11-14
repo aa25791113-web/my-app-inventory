@@ -1660,7 +1660,7 @@ class ShortagesPage extends StatefulWidget {const ShortagesPage({super.key});@ov
 class _ShortagesPageState extends State<ShortagesPage>{
  List<Map<String,Object?>> rows=[];bool loading=true;
  @override void initState(){super.initState();load();}
- Future<void> load()async{if(mounted)setState(()=>loading=true);final r=await StoreDb.instance.shortageGroups();if(mounted)setState(()=>{rows=r,loading=false});}
+ Future<void> load()async{if(mounted)setState(()=>loading=true);final r=await StoreDb.instance.shortageGroups();if(mounted)setState((){rows=r;loading=false;});}
  @override Widget build(BuildContext context){
   final groups=<String,List<Map<String,Object?>>>{};for(final e in rows){final k=(e['supplier_name']??'بدون مورد').toString();(groups[k]??=[]).add(e);}
   return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
