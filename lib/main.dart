@@ -41,7 +41,30 @@ const String _adminSupabaseKey='sb_publishable_Uxl-meIJXZPaTxzNglGCPQ_7CcGOxuK';
 
 Color? _remoteHexColor(Object? value){
   final raw=(value??'').toString().trim().replaceFirst('#','');
-  if(!RegExp(r'^[0-9a-fA-F]{6}
+  if(raw.length!=6)return null;
+  final parsed=int.tryParse(raw,radix:16);
+  if(parsed==null)return null;
+  return Color(0xFF000000|parsed);
+}
+
+Future<Map<String,dynamic>?> fetchRemoteAdminSettings() async {
+  final client=HttpClient();
+  try{
+    final uri=Uri.parse('$_adminSupabaseUrl/rest/v1/app_settings').replace(queryParameters:{'id':'eq.global','select':'settings'});
+    final request=await client.getUrl(uri).timeout(const Duration(seconds:5));
+    request.headers.set('apikey',_adminSupabaseKey);
+    request.headers.set(HttpHeaders.authorizationHeader,'Bearer $_adminSupabaseKey');
+    request.headers.set(HttpHeaders.acceptHeader,'application/json');
+    final response=await request.close().timeout(const Duration(seconds:5));
+    if(response.statusCode!=HttpStatus.ok)return null;
+    final decoded=jsonDecode(await response.transform(utf8.decoder).join());
+    if(decoded is List&&decoded.isNotEmpty&&decoded.first is Map){
+      final settings=(decoded.first as Map)['settings'];
+      if(settings is Map)return Map<String,dynamic>.from(settings);
+    }
+    return null;
+  }catch(_){return null;}finally{client.close(force:true);}
+}
 
 @pragma('vm:entry-point')
 void updateBackgroundDispatcher() {
