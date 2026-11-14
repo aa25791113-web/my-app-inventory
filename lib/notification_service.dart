@@ -45,7 +45,11 @@ class AppNotificationService {
     );
     final launchDetails=await _plugin.getNotificationAppLaunchDetails();
     if(launchDetails?.didNotificationLaunchApp==true){
-      _pendingLaunchPayload=launchDetails?.notificationResponse?.payload;
+      final payload=launchDetails?.notificationResponse?.payload;
+      if(payload!=null){
+        if(_tapController.hasListener){_tapController.add(payload);}
+        else{_pendingLaunchPayload=payload;}
+      }
     }
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
