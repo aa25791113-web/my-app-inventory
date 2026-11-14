@@ -294,7 +294,7 @@ class StoreDb {
         for(final queryBits in queryHashes){for(final bits in productHashes){
           var distance=0;
           for(var i=0;i<64;i++){if(bits[i]!=queryBits[i])distance++;}
-          similarity=math.max(similarity,(64-distance)/64);
+          similarity=math.max(similarity,(64-distance)/64).toDouble();
         }}
         if(similarity>=0.55)ranked.add({...row,'similarity':similarity});
       }catch(_){continue;}
