@@ -1694,7 +1694,8 @@ class SettingsPage extends StatelessWidget {
           if(status==UpdateStatus.upToDate){if(context.mounted)toast(context,'أنت تستخدم أحدث تحديث متاح.');return;}
           if(status==UpdateStatus.restartRequired){if(context.mounted)toast(context,'التحديث جاهز. أغلق التطبيق وافتحه مرة أخرى لتطبيقه.');return;}
           if(status==UpdateStatus.unavailable){if(context.mounted)toast(context,'خدمة التحديث غير متاحة حالياً.');return;}
-          final manifest=await fetchUpdateManifest();
+          final fetchedManifest=await fetchUpdateManifest();
+          final manifest=fetchedManifest?['track']=='stable'?fetchedManifest:null;
           final version=(manifest?['release_version']??'تحديث برمجي').toString();
           final patch=(manifest?['patch_number']??'—').toString();
           final size=(manifest?['size_label']??formatUpdateSize(manifest?['size_bytes'])).toString();
@@ -1729,7 +1730,8 @@ class SettingsPage extends StatelessWidget {
 Future<Map<String,dynamic>?> fetchUpdateManifest() async {
   final client=HttpClient();
   try {
-    final request=await client.getUrl(Uri.parse('https://raw.githubusercontent.com/aa25791113-web/my-app-inventory/premium-redesign-v1/update_manifest.json')).timeout(const Duration(seconds:8));
+    final manifestUri=Uri.parse('https://raw.githubusercontent.com/aa25791113-web/my-app-inventory/premium-redesign-v1/update_manifest.json').replace(queryParameters:{'v':DateTime.now().millisecondsSinceEpoch.toString()});
+    final request=await client.getUrl(manifestUri).timeout(const Duration(seconds:8));
     request.headers.set(HttpHeaders.cacheControlHeader,'no-cache');
     final response=await request.close().timeout(const Duration(seconds:8));
     if(response.statusCode!=HttpStatus.ok)return null;
