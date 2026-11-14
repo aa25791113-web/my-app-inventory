@@ -94,7 +94,7 @@ class AppNotificationService {
         importance: importance,
         priority: Priority.high,
         category: AndroidNotificationCategory.reminder,
-                icon: '@mipmap/ic_launcher',
+        icon: '@mipmap/ic_launcher',
         playSound: true,
         enableVibration: true,
       ),
@@ -229,7 +229,8 @@ class AppNotificationService {
       if (!forceReschedule && stored == fingerprint) continue;
 
       await _plugin.cancel(_invoiceId(id));
-      final dueAt = createdAt.add(Duration(days: days));
+      final dueDate = createdAt.add(Duration(days: days));
+      final dueAt = DateTime(dueDate.year, dueDate.month, dueDate.day, 10);
       final scheduleAt = dueAt.isAfter(now)
           ? dueAt
           : now.add(const Duration(seconds: 8));
