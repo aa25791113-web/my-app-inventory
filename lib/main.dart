@@ -1767,7 +1767,7 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
         IconButton(onPressed:()=>Navigator.pop(context,false),icon:const Icon(Icons.close,color:Colors.white),tooltip:'إغلاق'),
       ])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        if(widget.invoice==null||widget.editing)...[_sectionTitle('بيانات العميل',Icons.person_outline_rounded),Row(children:[
+        if(widget.invoice==null)...[_sectionTitle('بيانات العميل',Icons.person_outline_rounded),Row(children:[
           Expanded(flex:3,child:_searchField(options:widget.customers.map((x)=>x['name'].toString()).toList(),initialValue:customerName.text,label:'ابحث عن العميل أو اكتب اسمه',onChanged:(v){customerName.text=v;customerId=null;},onSelected:(name){final found=widget.customers.where((x)=>x['name'].toString()==name).toList();setState((){customerName.text=name;if(found.isNotEmpty){customerId=found.first['id'] as int?;customerPhone.text=(found.first['phone']??'').toString();}});})),
           const SizedBox(width:9),Expanded(flex:2,child:TextField(controller:customerPhone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف',prefixIcon:Icon(Icons.phone_outlined)))),
         ]),const SizedBox(height:18)],
@@ -1810,10 +1810,10 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
 
 
 class InvoicePreviewDialog extends StatefulWidget {
-  const InvoicePreviewDialog({super.key,required this.invoice,required this.items,required this.onAppend});
+  const InvoicePreviewDialog({super.key,required this.invoice,required this.items,required this.onAppend,required this.onEdit});
   final Map<String,Object?> invoice;
   final List<Map<String,Object?>> items;
-  final VoidCallback onAppend;
+  final VoidCallback onAppend,onEdit;
   @override State<InvoicePreviewDialog> createState()=>_InvoicePreviewDialogState();
 }
 class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
@@ -1839,15 +1839,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     }catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}
     finally{if(mounted)setState(()=>busy=false);}
   }
-  Future<void> printPdf() async {
-    if(busy)return;setState(()=>busy=true);
-    try{
-      final bytes=await capture();final doc=pw.Document();final image=pw.MemoryImage(bytes);
-      doc.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:const pw.EdgeInsets.all(18),build:(_)=>pw.Center(child:pw.Image(image,fit:pw.BoxFit.contain))));
-      await Printing.layoutPdf(name:'APP_LOL_${widget.invoice['invoice_no']}.pdf',onLayout:(_)async=>doc.save());
-    }catch(e){if(mounted)toast(context,'تعذر تجهيز PDF: ${e.toString().replaceFirst('Exception: ','')}');}
-    finally{if(mounted)setState(()=>busy=false);}
-  }
+  Future<Uint8List> pdfBytes()async{final bytes=await capture();final doc=pw.Document();final image=pw.MemoryImage(bytes);doc.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:const pw.EdgeInsets.all(18),build:(_)=>pw.Center(child:pw.Image(image,fit:pw.BoxFit.contain))));return doc.save();}
+  Future<void> savePdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();final path=await FilePicker.platform.saveFile(dialogTitle:'حفظ الفاتورة PDF',fileName:'APP_LOL_${widget.invoice['invoice_no']}.pdf',type:FileType.custom,allowedExtensions:['pdf'],bytes:bytes);if(mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم حفظ الفاتورة PDF.');}catch(e){if(mounted)toast(context,'تعذر حفظ PDF: ${e.toString().replaceFirst('Exception: ','')}');}finally{if(mounted)setState(()=>busy=false);}}
+  Future<void> printPdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();await Printing.layoutPdf(name:'APP_LOL_${widget.invoice['invoice_no']}.pdf',onLayout:(_)async=>bytes);}catch(e){if(mounted)toast(context,'تعذرت الطباعة: ${e.toString().replaceFirst('Exception: ','')}');}finally{if(mounted)setState(()=>busy=false);}}
+  IconData paymentIcon(String value){final v=value.toLowerCase();if(v.contains('insta')||v.contains('انستا'))return Icons.qr_code_2_rounded;if(v.contains('vodafone')||v.contains('فودافون'))return Icons.phone_android_rounded;if(v.contains('محفظ')||v.contains('wallet'))return Icons.account_balance_wallet_rounded;if(v.contains('كاش')||v.contains('cash'))return Icons.payments_rounded;if(v.contains('فيزا')||v.contains('card'))return Icons.credit_card_rounded;return Icons.account_balance_rounded;}
   Widget meta(String label,String value)=>Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:const TextStyle(color:Color(0xFF64748B),fontSize:11)),const SizedBox(height:4),Text(value,style:const TextStyle(color:Color(0xFF172B3A),fontWeight:FontWeight.w800,fontSize:13))]));
   Widget totalRow(String label,String value,{Color color=const Color(0xFF475569)})=>Row(children:[Expanded(child:Text(label,style:const TextStyle(fontSize:12,color:Color(0xFF64748B)))),Text(value,style:TextStyle(fontSize:12,fontWeight:FontWeight.w800,color:color))]);
   @override Widget build(BuildContext context){
@@ -1861,6 +1856,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
         ])),
         const SizedBox(height:14),
         Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFFF2F7F8),borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE1EAEC))),child:Row(children:[meta('العميل',(e['customer_name']??'عميل نقدي').toString()),if((e['customer_phone']??'').toString().trim().isNotEmpty)meta('رقم الهاتف',e['customer_phone'].toString())])),
+        if((e['payment_method']??'').toString().trim().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Container(padding:const EdgeInsets.symmetric(horizontal:13,vertical:11),decoration:BoxDecoration(color:const Color(0xFFEAF2F2),borderRadius:BorderRadius.circular(13),border:Border.all(color:const Color(0xFFD6E5E4))),child:Row(children:[Icon(paymentIcon(e['payment_method'].toString()),color:const Color(0xFF087F68),size:22),const SizedBox(width:9),const Text('طريقة الدفع:',style:TextStyle(fontSize:11,color:Color(0xFF64748B))),const SizedBox(width:6),Expanded(child:Text(e['payment_method'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,color:Color(0xFF173A43),fontSize:13)))]))),
         const SizedBox(height:15),const Text('تفاصيل الأصناف',style:TextStyle(color:Color(0xFF173A43),fontSize:15,fontWeight:FontWeight.w900)),const SizedBox(height:8),
         Container(padding:const EdgeInsets.symmetric(vertical:10,horizontal:8),decoration:BoxDecoration(color:const Color(0xFFEAF2F2),borderRadius:BorderRadius.circular(9)),child:const Row(children:[
           Expanded(flex:5,child:Text('الصنف',style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
@@ -1884,7 +1880,9 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
       ]))))),
       Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Wrap(spacing:8,runSpacing:8,alignment:WrapAlignment.spaceBetween,children:[
         OutlinedButton.icon(onPressed:busy?null:saveImage,icon:const Icon(Icons.image_outlined),label:const Text('حفظ صورة')),
-        FilledButton.icon(onPressed:busy?null:printPdf,icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('PDF / طباعة')),
+        FilledButton.icon(onPressed:busy?null:savePdf,icon:const Icon(Icons.picture_as_pdf_outlined),label:const Text('حفظ PDF')),
+        OutlinedButton.icon(onPressed:busy?null:printPdf,icon:const Icon(Icons.print_outlined),label:const Text('طباعة')),
+        TextButton.icon(onPressed:(){Navigator.pop(context);widget.onEdit();},icon:const Icon(Icons.edit_outlined),label:const Text('تعديل الفاتورة')),
         TextButton.icon(onPressed:(){Navigator.pop(context);widget.onAppend();},icon:const Icon(Icons.add_shopping_cart),label:const Text('إضافة أصناف')),
       ])),if(busy)const LinearProgressIndicator(minHeight:2),
     ]))));
@@ -2041,7 +2039,7 @@ class _MovementPageState extends State<MovementPage> {
     final total=chosen.fold<double>(0,(s,e)=>s+(e['total'] as num).toDouble());
     final paid=TextEditingController(text:total.toStringAsFixed(2));
     final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إنشاء فاتورة مجمعة'),content:SizedBox(width:420,child:Column(mainAxisSize:MainAxisSize.min,children:[Text('عدد عمليات البيع: ${chosen.length} • الإجمالي: ${money(total)}',style:const TextStyle(fontWeight:FontWeight.w900)),const SizedBox(height:8),const Align(alignment:Alignment.centerRight,child:Text('مراجعة الأصناف والأسعار والكميات',style:TextStyle(fontSize:12,fontWeight:FontWeight.w800))),const SizedBox(height:5),SizedBox(height:170,child:ListView.separated(shrinkWrap:true,itemCount:chosen.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(_,i){final item=chosen[i];final qty=(item['qty'] as num).toInt();final price=(item['unit_price'] as num).toDouble();final line=(item['total'] as num).toDouble();return Padding(padding:const EdgeInsets.symmetric(vertical:7),child:Row(children:[Expanded(child:Text((item['product_name']??'صنف').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:12,fontWeight:FontWeight.w700))),Text('$qty × ${money(price)}',style:const TextStyle(fontSize:10)),const SizedBox(width:8),Text(money(line),style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900))]));})),const SizedBox(height:10),TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل *')),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)')),TextField(controller:paid,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المحصّل'))])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إنشاء الفاتورة'))])));
-    if(ok==true){try{await StoreDb.instance.createInvoiceFromSales(operationIds:chosen.map((e)=>e['id'] as int).toList(),customerName:name.text,customerPhone:phone.text,paid:double.parse(paid.text));selectedIds.clear();await load();await syncLocalNotifications();widget.changed();if(mounted)toast(context,'تم إنشاء فاتورة مجمعة دون خصم المخزون مرة أخرى.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
+    if(ok==true){try{await StoreDb.instance.createInvoiceFromSales(operationIds:chosen.map((e)=>e['id'] as int).toList(),customerName:name.text,customerPhone:phone.text,paid:double.parse(paid.text),paymentMethod:'');selectedIds.clear();await load();await syncLocalNotifications();widget.changed();if(mounted)toast(context,'تم إنشاء فاتورة مجمعة دون خصم المخزون مرة أخرى.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}
     name.dispose();phone.dispose();paid.dispose();
   }
   Future<void> add() async {
