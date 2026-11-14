@@ -1587,7 +1587,7 @@ class InvoicePage extends StatefulWidget {
   @override State<InvoicePage> createState()=>_InvoicePageState();
 }
 class _InvoicePageState extends State<InvoicePage>{
-  List<Map<String,Object?>> rows=[];
+  List<Map<String,Object?>> rows=[],draftRows=[];
   @override void initState(){
     super.initState();load();
     if(widget.startNewInvoice){
@@ -1598,14 +1598,17 @@ class _InvoicePageState extends State<InvoicePage>{
       });
     }
   }
-  Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);if(!mounted)return;setState(()=>rows=r);final target=widget.openInvoiceId;if(target!=null){final found=r.where((e)=>e['id']==target).toList();widget.onOpenInvoiceHandled?.call();if(found.isNotEmpty){WidgetsBinding.instance.addPostFrameCallback((_) {if(mounted)details(found.first);});}else{toast(context,'الفاتورة المطلوبة لم تعد موجودة أو ليست ضمن هذه القائمة.');}}}
-  Future<void> create()async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;if(products.isEmpty){toast(context,'أضف منتجات أولاً.');return;}final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers,suppliers:suppliers));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
+  Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);final d=widget.pendingOnly?<Map<String,Object?>>[]:await StoreDb.instance.invoiceDrafts();if(!mounted)return;setState(()=>{rows=r,draftRows=d});final target=widget.openInvoiceId;if(target!=null){final found=r.where((e)=>e['id']==target).toList();widget.onOpenInvoiceHandled?.call();if(found.isNotEmpty){WidgetsBinding.instance.addPostFrameCallback((_) {if(mounted)details(found.first);});}else{toast(context,'الفاتورة المطلوبة لم تعد موجودة أو ليست ضمن هذه القائمة.');}}}
+  Future<void> create()async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;if(products.isEmpty){toast(context,'أضف منتجات أولاً.');return;}final result=await showDialog<dynamic>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers,suppliers:suppliers));if(result==true){await load();await syncLocalNotifications();widget.changed();}else if(result=='draft'){await load();}}
    Future<void> append(Map<String,Object?> invoice)async{final products=await StoreDb.instance.products();final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:const [],suppliers:suppliers,invoice:invoice));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
+  Future<void> editInvoice(Map<String,Object?> invoice)async{final products=await StoreDb.instance.products();final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:const [],suppliers:suppliers,invoice:invoice,editing:true));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
+  Future<void> resumeDraft(Map<String,Object?> draft)async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;final result=await showDialog<dynamic>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers,suppliers:suppliers,draft:draft));if(result==true||result=='draft'){await load();if(result==true){await syncLocalNotifications();widget.changed();}}}
+  Future<void> deleteDraft(Map<String,Object?> draft)async{await StoreDb.instance.deleteInvoiceDraft(draft['id'] as int);await load();}
   Future<void> pay(Map<String,Object?> invoice)async{final c=TextEditingController();final due=(invoice['total'] as num).toDouble()-(invoice['paid'] as num).toDouble();final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:Text('تحصيل دفعة • ${invoice['invoice_no']}'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:InputDecoration(labelText:'المبلغ المتبقي: ${money(due)}')),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('تأكيد التحصيل'))])));if(ok==true){try{await StoreDb.instance.addInvoicePayment(invoice['id'] as int,double.parse(c.text));await load();await syncLocalNotifications();widget.changed();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}c.dispose();}
   Future<void> details(Map<String,Object?> e)async{
     final items=await StoreDb.instance.invoiceItems(e['id'] as int);
     if(!mounted)return;
-    await showDialog<void>(context:context,builder:(_)=>InvoicePreviewDialog(invoice:e,items:items,onAppend:()=>append(e)));
+    await showDialog<void>(context:context,builder:(_)=>InvoicePreviewDialog(invoice:e,items:items,onAppend:()=>append(e),onEdit:()=>editInvoice(e)));
   }
   @override Widget build(BuildContext context){
     final total=rows.fold<double>(0,(v,e)=>v+((e['total'] as num?)?.toDouble()??0));
@@ -1644,6 +1647,7 @@ class _InvoicePageState extends State<InvoicePage>{
           )),
         ]),
       )),
+      if(!widget.pendingOnly&&draftRows.isNotEmpty)Container(margin:const EdgeInsets.fromLTRB(14,0,14,8),padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:scheme.tertiaryContainer.withOpacity(.35),borderRadius:BorderRadius.circular(17),border:Border.all(color:scheme.tertiary.withOpacity(.25))),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Row(children:[Icon(Icons.pause_circle_outline,color:scheme.tertiary),const SizedBox(width:8),Expanded(child:Text('فواتير معلّقة (${draftRows.length})',style:const TextStyle(fontWeight:FontWeight.w900))),Text('لم يتم خصم المخزون',style:TextStyle(fontSize:10,color:scheme.onSurfaceVariant))]),const SizedBox(height:7),...draftRows.map((d)=>Card(margin:const EdgeInsets.only(top:5),child:ListTile(leading:const Icon(Icons.receipt_long_outlined),title:Text((d['customer_name']??'فاتورة بدون اسم').toString()),subtitle:Text('آخر حفظ: ${formatDateTime(d['updated_at'])} • ${((jsonDecode((d['items_json']??'[]').toString()) as List).length)} صنف'),trailing:Wrap(mainAxisSize:MainAxisSize.min,children:[IconButton(tooltip:'استئناف الفاتورة',onPressed:()=>resumeDraft(d),icon:const Icon(Icons.play_circle_outline)),IconButton(tooltip:'حذف الفاتورة المعلقة',onPressed:()=>deleteDraft(d),icon:const Icon(Icons.delete_outline,color:Colors.redAccent))]),onTap:()=>resumeDraft(d))))])),
       Expanded(child:rows.isEmpty
         ? Center(child:Padding(padding:const EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[
             Icon(Icons.receipt_long_outlined,size:54,color:scheme.primary.withOpacity(.65)),
@@ -1699,20 +1703,22 @@ class _InvoicePageState extends State<InvoicePage>{
 
 }
 class InvoiceEditor extends StatefulWidget{
-  const InvoiceEditor({super.key,required this.products,required this.customers,required this.suppliers,this.invoice});
-  final List<Map<String,Object?>> products,customers,suppliers;final Map<String,Object?>? invoice;
+  const InvoiceEditor({super.key,required this.products,required this.customers,required this.suppliers,this.invoice,this.draft,this.editing=false});
+  final List<Map<String,Object?>> products,customers,suppliers;final Map<String,Object?>? invoice,draft;final bool editing;
   @override State<InvoiceEditor> createState()=>_InvoiceEditorState();
 }
 class _InvoiceEditorState extends State<InvoiceEditor>{
   final List<Map<String,Object?>> items=[];
-  final discount=TextEditingController(text:'0'),paid=TextEditingController(text:'0'),note=TextEditingController(),customerName=TextEditingController(),customerPhone=TextEditingController();
-  int? customerId;
+  final discount=TextEditingController(text:'0'),paid=TextEditingController(text:'0'),note=TextEditingController(),customerName=TextEditingController(),customerPhone=TextEditingController(),paymentMethod=TextEditingController();
+  int? customerId,draftId;
   bool percent=false,saving=false;
+  @override void initState(){super.initState();_loadInitial();}
+  Future<void> _loadInitial()async{if(widget.draft!=null){final d=widget.draft!;draftId=d['id'] as int;customerId=d['customer_id'] as int?;customerName.text=(d['customer_name']??'').toString();customerPhone.text=(d['customer_phone']??'').toString();discount.text=(d['discount_value']??0).toString();percent=(d['discount_percent'] as int? ?? 0)==1;paid.text=(d['paid']??0).toString();note.text=(d['note']??'').toString();paymentMethod.text=(d['payment_method']??'').toString();try{items.addAll((jsonDecode((d['items_json']??'[]').toString()) as List).map((x)=>Map<String,Object?>.from(x as Map)));}catch(_){}if(mounted)setState((){});return;}if(widget.invoice!=null){final e=widget.invoice!;customerId=e['customer_id'] as int?;customerName.text=(e['customer_name']??'').toString();customerPhone.text=(e['customer_phone']??'').toString();discount.text=(e['discount_value']??0).toString();percent=e['discount_mode']=='percent';paid.text=(e['paid']??0).toString();note.text=(e['note']??'').toString();paymentMethod.text=(e['payment_method']??'').toString();if(widget.editing){final saved=await StoreDb.instance.invoiceItems(e['id'] as int);if(mounted)setState(()=>items.addAll(saved.map((x)=>Map<String,Object?>.from(x))));}}}
   double get subtotal=>items.fold<double>(0,(s,e)=>s+((e['qty'] as int? ?? 0)*(e['unit_price'] as num? ?? 0).toDouble()));
   double get discountAmount{final v=double.tryParse(discount.text)??0;return (percent?subtotal*v/100:v).clamp(0,subtotal).toDouble();}
   double get total=>(subtotal-discountAmount).clamp(0,double.infinity).toDouble();
   double get paidValue=>double.tryParse(paid.text)??0;
-  @override void dispose(){discount.dispose();paid.dispose();note.dispose();customerName.dispose();customerPhone.dispose();super.dispose();}
+  @override void dispose(){discount.dispose();paid.dispose();note.dispose();customerName.dispose();customerPhone.dispose();paymentMethod.dispose();super.dispose();}
   void addItem(){
     final available=widget.products.where((p)=>(p['qty'] as int? ?? 0)>0).toList();
     if(available.isEmpty){toast(context,'لا توجد كميات متاحة للبيع.');return;}
@@ -1735,13 +1741,14 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
     for(final item in items){final product=widget.products.where((p)=>p['id']==item['product_id']).toList();final qty=item['qty'] as int? ?? 0;
       if(product.isEmpty){toast(context,'اختر صنفًا من نتائج البحث لكل سطر قبل حفظ الفاتورة.');return;}
       if(qty<=0){toast(context,'راجع كميات الأصناف؛ يجب أن تكون أكبر من صفر.');return;}
-      if(qty>(product.first['qty'] as int? ?? 0)){toast(context,'الكمية المطلوبة من ${item['product_name']} أكبر من المخزون المتاح.');return;}
+      final originalQty=widget.editing?items.where((x)=>x['product_id']==item['product_id']).fold<int>(0,(v,x)=>v+(x['qty'] as int? ?? 0)):0;final availableQty=(product.first['qty'] as int? ?? 0)+originalQty;if(qty>availableQty){toast(context,'الكمية المطلوبة من ${item['product_name']} أكبر من المخزون المتاح.');return;}
     }
     if(widget.invoice==null&&(paidValue<0||paidValue>total)){toast(context,'راجع المبلغ المدفوع؛ لا يمكن أن يتجاوز إجمالي الفاتورة.');return;}
     setState(()=>saving=true);
-    try{if(widget.invoice!=null){await StoreDb.instance.appendInvoiceItems(widget.invoice!['id'] as int,items);}else{await StoreDb.instance.createInvoice(customerName:customerName.text.trim(),customerPhone:customerPhone.text.trim(),customerId:customerId,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:paidValue,note:note.text);}if(mounted)Navigator.pop(context,true);}
+    try{if(widget.editing&&widget.invoice!=null){await StoreDb.instance.updateInvoice(invoiceId:widget.invoice!['id'] as int,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,note:note.text,paymentMethod:paymentMethod.text.trim());}else if(widget.invoice!=null){await StoreDb.instance.appendInvoiceItems(widget.invoice!['id'] as int,items);}else{await StoreDb.instance.createInvoice(customerName:customerName.text.trim(),customerPhone:customerPhone.text.trim(),customerId:customerId,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:paidValue,note:note.text,paymentMethod:paymentMethod.text.trim());}if(draftId!=null)await StoreDb.instance.deleteInvoiceDraft(draftId!);if(mounted)Navigator.pop(context,true);}
     catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>saving=false);}
   }
+  Future<void> suspend()async{if(saving)return;setState(()=>saving=true);try{draftId=await StoreDb.instance.saveInvoiceDraft(id:draftId,customerId:customerId,customerName:customerName.text.trim(),customerPhone:customerPhone.text.trim(),items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:paidValue,note:note.text,paymentMethod:paymentMethod.text.trim());if(mounted){toast(context,'تم تعليق الفاتورة وحفظها بدون خصم المخزون.');Navigator.pop(context,'draft');}}catch(e){if(mounted)toast(context,e.toString());}finally{if(mounted)setState(()=>saving=false);}}
   Widget _searchField({required List<String> options,required String label,required String initialValue,required ValueChanged<String> onSelected,ValueChanged<String>? onChanged})=>Autocomplete<String>(
     initialValue:TextEditingValue(text:initialValue),
     optionsBuilder:(value){final q=value.text.trim().toLowerCase();if(q.isEmpty)return const Iterable<String>.empty();return options.where((x)=>x.toLowerCase().startsWith(q)||x.toLowerCase().contains(q)).take(10);},
@@ -1756,11 +1763,11 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.symmetric(horizontal:12,vertical:18),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:850,maxHeight:MediaQuery.of(context).size.height*.94),child:Column(children:[
       Container(padding:const EdgeInsets.fromLTRB(18,15,18,16),decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[cs.primary,cs.tertiary]),borderRadius:const BorderRadius.vertical(top:Radius.circular(26))),child:Row(children:[
         Container(width:45,height:45,decoration:BoxDecoration(color:Colors.white.withOpacity(.16),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.receipt_long_rounded,color:Color(0xFFFFD47A),size:25)),
-        const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.invoice==null?'إنشاء فاتورة بيع':'إضافة أصناف للفاتورة',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:19)),Text(widget.invoice==null?'اكتب بيانات الفاتورة وشاهد شكلها النهائي مباشرة':'رقم الفاتورة ${widget.invoice!['invoice_no']}',style:const TextStyle(color:Colors.white70,fontSize:11))])),
+        const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.editing?'تعديل الفاتورة':widget.invoice==null?'إنشاء فاتورة بيع':'إضافة أصناف للفاتورة',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:19)),Text(widget.invoice==null?'اكتب بيانات الفاتورة وشاهد شكلها النهائي مباشرة':'رقم الفاتورة ${widget.invoice!['invoice_no']}',style:const TextStyle(color:Colors.white70,fontSize:11))])),
         IconButton(onPressed:()=>Navigator.pop(context,false),icon:const Icon(Icons.close,color:Colors.white),tooltip:'إغلاق'),
       ])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        if(widget.invoice==null)...[_sectionTitle('بيانات العميل',Icons.person_outline_rounded),Row(children:[
+        if(widget.invoice==null||widget.editing)...[_sectionTitle('بيانات العميل',Icons.person_outline_rounded),Row(children:[
           Expanded(flex:3,child:_searchField(options:widget.customers.map((x)=>x['name'].toString()).toList(),initialValue:customerName.text,label:'ابحث عن العميل أو اكتب اسمه',onChanged:(v){customerName.text=v;customerId=null;},onSelected:(name){final found=widget.customers.where((x)=>x['name'].toString()==name).toList();setState((){customerName.text=name;if(found.isNotEmpty){customerId=found.first['id'] as int?;customerPhone.text=(found.first['phone']??'').toString();}});})),
           const SizedBox(width:9),Expanded(flex:2,child:TextField(controller:customerPhone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف',prefixIcon:Icon(Icons.phone_outlined)))),
         ]),const SizedBox(height:18)],
@@ -1782,20 +1789,21 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
             Align(alignment:Alignment.centerLeft,child:Text('المتاح بالمخزن: $availableQty قطعة',style:TextStyle(fontSize:10,color:qty>availableQty?cs.error:cs.onSurfaceVariant))),
           ]));
         }),
-        if(widget.invoice==null)...[
+        if(widget.invoice==null||widget.editing)...[
           const SizedBox(height:8),_sectionTitle('الخصم والتحصيل',Icons.account_balance_wallet_outlined),
           Row(children:[Expanded(child:SegmentedButton<bool>(showSelectedIcon:false,segments:const [ButtonSegment(value:false,label:Text('خصم مبلغ')),ButtonSegment(value:true,label:Text('خصم %'))],selected:{percent},onSelectionChanged:(v)=>setState(()=>percent=v.first))),const SizedBox(width:8),Expanded(child:TextField(controller:discount,onChanged:(_)=>setState((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'قيمة الخصم')))]),
           const SizedBox(height:9),TextField(controller:paid,onChanged:(_)=>setState((){}),keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'المبلغ المدفوع',prefixIcon:Icon(Icons.payments_outlined))),
+          const SizedBox(height:9),TextField(controller:paymentMethod,decoration:const InputDecoration(labelText:'طريقة الدفع (إنستا باي، فودافون كاش، محفظة...)',prefixIcon:Icon(Icons.account_balance_wallet_outlined))),
           const SizedBox(height:9),TextField(controller:note,maxLines:2,decoration:const InputDecoration(labelText:'ملاحظات الفاتورة',prefixIcon:Icon(Icons.notes_rounded))),
         ],
         const SizedBox(height:16),
         Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(gradient:LinearGradient(colors:[cs.primaryContainer.withOpacity(.8),cs.surfaceContainerLow]),borderRadius:BorderRadius.circular(18),border:Border.all(color:cs.outlineVariant.withOpacity(.5))),child:Column(children:[
           Row(children:[_moneyBox('قبل الخصم',money(subtotal)),const SizedBox(width:7),_moneyBox('الخصم',money(discountAmount))]),const SizedBox(height:8),
           Row(children:[_moneyBox(widget.invoice==null?'المدفوع':'قيمة الإضافة',money(widget.invoice==null?paidValue:subtotal)),const SizedBox(width:7),_moneyBox(widget.invoice==null?'المتبقي':'بعد الإضافة',money(widget.invoice==null?(total-paidValue).clamp(0,double.infinity):subtotal),strong:true,color:cs.primary)]),
-          const SizedBox(height:10),Row(children:[const Expanded(child:Text('الإجمالي النهائي',style:TextStyle(fontWeight:FontWeight.w900,fontSize:14))),Text(money(widget.invoice==null?total:subtotal),style:TextStyle(fontWeight:FontWeight.w900,fontSize:22,color:cs.primary))]),
+          const SizedBox(height:10),Row(children:[const Expanded(child:Text('الإجمالي النهائي',style:TextStyle(fontWeight:FontWeight.w900,fontSize:14))),Text(money(widget.invoice==null||widget.editing?total:subtotal),style:TextStyle(fontWeight:FontWeight.w900,fontSize:22,color:cs.primary))]),
         ])),
       ]))),
-      Padding(padding:const EdgeInsets.fromLTRB(16,8,16,14),child:Row(children:[Expanded(child:OutlinedButton(onPressed:saving?null:()=>Navigator.pop(context,false),child:const Text('إلغاء'))),const SizedBox(width:10),Expanded(flex:2,child:FilledButton.icon(onPressed:saving?null:save,icon:saving?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.check_circle_outline),label:Text(saving?'جارٍ الحفظ…':widget.invoice==null?'حفظ وإصدار الفاتورة':'حفظ الأصناف')))])),
+      Padding(padding:const EdgeInsets.fromLTRB(12,8,12,14),child:Wrap(spacing:8,runSpacing:8,alignment:WrapAlignment.spaceBetween,children:[OutlinedButton(onPressed:saving?null:()=>Navigator.pop(context,false),child:const Text('إغلاق')),if(widget.invoice==null)OutlinedButton.icon(onPressed:saving?null:suspend,icon:const Icon(Icons.pause_circle_outline),label:const Text('تعليق الفاتورة')),FilledButton.icon(onPressed:saving?null:save,icon:saving?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.save_outlined),label:Text(saving?'جارٍ الحفظ…':widget.editing?'حفظ التعديلات':widget.invoice==null?'حفظ الفاتورة':'حفظ الأصناف'))])),
     ]))));
   }
 }
