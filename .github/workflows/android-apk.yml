@@ -222,13 +222,23 @@ jobs:
             exit 1
           fi
           shorebird release android --artifact apk --target-platform android-arm64
+      - name: Publish downloadable APK on GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-${{ github.run_number }}
+          name: APP LOL Android ${{ github.run_number }}
+          body: "نسخة Android رسمية من APP LOL — مبنية عبر Shorebird."
+          files: build/app/outputs/flutter-apk/app-lol-android-arm64.apk
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Publish version and release notes for in-app update alerts
         shell: bash
         env:
           RELEASE_NOTES: ${{ inputs.release_notes }}
         run: |
           python - <<'PY'
-          import json, os, re
+          import json, os, re, shutil
           from datetime import datetime, timezone
           from pathlib import Path
           pubspec = Path("pubspec.yaml").read_text()
@@ -240,6 +250,10 @@ jobs:
           if not apks:
               raise SystemExit("Shorebird release succeeded but no APK artifact was found.")
           size_bytes = sum(p.stat().st_size for p in apks)
+          release_asset = apks[0].parent / "app-lol-android-arm64.apk"
+          shutil.copy2(apks[0], release_asset)
+          release_tag = f"app-{os.environ.get('GITHUB_RUN_NUMBER', 'latest')}"
+          apk_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{release_tag}/app-lol-android-arm64.apk"
           if size_bytes < 1024:
               size_label = f"{size_bytes} بايت"
           elif size_bytes < 1024 * 1024:
@@ -253,6 +267,8 @@ jobs:
               "size_bytes": size_bytes,
               "size_label": size_label,
               "notes": os.environ.get("RELEASE_NOTES", "").strip() or "إصدار جديد يتضمن تحسينات وإصلاحات.",
+              "apk_url": apk_url,
+              "update_type": "apk",
               "published_at": datetime.now(timezone.utc).isoformat()
           }
           Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
