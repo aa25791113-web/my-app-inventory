@@ -921,7 +921,10 @@ class _HomePageState extends State<HomePage> {
         const Text('إدارة المخزون دون إنترنت',style:TextStyle(fontSize:11))]),
         actions:[IconButton(tooltip:'مساعد البرنامج',onPressed:()=>setState(()=>tab=13),icon:const Icon(Icons.support_agent)),const SizedBox(width:6)]),
       body:Stack(children:[
-        if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Image.file(File(widget.backgroundPath!),fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
+        if(widget.backgroundPath!=null&&File(widget.backgroundPath!).existsSync()) Positioned.fill(child:Stack(fit:StackFit.expand,children:[
+          Opacity(opacity:.16,child:Image.file(File(widget.backgroundPath!),fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
+          DecoratedBox(decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topCenter,end:Alignment.bottomCenter,colors:[Theme.of(context).scaffoldBackgroundColor.withOpacity(.70),Theme.of(context).scaffoldBackgroundColor.withOpacity(.90)]))),
+        ])),
         IndexedStack(index:tab,children:pages)
       ]),
       bottomNavigationBar:NavigationBar(selectedIndex:tab==10?0:tab==1?1:tab==0?2:tab==14?3:tab==8?4:tab==12?5:0,onDestinationSelected:(v)=>setState(()=>tab=[10,1,0,14,8,12][v]),
@@ -2434,10 +2437,17 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
     void beginPage() {
       recorder=ui.PictureRecorder();
       canvas=ui.Canvas(recorder!);
-      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=const ui.Color(0xFFF4F8F6));
+      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=const ui.Color(0xFFEAF1F2));
+      canvas!.drawCircle(const ui.Offset(1110,1540),250,ui.Paint()..color=const ui.Color(0xFFE8F2EF));
+      canvas!.drawCircle(const ui.Offset(90,260),190,ui.Paint()..color=const ui.Color(0xFFE8F2EF));
       canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,h-56),const ui.Radius.circular(34)),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,190),const ui.Radius.circular(34)),ui.Paint()..color=const ui.Color(0xFF087F68));
-      canvas!.drawRect(const ui.Rect.fromLTWH(28,150,w-56,218),ui.Paint()..color=const ui.Color(0xFF087F68));
+      final headerPaint=ui.Paint()..shader=ui.Gradient.linear(const ui.Offset(28,28),const ui.Offset(w-28,218),const [ui.Color(0xFF082D3A),ui.Color(0xFF087F68)]);
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,190),const ui.Radius.circular(34)),headerPaint);
+      canvas!.drawRect(const ui.Rect.fromLTWH(28,150,w-56,218),headerPaint);
+      canvas!.drawCircle(const ui.Offset(1110,75),130,ui.Paint()..color=const ui.Color(0x22FFFFFF));
+      canvas!.drawCircle(const ui.Offset(1010,180),65,ui.Paint()..color=const ui.Color(0x18FFFFFF));
+      final watermark=TextPainter(text:const TextSpan(text:'APP LOL',style:TextStyle(fontSize:74,fontWeight:FontWeight.w900,color:Color(0x087F8A90),letterSpacing:5)),textDirection:ui.TextDirection.ltr);
+      watermark.layout();watermark.paint(canvas!,Offset(w-pad-watermark.width,h-120));
       final heading=TextPainter(text:TextSpan(text:title,style:const TextStyle(fontSize:42,fontWeight:FontWeight.bold,color:Color(0xFFFFFFFF))),textDirection:ui.TextDirection.rtl,textAlign:TextAlign.right);
       heading.layout(maxWidth:w-2*pad);
       heading.paint(canvas!,Offset(pad,pad));
@@ -2457,7 +2467,8 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       final painter=TextPainter(text:TextSpan(text:line,style:const TextStyle(fontSize:27,color:Color(0xFF161616))),textDirection:ui.TextDirection.rtl,textAlign:TextAlign.right);
       painter.layout(maxWidth:w-2*pad);
       if(y+painter.height+24>h-pad) { await finishPage(); beginPage(); }
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18),const ui.Radius.circular(12)),ui.Paint()..color=const ui.Color(0xFFF0F6F3));
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18),const ui.Radius.circular(12)),ui.Paint()..color=const ui.Color(0xFFF4F8F7));
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=const ui.Color(0xFF087F68));
       painter.paint(canvas!,Offset(pad,y));
       y+=painter.height+28;
     }
