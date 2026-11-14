@@ -2322,10 +2322,10 @@ class SettingsPage extends StatelessWidget {
         try{await StoreDb.instance.importBackup();if(context.mounted)toast(context,'تم استيراد النسخة بنجاح. أعد فتح الصفحات لتحديث البيانات.');}
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     Card(child:ListTile(
-      leading:const CircleAvatar(child:Icon(Icons.system_update_alt)),
-      title:const Text('مركز تحديثات APP LOL'),
+      leading:Container(width:48,height:48,decoration:BoxDecoration(gradient:const LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[Color(0xFF092D3A),Color(0xFF087F68)]),borderRadius:BorderRadius.circular(15),boxShadow:[BoxShadow(color:const Color(0xFF087F68).withOpacity(.20),blurRadius:10,offset:const Offset(0,4))]),child:const Icon(Icons.system_update_alt_rounded,color:Colors.white,size:24)),
+      title:const Text('مركز تحديثات APP LOL',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15)),
       subtitle:const Text('تحقق من أحدث إصدار، واعرف حجم التحديث وملاحظاته قبل التنزيل.'),
-      trailing:const Icon(Icons.chevron_left),
+      trailing:Container(width:32,height:32,decoration:BoxDecoration(color:Theme.of(context).colorScheme.primaryContainer,borderRadius:BorderRadius.circular(10)),child:Icon(Icons.arrow_back_ios_new_rounded,size:14,color:Theme.of(context).colorScheme.primary)),
       onTap:()async{
         try{
           final manifest=await fetchUpdateManifest();
