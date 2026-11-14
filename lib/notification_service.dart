@@ -94,8 +94,7 @@ class AppNotificationService {
         importance: importance,
         priority: Priority.high,
         category: AndroidNotificationCategory.reminder,
-        styleInformation: const BigTextStyleInformation(''),
-        icon: '@mipmap/ic_launcher',
+                icon: '@mipmap/ic_launcher',
         playSound: true,
         enableVibration: true,
       ),
@@ -138,6 +137,7 @@ class AppNotificationService {
           await _plugin.cancel(item.id);
         }
       }
+      await prefs.setStringList('notified_low_stock_ids', []);
       return;
     }
 
@@ -156,7 +156,7 @@ class AppNotificationService {
           await _plugin.show(
             _stockId(id),
             'تنبيه مخزون منخفض',
-            '\${product['name'] ?? 'منتج'}: المتبقي $qty، وحد التنبيه $minimum.',
+            '${product['name'] ?? 'منتج'}: المتبقي $qty، وحد التنبيه $minimum.',
             _details(
               'inventory_alerts',
               'تنبيهات المخزون',
@@ -196,7 +196,7 @@ class AppNotificationService {
     }
 
     final liveIds = <int>{};
-    final days = reminderDays.clamp(1, 365);
+    final days = reminderDays.clamp(1, 365).toInt();
     final now = DateTime.now();
 
     for (final invoice in invoices) {
@@ -232,7 +232,7 @@ class AppNotificationService {
       await _plugin.zonedSchedule(
         _invoiceId(id),
         'تذكير بفاتورة غير مسددة',
-        'العميل \${invoice['customer_name'] ?? ''} • الفاتورة \${invoice['invoice_no'] ?? ''} • المتبقي \${remaining.toStringAsFixed(2)} ج.م',
+        'العميل ${invoice['customer_name'] ?? ''} • الفاتورة ${invoice['invoice_no'] ?? ''} • المتبقي ${remaining.toStringAsFixed(2)} ج.م',
         tz.TZDateTime.from(scheduleAt, tz.local),
         _details(
           'invoice_reminders',
