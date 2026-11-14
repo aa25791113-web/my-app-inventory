@@ -3,3 +3,4 @@ Final source verification passed; build the latest integrated Android release.
 Build Shorebird base release 3.9.2+43 after previous release version conflict.
 Publish final integrated Shorebird Android release 3.9.3+44 with resilient GitHub asset upload.
 Final integrated release 3.9.4+45 — owner branding, searchable invoices, announcement deep links, remote theme and public APK delivery.
+Final integrated Shorebird release 3.9.5+46 — includes detailed bulk invoice line review and reliable public release manifest publishing.
