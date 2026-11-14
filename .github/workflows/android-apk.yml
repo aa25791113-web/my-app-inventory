@@ -3,6 +3,11 @@ concurrency:
   group: android-release-v3-${{ github.ref }}
   cancel-in-progress: true
 on:
+  push:
+    branches:
+      - premium-redesign-v1
+    paths:
+      - .github/release-ready
   workflow_dispatch:
     inputs:
       release_notes:
