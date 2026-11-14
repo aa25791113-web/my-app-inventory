@@ -804,6 +804,17 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     load();
+    WidgetsBinding.instance.addPostFrameCallback((_) async {
+      if (!Platform.isAndroid) return;
+      final prefs = await SharedPreferences.getInstance();
+      if (prefs.getBool('notification_permission_prompted') ?? false) return;
+      await prefs.setBool('notification_permission_prompted', true);
+      final granted = await AppNotificationService.instance.requestPermission();
+      if (granted) {
+        await prefs.setBool('notifications_enabled', true);
+        await syncLocalNotifications(forceInvoiceReschedule: true);
+      }
+    });
     _connectivitySubscription=Connectivity().onConnectivityChanged.listen((states){
       if(states.any((state)=>state!=ConnectivityResult.none)){
         unawaited(checkForOnlineUpdateNotification());
@@ -2151,8 +2162,8 @@ class SettingsPage extends StatelessWidget {
         catch(e){if(context.mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}})),
     Card(child:ListTile(
       leading:const CircleAvatar(child:Icon(Icons.system_update_alt)),
-      title:const Text('تحديث البرنامج عبر الإنترنت'),
-      subtitle:const Text('البحث عن تحديثات صغيرة وتنزيلها داخل التطبيق دون ملف APK عندما يكون التحديث متوافقاً.'),
+      title:const Text('مركز تحديثات APP LOL'),
+      subtitle:const Text('تحقق من أحدث إصدار، واعرف حجم التحديث وملاحظاته قبل التنزيل.'),
       trailing:const Icon(Icons.chevron_left),
       onTap:()async{
         try{
@@ -2223,7 +2234,7 @@ class SettingsPage extends StatelessWidget {
     )),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('MY APP — إصدار 3.8.0'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 3.8.0'),
       subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
@@ -2322,13 +2333,13 @@ class _ShortagesPageState extends State<ShortagesPage>{
   return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
    Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(22)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
     const Row(children:[Icon(Icons.warning_amber_rounded,color:Colors.white,size:28),SizedBox(width:8),Text('كشف النواقص',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w900))]),
-    const SizedBox(height:8),Text('المنتجات التي وصلت إلى حد التنبيه أو أقل، مجمعة حسب المورد',style:TextStyle(color:Colors.white.withOpacity(.9))),
+    const SizedBox(height:8),Text('كل منتج تم بيعه أو وصل إلى حد التنبيه يظهر هنا، مجمّعاً حسب المورد',style:TextStyle(color:Colors.white.withOpacity(.9))),
     const SizedBox(height:12),Text('عدد المنتجات الناقصة: ${rows.length}',style:const TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.bold))
    ])),
    const SizedBox(height:10),
    if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
-   if(!loading&&rows.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.inventory_2_outlined,size:42),SizedBox(height:8),Text('لا توجد نواقص حالياً',style:TextStyle(fontWeight:FontWeight.bold)),Text('تظهر هنا المنتجات التي وصل رصيدها إلى حد التنبيه أو أقل، سواء تم بيعها أم لا.')]))),
-   ...groups.entries.map((g){final sold=g.value.fold<int>(0,(v,e)=>v+(e['sold_qty'] as int));return Card(clipBehavior:Clip.antiAlias,child:ExpansionTile(leading:CircleAvatar(child:Icon(g.key=='بدون مورد'?Icons.help_outline:Icons.local_shipping_outlined)),title:Text(g.key,style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${g.value.length} منتج ناقص • إجمالي المباع: $sold'),children:g.value.map((e){final qty=e['qty'] as int,min=e['min_qty'] as int,soldQty=e['sold_qty'] as int;return ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('مباع: $soldQty • المتبقي: $qty ${e['unit']} • حد التنبيه: $min\nالمطلوب للوصول لحد التنبيه: ${math.max(min-qty,0)}'),isThreeLine:true,trailing:Text('كود ${e['sku']}',style:Theme.of(context).textTheme.labelSmall));}).toList()));})
+   if(!loading&&rows.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.inventory_2_outlined,size:42),SizedBox(height:8),Text('لا توجد نواقص حالياً',style:TextStyle(fontWeight:FontWeight.bold)),Text('تظهر هنا المنتجات التي عليها حركة بيع أو وصلت إلى حد التنبيه، حتى لو ما زال رصيدها أعلى من الحد الأدنى.')]))),
+   ...groups.entries.map((g){final sold=g.value.fold<int>(0,(v,e)=>v+(e['sold_qty'] as int));return Card(clipBehavior:Clip.antiAlias,child:ExpansionTile(leading:CircleAvatar(child:Icon(g.key=='بدون مورد'?Icons.help_outline:Icons.local_shipping_outlined)),title:Text(g.key,style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${g.value.length} منتج ناقص • إجمالي المباع: $sold'),children:g.value.map((e){final qty=e['qty'] as int,min=e['min_qty'] as int,soldQty=e['sold_qty'] as int;return ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('مباع: $soldQty • المتبقي: $qty ${e['unit']} • حد التنبيه: $min\nكمية مقترحة للطلب: ${e['suggested_qty']??math.max(soldQty,min-qty)}'),isThreeLine:true,trailing:Text('كود ${e['sku']}',style:Theme.of(context).textTheme.labelSmall));}).toList()));})
   ]));
  }
 }
