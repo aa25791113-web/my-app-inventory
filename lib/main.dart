@@ -1721,6 +1721,175 @@ class _PartyLedgerPageState extends State<PartyLedgerPage> {
   }
 }
 
+class NotificationSettingsCard extends StatefulWidget {
+  const NotificationSettingsCard({super.key});
+  @override State<NotificationSettingsCard> createState()=>_NotificationSettingsCardState();
+}
+class _NotificationSettingsCardState extends State<NotificationSettingsCard>{
+  bool permissionGranted=false,enabled=false,stock=true,invoices=true,updates=true,loading=true;
+  int reminderDays=7;
+  @override void initState(){super.initState();load();}
+  Future<void> load()async{
+    final prefs=await SharedPreferences.getInstance();
+    final permission=await AppNotificationService.instance.hasPermission();
+    if(!mounted)return;
+    setState((){
+      permissionGranted=permission;
+      enabled=prefs.getBool('notifications_enabled')??false;
+      stock=prefs.getBool('stock_alerts')??true;
+      invoices=prefs.getBool('invoice_alerts')??true;
+      updates=prefs.getBool('update_alerts')??true;
+      reminderDays=prefs.getInt('invoice_reminder_days')??7;
+      loading=false;
+    });
+  }
+  Future<void> enableNotifications()async{
+    setState(()=>loading=true);
+    final granted=await AppNotificationService.instance.requestPermission();
+    if(!granted){
+      if(mounted){setState(()=>loading=false);toast(context,'لم يتم منح إذن الإشعارات. فعّله من إعدادات إشعارات التطبيق في الهاتف.');}
+      return;
+    }
+    final prefs=await SharedPreferences.getInstance();
+    await prefs.setBool('notifications_enabled',true);
+    if(!mounted)return;
+    setState((){
+      permissionGranted=true;
+      enabled=true;
+      loading=false;
+    });
+    await syncLocalNotifications(forceInvoiceReschedule:true);
+    await checkForOnlineUpdateNotification();
+    await AppNotificationService.instance.showTestNotification();
+  }
+  Future<void> setMaster(bool value)async{
+    if(value&&!permissionGranted){await enableNotifications();return;}
+    final prefs=await SharedPreferences.getInstance();
+    await prefs.setBool('notifications_enabled',value);
+    if(!mounted)return;
+    setState(()=>enabled=value);
+    if(value){await syncLocalNotifications(forceInvoiceReschedule:true);await checkForOnlineUpdateNotification();}
+    else{
+      await AppNotificationService.instance.syncStockAlerts(const []);
+      await AppNotificationService.instance.cancelAllInvoiceReminders();
+    }
+  }
+  Future<void> setOption(String key,bool value)async{
+    final prefs=await SharedPreferences.getInstance();await prefs.setBool(key,value);
+    if(!mounted)return;
+    setState((){
+      if(key=='stock_alerts')stock=value;
+      if(key=='invoice_alerts')invoices=value;
+      if(key=='update_alerts')updates=value;
+    });
+    await syncLocalNotifications(forceInvoiceReschedule:key=='invoice_alerts'&&value);
+    if(key=='update_alerts'&&value)await checkForOnlineUpdateNotification();
+  }
+  Future<void> setDays(int? value)async{
+    if(value==null)return;
+    final prefs=await SharedPreferences.getInstance();
+    await prefs.setInt('invoice_reminder_days',value);
+    if(!mounted)return;
+    setState(()=>reminderDays=value);
+    await syncLocalNotifications(forceInvoiceReschedule:true);
+  }
+  @override Widget build(BuildContext context){
+    final active=permissionGranted&&enabled;
+    return Card(
+      clipBehavior:Clip.antiAlias,
+      child:Column(children:[
+        Container(
+          width:double.infinity,
+          padding:const EdgeInsets.all(16),
+          decoration:BoxDecoration(
+            gradient:LinearGradient(
+              colors:[Theme.of(context).colorScheme.primaryContainer,Theme.of(context).colorScheme.surfaceContainerHighest],
+              begin:Alignment.topRight,end:Alignment.bottomLeft,
+            ),
+          ),
+          child:Row(children:[
+            CircleAvatar(backgroundColor:Theme.of(context).colorScheme.primary,foregroundColor:Theme.of(context).colorScheme.onPrimary,child:const Icon(Icons.notifications_active_outlined)),
+            const SizedBox(width:12),
+            const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text('إشعارات الهاتف',style:TextStyle(fontSize:17,fontWeight:FontWeight.w900)),
+              SizedBox(height:3),
+              Text('تنبيهات تظهر خارج البرنامج، حتى عندما تكون لا تستخدمه',style:TextStyle(fontSize:12)),
+            ])),
+            if(active)const Icon(Icons.verified_rounded,color:Colors.green),
+          ]),
+        ),
+        if(!permissionGranted)
+          Padding(
+            padding:const EdgeInsets.fromLTRB(14,14,14,4),
+            child:Container(
+              padding:const EdgeInsets.all(12),
+              decoration:BoxDecoration(color:Theme.of(context).colorScheme.errorContainer,borderRadius:BorderRadius.circular(14)),
+              child:Row(children:[
+                const Icon(Icons.info_outline),
+                const SizedBox(width:8),
+                const Expanded(child:Text('اسمح للتطبيق بإرسال الإشعارات من الهاتف حتى تصلك التنبيهات.',style:TextStyle(fontSize:12))),
+                const SizedBox(width:8),
+                FilledButton(
+                  onPressed:loading?null:enableNotifications,
+                  child:loading?const SizedBox(width:16,height:16,child:CircularProgressIndicator(strokeWidth:2)):const Text('تفعيل'),
+                ),
+              ]),
+            ),
+          ),
+        SwitchListTile(
+          secondary:const Icon(Icons.notifications_active_outlined),
+          title:const Text('تشغيل إشعارات الهاتف'),
+          subtitle:Text(permissionGranted?'تشغيل أو إيقاف جميع التنبيهات':'يحتاج إلى إذن الإشعارات أولاً'),
+          value:enabled&&permissionGranted,
+          onChanged:loading?null:setMaster,
+        ),
+        const Divider(height:1),
+        SwitchListTile(
+          secondary:const Icon(Icons.inventory_2_outlined),
+          title:const Text('تنبيه انخفاض المخزون'),
+          subtitle:const Text('يظهر فور وصول رصيد المنتج إلى الحد الأدنى أو أقل، ويعمل دون إنترنت'),
+          value:stock,
+          onChanged:active?(v)=>setOption('stock_alerts',v):null,
+        ),
+        SwitchListTile(
+          secondary:const Icon(Icons.receipt_long_outlined),
+          title:const Text('تذكير الفواتير المتأخرة'),
+          subtitle:Text('تذكير محلي بعد مرور $reminderDays يوم على الفاتورة إذا بقي مبلغ مستحق'),
+          value:invoices,
+          onChanged:active?(v)=>setOption('invoice_alerts',v):null,
+        ),
+        if(active&&invoices)
+          Padding(
+            padding:const EdgeInsets.fromLTRB(16,0,16,12),
+            child:DropdownButtonFormField<int>(
+              value:reminderDays,
+              decoration:const InputDecoration(labelText:'التذكير بعد مرور',prefixIcon:Icon(Icons.schedule_rounded)),
+              items:const [1,3,5,7,10,14,21,30].map((d)=>DropdownMenuItem(value:d,child:Text('$d \${d==1?'يوم':'أيام'}'))).toList(),
+              onChanged:setDays,
+            ),
+          ),
+        SwitchListTile(
+          secondary:const Icon(Icons.system_update_alt),
+          title:const Text('إشعار توفر تحديث جديد'),
+          subtitle:const Text('يتحقق عند توفر الإنترنت أثناء تشغيل التطبيق أو عند فتحه'),
+          value:updates,
+          onChanged:active?(v)=>setOption('update_alerts',v):null,
+        ),
+        Padding(
+          padding:const EdgeInsets.fromLTRB(14,0,14,14),
+          child:Row(children:[
+            Expanded(child:OutlinedButton.icon(
+              onPressed:active?()=>AppNotificationService.instance.showTestNotification():null,
+              icon:const Icon(Icons.notifications_none),
+              label:const Text('تجربة إشعار'),
+            )),
+          ]),
+        ),
+      ]),
+    );
+  }
+}
+
 class SettingsPage extends StatelessWidget {
   const SettingsPage({super.key,required this.dark,required this.toggle,required this.seedColor,required this.changeSeed,required this.appName,required this.changeAppName,required this.logoPath,required this.changeLogo,required this.backgroundPath,required this.changeBackground,required this.clearBackground});final bool dark;final VoidCallback toggle;final Color seedColor;final ValueChanged<int> changeSeed;final String appName;final ValueChanged<String> changeAppName;final String? logoPath;final VoidCallback changeLogo;final String? backgroundPath;final VoidCallback changeBackground,clearBackground;
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
@@ -1733,6 +1902,7 @@ class SettingsPage extends StatelessWidget {
       const Text('اسم وأيقونة المشغّل الخارجيان ثابتان في ملف التثبيت؛ تغييرهما يتطلب بناء نسخة جديدة.',style:TextStyle(fontSize:11,color:Colors.grey)),
       ListTile(contentPadding:EdgeInsets.zero,leading:const Icon(Icons.image_outlined),title:const Text('تغيير الشعار داخل البرنامج'),subtitle:Text(logoPath==null?'لم يتم اختيار شعار بعد':'تم حفظ شعار مخصص على هذا الجهاز'),onTap:changeLogo)
     ]))),
+    const NotificationSettingsCard(),
     Card(child:Column(children:[ListTile(leading:const Icon(Icons.wallpaper_outlined),title:const Text('تغيير خلفية البرنامج'),subtitle:Text(backgroundPath==null?'لم يتم اختيار خلفية':'تم حفظ خلفية مخصصة على هذا الجهاز'),onTap:changeBackground),if(backgroundPath!=null) Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:clearBackground,icon:const Icon(Icons.delete_outline),label:const Text('إزالة الخلفية')))])),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
     Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
