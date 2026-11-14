@@ -1152,7 +1152,8 @@ class _DashboardState extends State<Dashboard> {
       const SizedBox(height:16),Wrap(spacing:8,runSpacing:8,children:[
         FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white,foregroundColor:Theme.of(context).colorScheme.primary),onPressed:()=>widget.go(1),icon:const Icon(Icons.add_box),label:const Text('إضافة / المنتجات')),
         FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(2),icon:const Icon(Icons.point_of_sale),label:const Text('تسجيل بيع')),
-        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(13),icon:const Icon(Icons.support_agent),label:const Text('المساعد')),\n        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(19),icon:const Icon(Icons.warning_amber_rounded),label:const Text('النواقص'))
+        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(13),icon:const Icon(Icons.support_agent),label:const Text('المساعد')),
+        FilledButton.tonalIcon(style:FilledButton.styleFrom(backgroundColor:Colors.white.withOpacity(.16),foregroundColor:Colors.white),onPressed:()=>widget.go(19),icon:const Icon(Icons.warning_amber_rounded),label:const Text('النواقص'))
       ])
     ])),
     Row(children:[stat('عدد المنتجات',(data['count']??0).toString(),Icons.inventory_2),stat('إجمالي الوحدات',(data['qty']??0).toString(),Icons.numbers)]),
