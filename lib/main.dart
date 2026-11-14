@@ -61,7 +61,7 @@ void updateBackgroundDispatcher() {
       } finally {
         client.close(force: true);
       }
-      if (manifest == null) return true;
+      if (manifest == null || manifest['track'] != 'stable') return true;
 
       final packageInfo = await PackageInfo.fromPlatform();
       final installedVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
@@ -747,7 +747,7 @@ Future<void> checkForOnlineUpdateNotification() async {
     if(!(prefs.getBool('notifications_enabled')??false)||
        !(prefs.getBool('update_alerts')??true))return;
     final manifest=await fetchUpdateManifest();
-    if(manifest==null)return;
+    if(manifest==null||manifest['track']!='stable')return;
     final packageInfo=await PackageInfo.fromPlatform();
     final installedVersion='${packageInfo.version}+${packageInfo.buildNumber}';
     final remoteVersion=(manifest['release_version']??'').toString();
@@ -2062,7 +2062,7 @@ class SettingsPage extends StatelessWidget {
       onTap:()async{
         try{
           final manifest=await fetchUpdateManifest();
-          if(manifest!=null){
+          if(manifest!=null&&manifest['track']=='stable'){
             final packageInfo=await PackageInfo.fromPlatform();
             final installedVersion='${packageInfo.version}+${packageInfo.buildNumber}';
             final remoteVersion=(manifest['release_version']??'').toString();
