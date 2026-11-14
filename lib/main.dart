@@ -874,7 +874,7 @@ class HomePage extends StatefulWidget {
   @override State<HomePage> createState()=>_HomePageState();
 }
 class _HomePageState extends State<HomePage> {
-  int tab=10, refreshId=0;
+  int tab=10, refreshId=0; bool assistantCreateInvoice=false;
   void refresh(){setState(()=>refreshId++);unawaited(syncLocalNotifications());}
   @override Widget build(BuildContext context) {
     final pages=[
@@ -892,7 +892,7 @@ class _HomePageState extends State<HomePage> {
       CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
       PremiumAssistantPage(onNavigate:(page)=>setState(()=>tab=page)),
-      InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh),
+      InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh,startNewInvoice:assistantCreateInvoice,onStartNewInvoiceHandled:()=>assistantCreateInvoice=false),
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       const ScientificCalculatorPage(),
       WarehouseStockPage(key:ValueKey('whstock'+refreshId.toString()),changed:refresh),
@@ -1400,13 +1400,24 @@ class _DashboardState extends State<Dashboard> {
 }
 
 class InvoicePage extends StatefulWidget {
-  const InvoicePage({super.key,required this.changed,this.pendingOnly=false});
-  final VoidCallback changed; final bool pendingOnly;
+  const InvoicePage({super.key,required this.changed,this.pendingOnly=false,this.startNewInvoice=false,this.onStartNewInvoiceHandled});
+  final VoidCallback changed;
+  final bool pendingOnly,startNewInvoice;
+  final VoidCallback? onStartNewInvoiceHandled;
   @override State<InvoicePage> createState()=>_InvoicePageState();
 }
 class _InvoicePageState extends State<InvoicePage>{
   List<Map<String,Object?>> rows=[];
-  @override void initState(){super.initState();load();}
+  @override void initState(){
+    super.initState();load();
+    if(widget.startNewInvoice){
+      WidgetsBinding.instance.addPostFrameCallback((_)async{
+        if(!mounted)return;
+        widget.onStartNewInvoiceHandled?.call();
+        await create();
+      });
+    }
+  }
   Future<void> load()async{final r=await StoreDb.instance.invoices(pendingOnly:widget.pendingOnly);if(mounted)setState(()=>rows=r);}
   Future<void> create()async{final products=await StoreDb.instance.products();final customers=await StoreDb.instance.parties('customers');final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;if(products.isEmpty){toast(context,'أضف منتجات أولاً.');return;}final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:customers,suppliers:suppliers));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
    Future<void> append(Map<String,Object?> invoice)async{final products=await StoreDb.instance.products();final suppliers=await StoreDb.instance.parties('suppliers');if(!mounted)return;final result=await showDialog<bool>(context:context,builder:(_)=>InvoiceEditor(products:products,customers:const [],suppliers:suppliers,invoice:invoice));if(result==true){await load();await syncLocalNotifications();widget.changed();}}
