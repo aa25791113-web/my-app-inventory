@@ -7,8 +7,14 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
       - uses: subosito/flutter-action@v2
         with:
           channel: stable
@@ -58,14 +64,18 @@ jobs:
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           source = manifest.read_text()
-          permission = '<uses-permission android:name="android.permission.CAMERA" />'
-          if permission not in source:
-              import re
-              source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
-              if count != 1:
-                  raise SystemExit("Could not insert camera permission into manifest")
-              manifest.write_text(source)
-          print("Verified Android camera permission in manifest")
+          permissions = [
+              '<uses-permission android:name="android.permission.CAMERA" />',
+              '<uses-permission android:name="android.permission.INTERNET" />',
+          ]
+          for permission in permissions:
+              if permission not in source:
+                  import re
+                  source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not insert Android permission: " + permission)
+          manifest.write_text(source)
+          print("Verified Android camera and internet permissions in manifest")
           PY
       - run: flutter pub get
       - name: Align Android plugin compile SDK versions
@@ -95,10 +105,16 @@ jobs:
           PY
       - run: dart run flutter_launcher_icons
       - run: flutter analyze --no-fatal-infos
-      - run: flutter build apk --release --split-per-abi
+      - name: Publish Shorebird-enabled Android release APK
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
+          fi
+          shorebird release android --artifact apk --target-platform android-arm64
       - uses: actions/upload-artifact@v4
         with:
-          name: my-app-android-apk
+          name: my-app-shorebird-android-apk-arm64
           path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 14
