@@ -274,6 +274,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       - name: Commit release metadata
+        continue-on-error: true
         shell: bash
         run: |
           git config user.name "github-actions[bot]"
