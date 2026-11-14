@@ -188,7 +188,7 @@ jobs:
           from datetime import datetime, timezone
           from pathlib import Path
           pubspec = Path("pubspec.yaml").read_text()
-          match = re.search(r"(?m)^version:\\s*([^\\s]+)", pubspec)
+          match = re.search(r"(?m)^version:\s*([^\s]+)", pubspec)
           if not match:
               raise SystemExit("Could not read version from pubspec.yaml")
           version = match.group(1)
@@ -211,7 +211,7 @@ jobs:
               "notes": os.environ.get("RELEASE_NOTES", "").strip() or "إصدار جديد يتضمن تحسينات وإصلاحات.",
               "published_at": datetime.now(timezone.utc).isoformat()
           }
-          Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\\n")
+          Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
           PY
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
