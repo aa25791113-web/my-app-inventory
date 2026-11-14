@@ -5,3 +5,5 @@ Retry final release after adding a bounded Shorebird initialization and standard
 
 Run isolated resilient APK workflow.
 Retry final Android APK after fixing the Shorebird fallback guard.
+
+Retry APK build with archive 4.0.8 compatibility pin; do not cancel an active release.
