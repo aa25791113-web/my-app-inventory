@@ -970,7 +970,49 @@ class HomePage extends StatefulWidget {
 }
 class _HomePageState extends State<HomePage> {
   int tab=10, refreshId=0; bool assistantCreateInvoice=false; int? notificationInvoiceId; StreamSubscription<String?>? _notificationTapSubscription;
-  @override void initState(){super.initState();_notificationTapSubscription=AppNotificationService.instance.taps.listen((payload){if(!mounted)return;setState((){if(payload!=null&&payload.startsWith('invoice:')){notificationInvoiceId=int.tryParse(payload.substring(8));tab=14;refreshId++;}else if(payload!=null&&payload.startsWith('stock:')){tab=1;refreshId++;}else if(payload=='app_update'){tab=9;}else if(payload!=null&&payload.startsWith('admin_announcement:')){tab=9;refreshId++;}else{tab=0;}});});}
+  @override void initState(){
+    super.initState();
+    _notificationTapSubscription=AppNotificationService.instance.taps.listen(_handleNotificationPayload);
+    WidgetsBinding.instance.addPostFrameCallback((_){
+      final payload=AppNotificationService.instance.takeLaunchPayload();
+      if(payload!=null)_handleNotificationPayload(payload);
+    });
+  }
+  void _handleNotificationPayload(String? payload){
+    if(!mounted)return;
+    setState((){
+      if(payload!=null&&payload.startsWith('invoice:')){notificationInvoiceId=int.tryParse(payload.substring(8));tab=14;refreshId++;}
+      else if(payload!=null&&payload.startsWith('stock:')){tab=1;refreshId++;}
+      else if(payload=='app_update'){tab=9;}
+      else if(payload!=null&&payload.startsWith('admin_announcement:')){tab=9;refreshId++;unawaited(_showAdminAnnouncement(payload.substring('admin_announcement:'.length)));}
+      else{tab=0;}
+    });
+  }
+  Future<void> _showAdminAnnouncement(String id) async {
+    final client=HttpClient();
+    try{
+      final uri=Uri.parse('$_adminSupabaseUrl/rest/v1/admin_announcements').replace(queryParameters:{'id':'eq.$id','select':'title,body,action_url','limit':'1'});
+      final request=await client.getUrl(uri).timeout(const Duration(seconds:7));
+      request.headers.set('apikey',_adminSupabaseKey);
+      request.headers.set(HttpHeaders.authorizationHeader,'Bearer $_adminSupabaseKey');
+      request.headers.set(HttpHeaders.acceptHeader,'application/json');
+      final response=await request.close().timeout(const Duration(seconds:7));
+      if(response.statusCode!=HttpStatus.ok)return;
+      final decoded=jsonDecode(await response.transform(utf8.decoder).join());
+      if(decoded is! List||decoded.isEmpty||decoded.first is! Map)return;
+      final item=Map<String,dynamic>.from(decoded.first as Map);
+      if(!mounted)return;
+      final action=(item['action_url']??'').toString().trim();
+      await showDialog<void>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
+        title:Text((item['title']??'إعلان من APP LOL').toString()),
+        content:SingleChildScrollView(child:Text((item['body']??'').toString())),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق')),
+          if(action.startsWith('https://')||action.startsWith('http://'))FilledButton(onPressed:(){Navigator.pop(ctx);final uri=Uri.tryParse(action);if(uri!=null)launchUrl(uri,mode:LaunchMode.externalApplication);},child:const Text('فتح الرابط')),
+        ],
+      )));
+    }catch(_){}finally{client.close(force:true);}
+  }
   @override void dispose(){_notificationTapSubscription?.cancel();super.dispose();}
   void refresh(){setState(()=>refreshId++);unawaited(syncLocalNotifications());}
   @override Widget build(BuildContext context) {
