@@ -1,5 +1,5 @@
 name: my_app_inventory
-description: Offline-first Arabic inventory manager for Android and Windows.
+description: APP LOL — Arabic offline inventory, sales and invoice manager.
 publish_to: "none"
 version: 3.8.0+40
 
@@ -47,7 +47,7 @@ flutter_launcher_icons:
   android: true
   ios: false
   image_path: assets/launcher_icon.png
-  adaptive_icon_background: '#087F68'
+  adaptive_icon_background: '#062B3B'
   adaptive_icon_foreground: assets/launcher_icon.png
   min_sdk_android: 21
   windows:
