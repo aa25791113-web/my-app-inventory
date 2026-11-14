@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -14,8 +15,87 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   List<Map<String,dynamic>> chats=[];
   int active=-1;
   bool busy=false;
+  bool onlineConfigured=false;
   static const storeKey='assistant_chats_v2';
-  @override void initState(){super.initState();load();}
+  static const apiKeyStore='assistant_gemini_api_key';
+  static const modelName='gemini-3.5-flash-lite';
+
+  Future<void> _loadAiConfig() async {
+    final prefs=await SharedPreferences.getInstance();
+    onlineConfigured=(prefs.getString(apiKeyStore)??'').trim().isNotEmpty;
+    if(mounted)setState((){});
+  }
+
+  Future<void> _showAiSettings() async {
+    final prefs=await SharedPreferences.getInstance();
+    final controller=TextEditingController(text:prefs.getString(apiKeyStore)??'');
+    final result=await showDialog<String?>(context:context,builder:(ctx)=>AlertDialog(
+      title:const Text('إعداد الذكاء الاصطناعي'),
+      content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+        const Text('بدون مفتاح: المساعد المحلي يظل متاحاً. مع مفتاح Gemini: يقدر يجاوب عن الأسئلة العامة بالمصري ويكمل سياق المحادثة عند اتصال الإنترنت.'),
+        const SizedBox(height:12),
+        const SelectableText('احصل على مفتاح من Google AI Studio: aistudio.google.com/apikey'),
+        const SizedBox(height:12),
+        TextField(controller:controller,obscureText:true,autocorrect:false,enableSuggestions:false,decoration:const InputDecoration(labelText:'مفتاح Gemini API',hintText:'الصق المفتاح هنا',prefixIcon:Icon(Icons.key))),
+        const SizedBox(height:8),
+        const Text('المفتاح يُحفظ على هذا الجهاز فقط. لا تشاركه مع أحد. استخدام الخدمة قد يخضع لحدود مجانية أو رسوم حسب حساب مزود الخدمة.',style:TextStyle(fontSize:11,color:Colors.grey)),
+      ])),
+      actions:[
+        TextButton(onPressed:()=>Navigator.pop(ctx,null),child:const Text('إلغاء')),
+        TextButton(onPressed:()=>Navigator.pop(ctx,''),child:const Text('مسح المفتاح')),
+        FilledButton(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),child:const Text('حفظ')),
+      ],
+    ));
+    controller.dispose();
+    if(result==null)return;
+    if(result.isEmpty)await prefs.remove(apiKeyStore);else await prefs.setString(apiKeyStore,result);
+    onlineConfigured=result.isNotEmpty;
+    if(mounted)setState((){});
+  }
+
+  Future<String?> _onlineAnswer(String question) async {
+    final prefs=await SharedPreferences.getInstance();
+    final key=(prefs.getString(apiKeyStore)??'').trim();
+    if(key.isEmpty)return null;
+    final recent=msgs.take(msgs.length).toList();
+    final contents=<Map<String,dynamic>>[];
+    for(final m in recent){
+      final role=m['role']=='assistant'?'model':'user';
+      final text=(m['text']??'').toString().trim();
+      if(text.isNotEmpty)contents.add({'role':role,'parts':[{'text':text}]});
+    }
+    contents.add({'role':'user','parts':[{'text':question}]});
+    final payload={
+      'systemInstruction':{'parts':[{'text':'أنت مساعد APP LOL الذكي. تحدث باللهجة المصرية الواضحة والمهذبة. أجب عن أي سؤال عام تعرفه، واشرح ببساطة وبأمثلة. أنت مساعد لتطبيق إدارة مخزون وفواتير ومبيعات ومشتريات وموردين وعملاء وتقارير. اشرح للمستخدم خطوات استخدام التطبيق بدقة. لا تدّعِ أنك نفذت عملية داخل التطبيق إلا إذا نفذها التطبيق فعلاً؛ تنفيذ التنقل والفتح يتم بواسطة التطبيق وليس النموذج. لا تخترع أرقام مخزون أو فواتير أو بيانات غير موجودة. إذا طلب المستخدم إجراءً داخل التطبيق، وضح الخطوات أو اطلب منه استخدام زر الإجراء المناسب. اجعل الرد عملياً ومنظماً.'}]},
+      'contents':contents,
+      'generationConfig':{'temperature':0.65,'maxOutputTokens':1200},
+    };
+    final client=HttpClient()..connectionTimeout=const Duration(seconds:12);
+    try{
+      final request=await client.postUrl(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent')).timeout(const Duration(seconds:15));
+      request.headers.set(HttpHeaders.contentTypeHeader,'application/json; charset=utf-8');
+      request.headers.set('x-goog-api-key',key);
+      request.add(utf8.encode(jsonEncode(payload)));
+      final response=await request.close().timeout(const Duration(seconds:35));
+      final body=await response.transform(utf8.decoder).join();
+      if(response.statusCode<200||response.statusCode>=300){
+        String reason='حصلت مشكلة في الاتصال بخدمة الذكاء الاصطناعي.';
+        try{final e=jsonDecode(body);reason=(e['error']?['message']??reason).toString();}catch(_){}
+        if(response.statusCode==429)return 'وصلنا للحد المؤقت للطلبات المجانية. استنى شوية وجرب تاني.';
+        if(response.statusCode==400||response.statusCode==403)return 'مفتاح Gemini غير صالح أو غير مفعّل لهذا النموذج. راجع المفتاح من إعدادات المساعد. ($reason)';
+        return '$reason (HTTP ${response.statusCode})';
+      }
+      final data=jsonDecode(body) as Map<String,dynamic>;
+      final candidates=data['candidates'] as List? ?? [];
+      if(candidates.isEmpty)return 'الخدمة لم ترجع إجابة حالياً. جرّب صياغة السؤال بشكل مختلف.';
+      final parts=candidates.first['content']?['parts'] as List? ?? [];
+      final answer=parts.map((p)=>(p['text']??'').toString()).where((s)=>s.isNotEmpty).join('\n').trim();
+      return answer.isEmpty?null:answer;
+    }catch(e){
+      return 'مش قادر أوصل لخدمة الذكاء الاصطناعي حالياً. اتأكد من الإنترنت، وهكمل معاك بالمساعد المحلي لحد ما الاتصال يرجع.';
+    }finally{client.close(force:true);}
+  }
+  @override void initState(){super.initState();load();_loadAiConfig();}
   @override void dispose(){input.dispose();scroll.dispose();super.dispose();}
   Future<void> load()async{
     final p=await SharedPreferences.getInstance();
@@ -105,10 +185,18 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     await Future<void>.delayed(const Duration(milliseconds:180));
     if(!mounted)return;
     final route=_route(q);
-    final createInvoice=route==14&&RegExp(r'(اعمل|اعمللي|انشئ|إنشاء|جديدة)').hasMatch(q);
+    final actionIntent=RegExp(r'(افتح|روح|اذهب|اعرض|وريني|اعمل|اعملي|اعمللي|انشئ|إنشاء|أنشئ|سجل|ضيف|أضف|ادخل|ابدأ)').hasMatch(q);
+    final actionRoute=actionIntent?route:null;
+    final createInvoice=actionRoute==14&&RegExp(r'(اعمل|اعمللي|انشئ|إنشاء|جديدة)').hasMatch(q);
     if(createInvoice&&widget.onCreateInvoice!=null){widget.onCreateInvoice!.call();}
-    else if(route!=null){widget.onNavigate?.call(route);}
-    final response=createInvoice?'تمام، فتحت لك نموذج فاتورة جديدة مباشرة. اكتب بيانات العميل، وأضف الأصناف والكميات والأسعار، وبعدها احفظ الفاتورة.':route==14?'فتحت لك صفحة الفواتير. اختار الفاتورة اللي عايز تراجعها أو اضغط «فاتورة جديدة».':route==19?'فتحت لك كشف النواقص. هتلاقي الأصناف متقسمة حسب المورد، ومع كل صنف الكمية المباعة والمتبقية والمقترح طلبه.':route==8?'فتحت لك صفحة التقارير. اختار التقرير اللي محتاجه وحدد الفترة المناسبة.':route==9?'فتحت لك الإعدادات. اختار الجزء اللي عايز تعدّله.':route==1?'فتحت لك المنتجات. استخدم زر الإضافة أو ابحث عن الصنف المطلوب.':route==4?'فتحت لك صفحة الموردين.':route==5?'فتحت لك صفحة العملاء.':route==2?'فتحت لك صفحة المبيعات.':route==3?'فتحت لك صفحة المشتريات.':route==16?'فتحت لك الآلة العلمية.':route==10?'فتحت لك بحث الأسعار.':_answer(q);
+    else if(actionRoute!=null){widget.onNavigate?.call(actionRoute);}
+    String response;
+    if(createInvoice){response='تمام، فتحت لك نموذج فاتورة جديدة مباشرة. اكتب بيانات العميل، وأضف الأصناف والكميات والأسعار، وبعدها احفظ الفاتورة.';}
+    else if(actionRoute!=null){
+      response=actionRoute==14?'فتحت لك صفحة الفواتير. اختار الفاتورة اللي عايز تراجعها أو اضغط «فاتورة جديدة».':actionRoute==19?'فتحت لك كشف النواقص.':actionRoute==8?'فتحت لك صفحة التقارير.':actionRoute==9?'فتحت لك الإعدادات.':actionRoute==1?'فتحت لك المنتجات.':actionRoute==4?'فتحت لك صفحة الموردين.':actionRoute==5?'فتحت لك صفحة العملاء.':actionRoute==2?'فتحت لك صفحة المبيعات.':actionRoute==3?'فتحت لك صفحة المشتريات.':actionRoute==16?'فتحت لك الآلة العلمية.':'فتحت لك الصفحة المطلوبة.';
+    }else{
+      response=await _onlineAnswer(q)??_answer(q);
+    }
     setState((){
       chats[active]['messages']=[...(chats[active]['messages'] as List),{'role':'assistant','text':response}];
       chats[active]['updated']=DateTime.now().toIso8601String();
@@ -130,8 +218,9 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     final chat=Column(children:[
       Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(20)),child:const Row(children:[
         Icon(Icons.auto_awesome,color:Colors.white,size:28),SizedBox(width:12),
-        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('مساعد APP LOL',style:TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w900)),Text('مساعد محلي للبرنامج والأسئلة الشائعة',style:TextStyle(color:Colors.white70,fontSize:12))])),
-        Text('OFFLINE',style:TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.bold)),
+        Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('مساعد APP LOL',style:TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w900)),Text('اسأل عن أي موضوع أو اطلب مساعدة داخل البرنامج',style:TextStyle(color:Colors.white70,fontSize:12))])),
+        IconButton(onPressed:_showAiSettings,tooltip:'إعداد الذكاء الاصطناعي',icon:const Icon(Icons.tune,color:Colors.white)),
+        Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:5),decoration:BoxDecoration(color:onlineConfigured?Colors.green.withOpacity(.22):Colors.white.withOpacity(.16),borderRadius:BorderRadius.circular(20)),child:Text(onlineConfigured?'AI ON':'LOCAL',style:const TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.bold))),
       ])),
       const SizedBox(height:10),
       Expanded(child:msgs.isEmpty?Center(child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
@@ -159,7 +248,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
         const SizedBox(width:4),
         IconButton.filled(onPressed:busy?null:()=>send(),tooltip:'إرسال',icon:const Icon(Icons.arrow_upward)),
       ]),
-      const Padding(padding:EdgeInsets.only(top:6),child:Text('يعمل محلياً دون إنترنت؛ لا يدّعي معرفة كل موضوع ولا ينفّذ إجراءات مالية تلقائياً.',style:TextStyle(fontSize:10,color:Colors.grey))),
+      Padding(padding:const EdgeInsets.only(top:6),child:Text(onlineConfigured?'الذكاء الاصطناعي متصل عند توفر الإنترنت؛ المساعد المحلي يعمل عند انقطاعه.':'المساعد المحلي يعمل دون إنترنت. اضغط الإعدادات لربط خدمة الذكاء الاصطناعي.',style:const TextStyle(fontSize:10,color:Colors.grey))),
     ]);
     return Directionality(textDirection:TextDirection.rtl,child:wide?Row(children:[history(),const VerticalDivider(width:1),Expanded(child:Padding(padding:const EdgeInsets.all(14),child:chat))]):Padding(padding:const EdgeInsets.all(12),child:chat));
   }
