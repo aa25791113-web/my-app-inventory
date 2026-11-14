@@ -105,7 +105,7 @@ class AppNotificationService {
     if (!Platform.isAndroid || !await hasPermission()) return;
     await _plugin.show(
       _testNotificationId,
-      'تم تفعيل إشعارات MY APP',
+      'تم تفعيل إشعارات APP LOL',
       'الإشعارات تعمل بشكل صحيح. ستصلك تنبيهات المخزون والفواتير والتحديثات حسب الإعدادات.',
       _details('app_updates', 'تحديثات البرنامج', 'إشعار تجريبي'),
     );
