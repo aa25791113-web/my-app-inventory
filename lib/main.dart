@@ -1654,8 +1654,9 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
   Future<void> save()async{
     if(saving)return;if(items.isEmpty){toast(context,'أضف صنفاً واحداً على الأقل قبل حفظ الفاتورة.');return;}
     for(final item in items){final product=widget.products.where((p)=>p['id']==item['product_id']).toList();final qty=item['qty'] as int? ?? 0;
+      if(product.isEmpty){toast(context,'اختر صنفًا من نتائج البحث لكل سطر قبل حفظ الفاتورة.');return;}
       if(qty<=0){toast(context,'راجع كميات الأصناف؛ يجب أن تكون أكبر من صفر.');return;}
-      if(product.isEmpty||qty>(product.first['qty'] as int? ?? 0)){toast(context,'الكمية المطلوبة من ${item['product_name']} أكبر من المخزون المتاح.');return;}
+      if(qty>(product.first['qty'] as int? ?? 0)){toast(context,'الكمية المطلوبة من ${item['product_name']} أكبر من المخزون المتاح.');return;}
     }
     if(widget.invoice==null&&(paidValue<0||paidValue>total)){toast(context,'راجع المبلغ المدفوع؛ لا يمكن أن يتجاوز إجمالي الفاتورة.');return;}
     setState(()=>saving=true);
