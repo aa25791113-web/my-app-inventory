@@ -15,7 +15,9 @@ class AppNotificationService {
       FlutterLocalNotificationsPlugin();
   bool _initialized = false;
   final StreamController<String?> _tapController = StreamController<String?>.broadcast();
+  String? _pendingLaunchPayload;
   Stream<String?> get taps => _tapController.stream;
+  String? takeLaunchPayload(){final value=_pendingLaunchPayload;_pendingLaunchPayload=null;return value;}
 
   static const int _stockBaseId = 1100000;
   static const int _invoiceBaseId = 2200000;
@@ -41,6 +43,10 @@ class AppNotificationService {
       settings,
       onDidReceiveNotificationResponse: (response) => _tapController.add(response.payload),
     );
+    final launchDetails=await _plugin.getNotificationAppLaunchDetails();
+    if(launchDetails?.didNotificationLaunchApp==true){
+      _pendingLaunchPayload=launchDetails?.notificationResponse?.payload;
+    }
     final android = _plugin.resolvePlatformSpecificImplementation<
         AndroidFlutterLocalNotificationsPlugin>();
     await android?.createNotificationChannel(
