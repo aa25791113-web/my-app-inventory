@@ -1,2 +1,4 @@
 Final Android release trigger.
 This marker is intentionally required for a one-time controlled APK build.
+
+Retry final release after adding a bounded Shorebird initialization and standard APK fallback.
