@@ -54,3 +54,7 @@ flutter_launcher_icons:
     generate: true
     image_path: assets/launcher_icon.png
     icon_size: 48
+
+dependency_overrides:
+  # flutter_launcher_icons pulls image 4.11.0; pin archive to the compatible API used by that release.
+  archive: 4.0.8
