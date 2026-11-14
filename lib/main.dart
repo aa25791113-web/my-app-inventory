@@ -891,7 +891,7 @@ class _HomePageState extends State<HomePage> {
       QuickSearchPage(key:ValueKey('q'+refreshId.toString())),
       CategoriesPage(key:ValueKey('cat'+refreshId.toString())),
       SmartToolsPage(key:ValueKey('tools'+refreshId.toString())),
-      PremiumAssistantPage(onNavigate:(page)=>setState(()=>tab=page)),
+      PremiumAssistantPage(onNavigate:(page)=>setState(()=>tab=page),onCreateInvoice:()=>setState((){tab=14;refreshId++;assistantCreateInvoice=true;})),
       InvoicePage(key:ValueKey('inv'+refreshId.toString()),changed:refresh,startNewInvoice:assistantCreateInvoice,onStartNewInvoiceHandled:()=>assistantCreateInvoice=false),
       InvoicePage(key:ValueKey('due'+refreshId.toString()),changed:refresh,pendingOnly:true),
       const ScientificCalculatorPage(),
