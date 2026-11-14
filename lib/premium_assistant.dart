@@ -3,8 +3,9 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 class PremiumAssistantPage extends StatefulWidget {
-  const PremiumAssistantPage({super.key,this.onNavigate});
+  const PremiumAssistantPage({super.key,this.onNavigate,this.onCreateInvoice});
   final ValueChanged<int>? onNavigate;
+  final VoidCallback? onCreateInvoice;
   @override State<PremiumAssistantPage> createState()=>_PremiumAssistantPageState();
 }
 class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
@@ -104,8 +105,10 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     await Future<void>.delayed(const Duration(milliseconds:180));
     if(!mounted)return;
     final route=_route(q);
-    if(route!=null)widget.onNavigate?.call(route);
-    final response=route==14?'تمام، فتحت لك صفحة الفواتير. اضغط «فاتورة جديدة» وامشي معاك خطوة بخطوة في إدخال العميل والأصناف وحفظ الفاتورة.':route==19?'فتحت لك كشف النواقص. هتلاقي الأصناف متقسمة حسب المورد، ومع كل صنف الكمية المباعة والمتبقية والمقترح طلبه.':route==8?'فتحت لك صفحة التقارير. اختار التقرير اللي محتاجه وحدد الفترة المناسبة.':route==9?'فتحت لك الإعدادات. اختار الجزء اللي عايز تعدّله.':route==1?'فتحت لك المنتجات. استخدم زر الإضافة أو ابحث عن الصنف المطلوب.':route==4?'فتحت لك صفحة الموردين.':route==5?'فتحت لك صفحة العملاء.':route==2?'فتحت لك صفحة المبيعات.':route==3?'فتحت لك صفحة المشتريات.':route==16?'فتحت لك الآلة العلمية.':route==10?'فتحت لك بحث الأسعار.':_answer(q);
+    final createInvoice=route==14&&RegExp(r'(اعمل|اعمللي|انشئ|إنشاء|جديدة)').hasMatch(q);
+    if(createInvoice&&widget.onCreateInvoice!=null){widget.onCreateInvoice!.call();}
+    else if(route!=null){widget.onNavigate?.call(route);}
+    final response=createInvoice?'تمام، فتحت لك نموذج فاتورة جديدة مباشرة. اكتب بيانات العميل، وأضف الأصناف والكميات والأسعار، وبعدها احفظ الفاتورة.':route==14?'فتحت لك صفحة الفواتير. اختار الفاتورة اللي عايز تراجعها أو اضغط «فاتورة جديدة».':route==19?'فتحت لك كشف النواقص. هتلاقي الأصناف متقسمة حسب المورد، ومع كل صنف الكمية المباعة والمتبقية والمقترح طلبه.':route==8?'فتحت لك صفحة التقارير. اختار التقرير اللي محتاجه وحدد الفترة المناسبة.':route==9?'فتحت لك الإعدادات. اختار الجزء اللي عايز تعدّله.':route==1?'فتحت لك المنتجات. استخدم زر الإضافة أو ابحث عن الصنف المطلوب.':route==4?'فتحت لك صفحة الموردين.':route==5?'فتحت لك صفحة العملاء.':route==2?'فتحت لك صفحة المبيعات.':route==3?'فتحت لك صفحة المشتريات.':route==16?'فتحت لك الآلة العلمية.':route==10?'فتحت لك بحث الأسعار.':_answer(q);
     setState((){
       chats[active]['messages']=[...(chats[active]['messages'] as List),{'role':'assistant','text':response}];
       chats[active]['updated']=DateTime.now().toIso8601String();
