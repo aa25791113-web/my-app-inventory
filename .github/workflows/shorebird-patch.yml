@@ -1,0 +1,114 @@
+name: Publish Shorebird Android patch
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: "Shorebird release version to patch (leave blank for latest)"
+        required: false
+        type: string
+      track:
+        description: "Patch track"
+        required: true
+        default: stable
+        type: choice
+        options:
+          - stable
+          - staging
+          - beta
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    env:
+      SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+      - name: Prepare generated Android project
+        run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
+      - name: Set Android compile SDK to 36
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          target = next((p for p in candidates if p.exists()), None)
+          if target is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          source = target.read_text()
+          updated, count = re.subn(r'compileSdk\s*=\s*flutter\.compileSdkVersion', 'compileSdk = 36', source, count=1)
+          if count == 0:
+              updated, count = re.subn(r'compileSdkVersion\s+flutter\.compileSdkVersion', 'compileSdkVersion 36', source, count=1)
+          if count == 0:
+              updated, count = re.subn(r'compileSdk\s*=\s*\d+', 'compileSdk = 36', source, count=1)
+          if count == 0:
+              raise SystemExit(f"Could not locate compileSdk setting in {target}")
+          target.write_text(updated)
+          PY
+      - name: Generate app icon and required permissions
+        run: |
+          python -m pip install --quiet pillow
+          python tool/generate_icon.py
+          sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          source = manifest.read_text()
+          for permission in [
+              '<uses-permission android:name="android.permission.CAMERA" />',
+              '<uses-permission android:name="android.permission.INTERNET" />',
+          ]:
+              if permission not in source:
+                  source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not insert permission: " + permission)
+          manifest.write_text(source)
+          PY
+      - run: flutter pub get
+      - name: Align Android plugin compile SDK versions
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          roots = [Path("android"), Path.home() / ".pub-cache" / "hosted" / "pub.dev"]
+          for root in roots:
+              if not root.exists():
+                  continue
+              for path in root.rglob("build.gradle*"):
+                  try:
+                      source = path.read_text()
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  updated = re.sub(r'(?m)^(\s*compileSdk\s*=\s*)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', source)
+                  updated = re.sub(r'(?m)^(\s*compileSdk\s+)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
+                  updated = re.sub(r'(?m)^(\s*compileSdkVersion\s+)(?:flutter\.compileSdkVersion|\d+)', r'\g<1>36', updated)
+                  if updated != source:
+                      path.write_text(updated)
+          PY
+      - run: dart run flutter_launcher_icons
+      - name: Verify Shorebird credentials
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
+          fi
+      - name: Publish Dart-only update patch
+        shell: bash
+        run: |
+          if [ -n "${{ inputs.release_version }}" ]; then
+            shorebird patch android --release-version "${{ inputs.release_version }}" --track "${{ inputs.track }}"
+          else
+            shorebird patch android --release-version latest --track "${{ inputs.track }}"
+          fi
