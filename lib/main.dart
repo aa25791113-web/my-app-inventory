@@ -657,13 +657,36 @@ class MyApp extends StatefulWidget {
   const MyApp({super.key});
   @override State<MyApp> createState()=>_MyAppState();
 }
-class _MyAppState extends State<MyApp> {
+class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
   ThemeMode mode = ThemeMode.light;
   Color seedColor = const Color(0xFF087F68);
   String appName = 'MY APP';
   String? logoPath;
   String? backgroundPath;
-  @override void initState(){super.initState();load();}
+  @override void initState(){
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    load();
+    _connectivitySubscription=Connectivity().onConnectivityChanged.listen((states){
+      if(states.any((state)=>state!=ConnectivityResult.none)){
+        unawaited(checkForOnlineUpdateNotification());
+      }
+    });
+    unawaited(syncLocalNotifications());
+    unawaited(checkForOnlineUpdateNotification());
+  }
+  @override void didChangeAppLifecycleState(AppLifecycleState state){
+    if(state==AppLifecycleState.resumed){
+      unawaited(syncLocalNotifications());
+      unawaited(checkForOnlineUpdateNotification());
+    }
+  }
+  @override void dispose(){
+    WidgetsBinding.instance.removeObserver(this);
+    _connectivitySubscription?.cancel();
+    super.dispose();
+  }
   Future<void> load() async {
     final prefs = await SharedPreferences.getInstance();
     if (mounted) setState(() { mode = prefs.getBool('dark') == true ? ThemeMode.dark : ThemeMode.light; seedColor = Color(prefs.getInt('seedColor') ?? 0xFF087F68); appName=prefs.getString('appName') ?? 'MY APP'; logoPath=prefs.getString('logoPath'); backgroundPath=prefs.getString('backgroundPath'); });
@@ -704,7 +727,7 @@ class HomePage extends StatefulWidget {
 }
 class _HomePageState extends State<HomePage> {
   int tab=10, refreshId=0;
-  void refresh()=>setState(()=>refreshId++);
+  void refresh(){setState(()=>refreshId++);unawaited(syncLocalNotifications());}
   @override Widget build(BuildContext context) {
     final pages=[
       Dashboard(key:ValueKey('d'+refreshId.toString()),go:(v)=>setState(()=>tab=v),appName:widget.appName),
