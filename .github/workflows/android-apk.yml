@@ -68,25 +68,25 @@ jobs:
           source = gradle.read_text()
           if gradle.suffix == ".kts":
               if "isCoreLibraryDesugaringEnabled" not in source:
-                  source, count = re.subn(r"compileOptions\\s*\\{", "compileOptions {\\n        isCoreLibraryDesugaringEnabled = true", source, count=1)
+                  source, count = re.subn(r"compileOptions\s*\{", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", source, count=1)
                   if count == 0:
-                      source, count = re.subn(r"android\\s*\\{", "android {\\n    compileOptions { isCoreLibraryDesugaringEnabled = true }", source, count=1)
+                      source, count = re.subn(r"android\s*\{", "android {\n    compileOptions { isCoreLibraryDesugaringEnabled = true }", source, count=1)
                   if count == 0:
                       raise SystemExit("Could not enable core library desugaring")
               dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
           else:
               if "coreLibraryDesugaringEnabled true" not in source:
-                  source, count = re.subn(r"compileOptions\\s*\\{", "compileOptions {\\n        coreLibraryDesugaringEnabled true", source, count=1)
+                  source, count = re.subn(r"compileOptions\s*\{", "compileOptions {\n        coreLibraryDesugaringEnabled true", source, count=1)
                   if count == 0:
-                      source, count = re.subn(r"android\\s*\\{", "android {\\n    compileOptions { coreLibraryDesugaringEnabled true }", source, count=1)
+                      source, count = re.subn(r"android\s*\{", "android {\n    compileOptions { coreLibraryDesugaringEnabled true }", source, count=1)
                   if count == 0:
                       raise SystemExit("Could not enable core library desugaring")
               dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
           if dependency not in source:
-              if re.search(r"dependencies\\s*\\{", source):
-                  source = re.sub(r"dependencies\\s*\\{", lambda m: m.group(0) + "\\n    " + dependency, source, count=1)
+              if re.search(r"dependencies\s*\{", source):
+                  source = re.sub(r"dependencies\s*\{", lambda m: m.group(0) + "\n    " + dependency, source, count=1)
               else:
-                  source += "\\ndependencies {\\n    " + dependency + "\\n}\\n"
+                  source += "\ndependencies {\n    " + dependency + "\n}\n"
           gradle.write_text(source)
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           xml = manifest.read_text()
