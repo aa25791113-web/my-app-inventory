@@ -1427,7 +1427,96 @@ class _InvoicePageState extends State<InvoicePage>{
     if(!mounted)return;
     await showDialog<void>(context:context,builder:(_)=>InvoicePreviewDialog(invoice:e,items:items,onAppend:()=>append(e)));
   }
-  @override Widget build(BuildContext context)=>Column(children:[Padding(padding:const EdgeInsets.all(12),child:Row(children:[Expanded(child:Text(widget.pendingOnly?'الفواتير المستحقة':'فواتير البيع',style:const TextStyle(fontSize:20,fontWeight:FontWeight.bold))),IconButton(onPressed:load,icon:const Icon(Icons.refresh)),if(!widget.pendingOnly)FilledButton.icon(onPressed:create,icon:const Icon(Icons.add),label:const Text('فاتورة جديدة'))])),Expanded(child:rows.isEmpty?Center(child:Text(widget.pendingOnly?'لا توجد مبالغ مستحقة حالياً.':'لا توجد فواتير بعد.')):ListView.builder(itemCount:rows.length,itemBuilder:(ctx,i){final e=rows[i];final total=(e['total'] as num).toDouble(),paid=(e['paid'] as num).toDouble(),due=total-paid;return Card(child:ListTile(leading:CircleAvatar(child:Icon(due>0?Icons.pending_actions:Icons.receipt_long)),title:Text('${e['invoice_no']} • ${e['customer_name']}'),subtitle:Text('الإجمالي: ${money(total)} • المدفوع: ${money(paid)} • المتبقي: ${money(due)}\n${e['created_at']}'),isThreeLine:true,onTap:()=>details(e),trailing:PopupMenuButton<String>(onSelected:(v){if(v=='pay')pay(e);else details(e);},itemBuilder:(_)=>[const PopupMenuItem(value:'details',child:Text('تفاصيل وطباعة')),if(due>0)const PopupMenuItem(value:'pay',child:Text('تسجيل دفعة'))])));} ))]);
+  @override Widget build(BuildContext context){
+    final total=rows.fold<double>(0,(v,e)=>v+((e['total'] as num?)?.toDouble()??0));
+    final paid=rows.fold<double>(0,(v,e)=>v+((e['paid'] as num?)?.toDouble()??0));
+    final due=(total-paid).clamp(0,double.infinity).toDouble();
+    final scheme=Theme.of(context).colorScheme;
+    return Directionality(textDirection:ui.TextDirection.rtl,child:Column(children:[
+      Padding(padding:const EdgeInsets.fromLTRB(14,14,14,8),child:Container(
+        width:double.infinity,padding:const EdgeInsets.all(18),
+        decoration:BoxDecoration(
+          gradient:LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[scheme.primary,scheme.tertiary]),
+          borderRadius:BorderRadius.circular(22),
+          boxShadow:[BoxShadow(color:scheme.primary.withOpacity(.16),blurRadius:18,offset:const Offset(0,7))],
+        ),
+        child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+          Row(children:[
+            Container(width:46,height:46,decoration:BoxDecoration(color:Colors.white.withOpacity(.15),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.receipt_long_rounded,color:Color(0xFFFFD47A),size:25)),
+            const SizedBox(width:12),
+            Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+              Text(widget.pendingOnly?'الفواتير المستحقة':'فواتير البيع',style:const TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w900)),
+              const Text('APP LOL • إدارة الفواتير والتحصيل',style:TextStyle(color:Colors.white70,fontSize:11)),
+            ])),
+            IconButton(onPressed:load,tooltip:'تحديث القائمة',icon:const Icon(Icons.refresh_rounded,color:Colors.white)),
+          ]),
+          const SizedBox(height:14),
+          Row(children:[
+            _invoiceStat('عدد الفواتير',rows.length.toString(),Icons.description_outlined),
+            const SizedBox(width:8),
+            _invoiceStat('الإجمالي',money(total),Icons.payments_outlined),
+            const SizedBox(width:8),
+            _invoiceStat('المتبقي',money(due),Icons.hourglass_bottom_rounded),
+          ]),
+          if(!widget.pendingOnly)Padding(padding:const EdgeInsets.only(top:14),child:FilledButton.icon(
+            style:FilledButton.styleFrom(backgroundColor:Colors.white,foregroundColor:scheme.primary,padding:const EdgeInsets.symmetric(vertical:13)),
+            onPressed:create,icon:const Icon(Icons.add_rounded),label:const Text('إنشاء فاتورة جديدة',style:TextStyle(fontWeight:FontWeight.w900)),
+          )),
+        ]),
+      )),
+      Expanded(child:rows.isEmpty
+        ? Center(child:Padding(padding:const EdgeInsets.all(28),child:Column(mainAxisSize:MainAxisSize.min,children:[
+            Icon(Icons.receipt_long_outlined,size:54,color:scheme.primary.withOpacity(.65)),
+            const SizedBox(height:12),
+            Text(widget.pendingOnly?'لا توجد مبالغ مستحقة حالياً':'لا توجد فواتير بعد',style:const TextStyle(fontWeight:FontWeight.w900,fontSize:17)),
+            const SizedBox(height:5),
+            Text(widget.pendingOnly?'كل الحسابات مسددة حالياً.':'أنشئ أول فاتورة بيع لتظهر هنا.',style:TextStyle(color:scheme.onSurfaceVariant,fontSize:12)),
+          ])))
+        :ListView.separated(padding:const EdgeInsets.fromLTRB(14,6,14,24),itemCount:rows.length,separatorBuilder:(_,__)=>const SizedBox(height:9),itemBuilder:(ctx,i){
+          final e=rows[i];
+          final invoiceTotal=(e['total'] as num?)?.toDouble()??0;
+          final invoicePaid=(e['paid'] as num?)?.toDouble()??0;
+          final remaining=(invoiceTotal-invoicePaid).clamp(0,double.infinity).toDouble();
+          final settled=remaining<=0;
+          return Card(
+            elevation:1,clipBehavior:Clip.antiAlias,
+            shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(18),side:BorderSide(color:scheme.outlineVariant.withOpacity(.55))),
+            child:InkWell(onTap:()=>details(e),child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+              Row(children:[
+                Container(width:42,height:42,decoration:BoxDecoration(color:scheme.primaryContainer,borderRadius:BorderRadius.circular(13)),child:Icon(Icons.receipt_long_outlined,color:scheme.primary)),
+                const SizedBox(width:10),
+                Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                  Text(e['invoice_no'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:15)),
+                  Text((e['customer_name']??'عميل نقدي').toString(),style:TextStyle(color:scheme.onSurfaceVariant,fontSize:12)),
+                ])),
+                Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),decoration:BoxDecoration(color:settled?const Color(0xFFE3F5EC):const Color(0xFFFFF1D8),borderRadius:BorderRadius.circular(20)),child:Text(settled?'مسددة':'متبقي ${{money(remaining)}',style:TextStyle(color:settled?const Color(0xFF16734B):const Color(0xFF986000),fontWeight:FontWeight.w900,fontSize:10))),
+                PopupMenuButton<String>(onSelected:(v){if(v=='pay')pay(e);else details(e);},itemBuilder:(_)=>[
+                  const PopupMenuItem(value:'details',child:Text('تفاصيل وطباعة')),
+                  if(remaining>0)const PopupMenuItem(value:'pay',child:Text('تسجيل دفعة')),
+                ]),
+              ]),
+              const Divider(height:20),
+              Row(children:[
+                Expanded(child:_invoiceMeta('الإجمالي',money(invoiceTotal))),
+                Expanded(child:_invoiceMeta('المدفوع',money(invoicePaid))),
+                Expanded(child:_invoiceMeta('التاريخ',formatDateTime(e['created_at']))),
+              ]),
+            ]))),
+          );
+        })),
+    ]));
+  }
+  Widget _invoiceStat(String label,String value,IconData icon)=>Expanded(child:Container(
+    padding:const EdgeInsets.symmetric(horizontal:7,vertical:10),
+    decoration:BoxDecoration(color:Colors.white.withOpacity(.13),borderRadius:BorderRadius.circular(13),border:Border.all(color:Colors.white.withOpacity(.12))),
+    child:Column(children:[Icon(icon,color:const Color(0xFFFFD47A),size:16),const SizedBox(height:5),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:13)),Text(label,style:const TextStyle(color:Colors.white70,fontSize:10))]),
+  ));
+  Widget _invoiceMeta(String label,String value)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Text(label,style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+    const SizedBox(height:4),
+    Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w800)),
+  ]);
+
 }
 class InvoiceEditor extends StatefulWidget{
   const InvoiceEditor({super.key,required this.products,required this.customers,required this.suppliers,this.invoice});
