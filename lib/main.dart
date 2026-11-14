@@ -104,6 +104,7 @@ void updateBackgroundDispatcher() {
           AndroidFlutterLocalNotificationsPlugin>();
       final permitted = await android?.areNotificationsEnabled() ?? true;
       if (!permitted) return true;
+      await checkRemoteAdminAnnouncement();
       await android?.createNotificationChannel(
         const AndroidNotificationChannel(
           'app_updates',
@@ -759,6 +760,7 @@ Future<void> checkForOnlineUpdateNotification() async {
     final prefs=await SharedPreferences.getInstance();
     if(!(prefs.getBool('notifications_enabled')??false)||
        !(prefs.getBool('update_alerts')??true))return;
+    await checkRemoteAdminAnnouncement();
     final manifest=await fetchUpdateManifest();
     if(manifest==null||manifest['track']!='stable')return;
     final packageInfo=await PackageInfo.fromPlatform();
@@ -2656,6 +2658,38 @@ Future<Map<String,dynamic>?> fetchRemoteAdminSettings() async {
     }
     return null;
   }catch(_){return null;}finally{client.close(force:true);}
+}
+
+Future<void> checkRemoteAdminAnnouncement() async {
+  if(!Platform.isAndroid)return;
+  final prefs=await SharedPreferences.getInstance();
+  if(!(prefs.getBool('notifications_enabled')??false)||
+     !(prefs.getBool('update_alerts')??true))return;
+  final client=HttpClient();
+  try{
+    final uri=Uri.parse('$_adminSupabaseUrl/rest/v1/admin_announcements').replace(queryParameters:{
+      'select':'id,title,body,kind,version,action_url',
+      'order':'created_at.desc',
+      'limit':'1',
+    });
+    final request=await client.getUrl(uri).timeout(const Duration(seconds:7));
+    request.headers.set('apikey',_adminSupabaseKey);
+    request.headers.set(HttpHeaders.authorizationHeader,'Bearer $_adminSupabaseKey');
+    request.headers.set(HttpHeaders.acceptHeader,'application/json');
+    final response=await request.close().timeout(const Duration(seconds:7));
+    if(response.statusCode!=HttpStatus.ok)return;
+    final decoded=jsonDecode(await response.transform(utf8.decoder).join());
+    if(decoded is! List||decoded.isEmpty||decoded.first is! Map)return;
+    final item=Map<String,dynamic>.from(decoded.first as Map);
+    final id=(item['id']??'').toString();
+    if(id.isEmpty||prefs.getString('last_admin_announcement_id')==id)return;
+    await AppNotificationService.instance.initialize();
+    await AppNotificationService.instance.showUpdateNotification(
+      title:(item['title']??'إعلان جديد من APP LOL').toString(),
+      body:(item['body']??'افتح البرنامج لعرض التفاصيل.').toString(),
+    );
+    await prefs.setString('last_admin_announcement_id',id);
+  }catch(_){}finally{client.close(force:true);}
 }
 
 @pragma('vm:entry-point')
