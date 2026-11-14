@@ -135,6 +135,7 @@ jobs:
           PY
           )
           fi
+          export RELEASE_VERSION
           shorebird patch android --release-version "$RELEASE_VERSION" --track "$INPUT_TRACK" --json > shorebird_patch.json
           python - <<'PY'
           import json
