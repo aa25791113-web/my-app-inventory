@@ -117,6 +117,7 @@ class AppNotificationService {
   Future<void> showUpdateNotification({
     required String title,
     required String body,
+    String payload = 'app_update',
   }) async {
     if (!Platform.isAndroid || !await hasPermission()) return;
     await _plugin.show(
@@ -124,7 +125,7 @@ class AppNotificationService {
       title,
       body,
       _details('app_updates', 'تحديثات البرنامج', 'إشعارات تحديث البرنامج'),
-      payload: 'app_update',
+      payload: payload,
     );
   }
 
