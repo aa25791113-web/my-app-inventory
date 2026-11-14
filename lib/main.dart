@@ -274,7 +274,12 @@ class StoreDb {
       for(var y=0;y<8;y++){for(var x=0;x<8;x++){bits.add(tiny.getPixel(x,y).r>tiny.getPixel(x+1,y).r);}}
       return bits;
     }
-    final queryBits=fingerprint(source);
+    List<List<bool>> fingerprints(img.Image image){
+      final side=image.width<image.height?image.width:image.height;
+      final center=img.copyCrop(image,x:(image.width-side)~/2,y:(image.height-side)~/2,width:side,height:side);
+      return [fingerprint(image),fingerprint(center)];
+    }
+    final queryHashes=fingerprints(source);
     final rows=await database!.query('products',where:'image_path<>? AND archived=0',whereArgs:['']);
     final ranked=<Map<String,Object?>>[];
     for(final row in rows){
@@ -284,11 +289,14 @@ class StoreDb {
         if(!await file.exists())continue;
         final decoded=img.decodeImage(await file.readAsBytes());
         if(decoded==null)continue;
-        final bits=fingerprint(decoded);
-        var distance=0;
-        for(var i=0;i<64;i++){if(bits[i]!=queryBits[i])distance++;}
-        final similarity=(64-distance)/64;
-        if(similarity>=0.57)ranked.add({...row,'similarity':similarity});
+        final productHashes=fingerprints(decoded);
+        var similarity=0.0;
+        for(final queryBits in queryHashes){for(final bits in productHashes){
+          var distance=0;
+          for(var i=0;i<64;i++){if(bits[i]!=queryBits[i])distance++;}
+          similarity=math.max(similarity,(64-distance)/64);
+        }}
+        if(similarity>=0.55)ranked.add({...row,'similarity':similarity});
       }catch(_){continue;}
     }
     ranked.sort((a,b)=>(b['similarity'] as double).compareTo(a['similarity'] as double));
@@ -398,7 +406,7 @@ class StoreDb {
       if(found.isEmpty)throw Exception('الفاتورة غير موجودة.');
       final invoice=found.first;double addedSubtotal=0;
       for(final item in items){
-        final id=item['product_id'] as int,q=item['qty'] as int,price=(item['unit_price'] as num).toDouble();
+        final id=item['product_id'] as int;final q=item['qty'] as int;final price=(item['unit_price'] as num).toDouble();
         if(q<=0||price<0)throw Exception('راجع كمية وسعر الأصناف.');
         final productRows=await txn.query('products',where:'id=?',whereArgs:[id],limit:1);
         if(productRows.isEmpty)throw Exception('أحد المنتجات لم يعد موجوداً.');
@@ -409,16 +417,16 @@ class StoreDb {
         if(wh<q)throw Exception('الكمية في المخزن الرئيسي لا تكفي.');
         await txn.update('warehouse_stock',{'qty':wh-q},where:'product_id=? AND warehouse_id=1',whereArgs:[id]);
         await txn.update('products',{'qty':current-q,'supplier_id':item['supplier_id']},where:'id=?',whereArgs:[id]);
-        final lineTotal=q*price,addedAt=DateTime.now().toIso8601String();
+        final lineTotal=q*price;final addedAt=DateTime.now().toIso8601String();
         addedSubtotal+=lineTotal;
         await txn.insert('invoice_items',{'invoice_id':invoiceId,'product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':lineTotal,'supplier_id':item['supplier_id'],'supplier_name':item['supplier_name']??'','added_at':addedAt});
         await txn.insert('operations',{'kind':'sale','product_id':id,'product_name':item['product_name'],'qty':q,'unit_price':price,'total':lineTotal,'note':'فاتورة ${invoice['invoice_no']}','created_at':addedAt,'cost_price':item['cost_price']??product['buy']??0,'party_id':invoice['customer_id'],'party_name':invoice['customer_name'],'warehouse_id':1});
       }
       final oldSubtotal=(invoice['subtotal'] as num).toDouble(),newSubtotal=oldSubtotal+addedSubtotal;
-      final discountValue=(invoice['discount_value'] as num).toDouble(),isPercent=invoice['discount_mode']=='percent';
+      final discountValue=(invoice['discount_value'] as num).toDouble();final isPercent=invoice['discount_mode']=='percent';
       final discount=isPercent?newSubtotal*discountValue/100:discountValue;
       final newTotal=(newSubtotal-discount).clamp(0,double.infinity).toDouble();
-      final oldTotal=(invoice['total'] as num).toDouble(),delta=newTotal-oldTotal;
+      final oldTotal=(invoice['total'] as num).toDouble();final delta=newTotal-oldTotal;
       await txn.update('invoices',{'subtotal':newSubtotal,'discount_amount':discount,'total':newTotal},where:'id=?',whereArgs:[invoiceId]);
       if(delta>0)await txn.insert('party_ledger',{'party_type':'customer','party_id':invoice['customer_id'],'entry_type':'debit','amount':delta,'note':'إضافة أصناف إلى فاتورة ${invoice['invoice_no']}','created_at':DateTime.now().toIso8601String(),'reference':'${invoice['invoice_no']}-ADD-${DateTime.now().microsecondsSinceEpoch}'});
       await txn.insert('activity_log',{'action':'إضافة أصناف لفاتورة','details':'${invoice['invoice_no']} | ${items.length} صنف | ${addedSubtotal.toStringAsFixed(2)}','created_at':DateTime.now().toIso8601String()});
