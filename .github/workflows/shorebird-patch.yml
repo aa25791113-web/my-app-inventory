@@ -6,6 +6,10 @@ on:
         description: "Shorebird release version to patch (leave blank for latest)"
         required: false
         type: string
+      release_notes:
+        description: "Short release notes shown inside the app"
+        required: false
+        type: string
       track:
         description: "Patch track"
         required: true
@@ -15,6 +19,8 @@ on:
           - stable
           - staging
           - beta
+permissions:
+  contents: write
 jobs:
   patch:
     runs-on: ubuntu-latest
@@ -106,9 +112,94 @@ jobs:
           fi
       - name: Publish Dart-only update patch
         shell: bash
+        env:
+          INPUT_RELEASE_VERSION: ${{ inputs.release_version }}
+          INPUT_TRACK: ${{ inputs.track }}
+          INPUT_NOTES: ${{ inputs.release_notes }}
         run: |
-          if [ -n "${{ inputs.release_version }}" ]; then
-            shorebird patch android --release-version "${{ inputs.release_version }}" --track "${{ inputs.track }}"
-          else
-            shorebird patch android --release-version latest --track "${{ inputs.track }}"
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
           fi
+          if [ -n "$INPUT_RELEASE_VERSION" ]; then
+            RELEASE_VERSION="$INPUT_RELEASE_VERSION"
+          else
+            RELEASE_VERSION=$(python - <<'PY'
+          import re
+          from pathlib import Path
+          text = Path("pubspec.yaml").read_text()
+          match = re.search(r"(?m)^version:\s*([^\s]+)", text)
+          if not match:
+              raise SystemExit("Could not read app version from pubspec.yaml")
+          print(match.group(1))
+          PY
+          )
+          fi
+          shorebird patch android --release-version "$RELEASE_VERSION" --track "$INPUT_TRACK" --json > shorebird_patch.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          def walk(value):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      if key == "patch_number" and isinstance(item, int):
+                          return item
+                      found = walk(item)
+                      if found is not None:
+                          return found
+              elif isinstance(value, list):
+                  for item in value:
+                      found = walk(item)
+                      if found is not None:
+                          return found
+              return None
+          result = json.loads(Path("shorebird_patch.json").read_text())
+          number = walk(result)
+          if number is None:
+              raise SystemExit("Patch was published but its patch number was not found in JSON output.")
+          Path("patch_number.txt").write_text(str(number))
+          PY
+          PATCH_NUMBER=$(cat patch_number.txt)
+          shorebird patches info --release-version "$RELEASE_VERSION" --patch-number "$PATCH_NUMBER" --json > shorebird_patch_info.json
+          python - <<'PY'
+          import json, os
+          from datetime import datetime, timezone
+          from pathlib import Path
+          info = json.loads(Path("shorebird_patch_info.json").read_text())
+          def collect(value, sizes):
+              if isinstance(value, dict):
+                  for key, item in value.items():
+                      if key in ("size_bytes", "size", "bytes") and isinstance(item, (int, float)) and item > 0:
+                          sizes.append(int(item))
+                      else:
+                          collect(item, sizes)
+              elif isinstance(value, list):
+                  for item in value:
+                      collect(item, sizes)
+          sizes = []
+          collect(info, sizes)
+          size_bytes = sum(sizes) if sizes else None
+          if size_bytes is None:
+              size_label = "غير متاح"
+          elif size_bytes < 1024:
+              size_label = f"{size_bytes} بايت"
+          elif size_bytes < 1024 * 1024:
+              size_label = f"{size_bytes / 1024:.1f} كيلوبايت"
+          else:
+              size_label = f"{size_bytes / (1024 * 1024):.2f} ميجابايت"
+          manifest = {
+              "release_version": os.environ["RELEASE_VERSION"],
+              "patch_number": int(Path("patch_number.txt").read_text()),
+              "track": os.environ["INPUT_TRACK"],
+              "size_bytes": size_bytes,
+              "size_label": size_label,
+              "notes": os.environ.get("INPUT_NOTES", "").strip() or "تحسينات وإصلاحات للبرنامج.",
+              "published_at": datetime.now(timezone.utc).isoformat()
+          }
+          Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+          PY
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add update_manifest.json
+          git commit -m "Update in-app release notes and patch metadata"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
