@@ -1489,7 +1489,7 @@ class _InvoicePageState extends State<InvoicePage>{
                   Text(e['invoice_no'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:15)),
                   Text((e['customer_name']??'عميل نقدي').toString(),style:TextStyle(color:scheme.onSurfaceVariant,fontSize:12)),
                 ])),
-                Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),decoration:BoxDecoration(color:settled?const Color(0xFFE3F5EC):const Color(0xFFFFF1D8),borderRadius:BorderRadius.circular(20)),child:Text(settled?'مسددة':'متبقي ${{money(remaining)}',style:TextStyle(color:settled?const Color(0xFF16734B):const Color(0xFF986000),fontWeight:FontWeight.w900,fontSize:10))),
+                Container(padding:const EdgeInsets.symmetric(horizontal:10,vertical:6),decoration:BoxDecoration(color:settled?const Color(0xFFE3F5EC):const Color(0xFFFFF1D8),borderRadius:BorderRadius.circular(20)),child:Text(settled?'مسددة':'متبقي ${money(remaining)}',style:TextStyle(color:settled?const Color(0xFF16734B):const Color(0xFF986000),fontWeight:FontWeight.w900,fontSize:10))),
                 PopupMenuButton<String>(onSelected:(v){if(v=='pay')pay(e);else details(e);},itemBuilder:(_)=>[
                   const PopupMenuItem(value:'details',child:Text('تفاصيل وطباعة')),
                   if(remaining>0)const PopupMenuItem(value:'pay',child:Text('تسجيل دفعة')),
