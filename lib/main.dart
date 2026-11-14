@@ -34,8 +34,6 @@ import 'premium_assistant.dart';
 import 'scientific_calculator.dart';
 
 String currencyLabel='ج.م';
-const String _updateManifestUrl =
-    'https://raw.githubusercontent.com/aa25791113-web/my-app-inventory/premium-redesign-v1/update_manifest.json';
 const String _adminSupabaseUrl='https://xesbhvqivavfvipnwykh.supabase.co';
 const String _adminSupabaseKey='sb_publishable_Uxl-meIJXZPaTxzNglGCPQ_7CcGOxuK';
 
