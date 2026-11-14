@@ -61,6 +61,65 @@ jobs:
               raise SystemExit(f"Could not locate compileSdk setting in {target}")
           target.write_text(updated)
           PY
+      - name: Configure Android notification permissions and scheduler
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          gradle = next((p for p in candidates if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          source = gradle.read_text()
+          if gradle.suffix == ".kts":
+              if "isCoreLibraryDesugaringEnabled" not in source:
+                  source, count = re.subn(r"compileOptions\\s*\\{", "compileOptions {\\n        isCoreLibraryDesugaringEnabled = true", source, count=1)
+                  if count == 0:
+                      source, count = re.subn(r"android\\s*\\{", "android {\\n    compileOptions { isCoreLibraryDesugaringEnabled = true }", source, count=1)
+                  if count == 0:
+                      raise SystemExit("Could not enable core library desugaring")
+              dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          else:
+              if "coreLibraryDesugaringEnabled true" not in source:
+                  source, count = re.subn(r"compileOptions\\s*\\{", "compileOptions {\\n        coreLibraryDesugaringEnabled true", source, count=1)
+                  if count == 0:
+                      source, count = re.subn(r"android\\s*\\{", "android {\\n    compileOptions { coreLibraryDesugaringEnabled true }", source, count=1)
+                  if count == 0:
+                      raise SystemExit("Could not enable core library desugaring")
+              dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          if dependency not in source:
+              if re.search(r"dependencies\\s*\\{", source):
+                  source = re.sub(r"dependencies\\s*\\{", lambda m: m.group(0) + "\\n    " + dependency, source, count=1)
+              else:
+                  source += "\\ndependencies {\\n    " + dependency + "\\n}\\n"
+          gradle.write_text(source)
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+          for permission in [
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+              '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
+          ]:
+              if permission not in xml:
+                  xml, count = re.subn(r"(<manifest\\b[^>]*>)", r"\\1\\n    " + permission, xml, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not add Android permission: " + permission)
+          receivers = """    <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+              <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                  <intent-filter>
+                      <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                      <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                      <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                  </intent-filter>
+              </receiver>"""
+          if "ScheduledNotificationReceiver" not in xml:
+              xml, count = re.subn(r"(<application\\b[^>]*>)", r"\\1\\n" + receivers, xml, count=1)
+              if count != 1:
+                  raise SystemExit("Could not register notification receivers in AndroidManifest.xml")
+          manifest.write_text(xml)
+          print("Configured notification permission, boot rescheduling and Java desugaring")
+          PY
       - name: Generate app icon and required permissions
         run: |
           python -m pip install --quiet pillow
