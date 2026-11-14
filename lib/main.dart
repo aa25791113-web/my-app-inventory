@@ -337,7 +337,7 @@ class StoreDb {
       final whQty=whRows.first['qty'] as int;
       if(kind=='sale' && whQty<qty) throw Exception('الكمية المتاحة في المخزن الرئيسي غير كافية.');
       await txn.update('warehouse_stock',{'qty':kind=='sale'?whQty-qty:whQty+qty},where:'product_id=? AND warehouse_id=1',whereArgs:[product['id']]);
-      await txn.update('products', {'qty':next},where:'id=?',whereArgs:[product['id']]);
+      await txn.update('products', {'qty':next,if(kind=='purchase'&&party!=null)'supplier_id':party['id']},where:'id=?',whereArgs:[product['id']]);
       final operationId=await txn.insert('operations', {
         'kind':kind,'product_id':product['id'],'product_name':product['name'],
         'qty':qty,'unit_price':price,'total':qty*price,'note':note,
@@ -354,6 +354,7 @@ class StoreDb {
 
   Future<List<Map<String,Object?>>> invoices({bool pendingOnly=false})=>database!.query('invoices',where:pendingOnly?'total>paid':null,orderBy:'id DESC');
   Future<List<Map<String,Object?>>> invoiceItems(int id)=>database!.query('invoice_items',where:'invoice_id=?',whereArgs:[id],orderBy:'id');
+  Future<List<Map<String,Object?>>> shortageGroups() async => database!.rawQuery("SELECT p.id AS product_id,p.name AS product_name,p.sku,p.qty,p.min_qty,p.unit,p.supplier_id,COALESCE(s.name,'بدون مورد') AS supplier_name,COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0) AS sold_qty FROM products p LEFT JOIN suppliers s ON s.id=p.supplier_id WHERE p.archived=0 AND p.qty<=p.min_qty AND COALESCE((SELECT SUM(o.qty) FROM operations o WHERE o.product_id=p.id AND o.kind='sale'),0)>0 ORDER BY supplier_name,p.name");
   Future<void> createInvoice({required String customerName,required String customerPhone,required int? customerId,required List<Map<String,Object?>> items,required double discountValue,required bool discountPercent,required double paid,required String note}) async {
     if(items.isEmpty)throw Exception('أضف صنفاً واحداً على الأقل.');
     if(customerName.trim().isEmpty)throw Exception('اكتب اسم العميل لإصدار الفاتورة.');
@@ -630,9 +631,10 @@ class _HomePageState extends State<HomePage> {
       const ScientificCalculatorPage(),
       WarehouseStockPage(key:ValueKey('whstock'+refreshId.toString()),changed:refresh),
       PartyLedgerPage(key:ValueKey('ledger'+refreshId.toString())),
+      ShortagesPage(key:ValueKey('shortages'+refreshId.toString())),
     ];
-    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية','توزيع المخزون','حسابات العملاء والموردين'];
-    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined,Icons.swap_horiz,Icons.account_balance_wallet_outlined];
+    const labels=['الرئيسية','المنتجات','المبيعات','المشتريات','الموردون','العملاء','المخازن','المصروفات','التقارير','الإعدادات','بحث الأسعار','التصنيفات','الأدوات الذكية','المساعد الذكي','الفواتير','انتظار الدفع','الآلة العلمية','توزيع المخزون','حسابات العملاء والموردين','النواقص'];
+    const icons=[Icons.dashboard_outlined,Icons.inventory_2_outlined,Icons.point_of_sale,Icons.shopping_cart_outlined,Icons.local_shipping_outlined,Icons.people_alt_outlined,Icons.warehouse_outlined,Icons.payments_outlined,Icons.analytics_outlined,Icons.settings_outlined,Icons.search,Icons.category_outlined,Icons.auto_awesome,Icons.auto_awesome,Icons.receipt_long,Icons.pending_actions,Icons.calculate_outlined,Icons.swap_horiz,Icons.account_balance_wallet_outlined,Icons.warning_amber_rounded];
     return Directionality(textDirection:TextDirection.rtl,child:Scaffold(
       drawer:Drawer(child:SafeArea(child:Column(children:[
         Container(width:double.infinity,padding:const EdgeInsets.all(22),color:Theme.of(context).colorScheme.primaryContainer,
@@ -1653,3 +1655,24 @@ Future<bool?> ask(BuildContext context,String title,String body)=>showDialog<boo
     TextButton(onPressed:()=>Navigator.pop(c,false),child:const Text('إلغاء')),
     FilledButton(onPressed:()=>Navigator.pop(c,true),child:const Text('تأكيد'))])));
 void toast(BuildContext context,String text)=>ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(text),duration:const Duration(seconds:5)));
+
+class ShortagesPage extends StatefulWidget {const ShortagesPage({super.key});@override State<ShortagesPage> createState()=>_ShortagesPageState();}
+class _ShortagesPageState extends State<ShortagesPage>{
+ List<Map<String,Object?>> rows=[];bool loading=true;
+ @override void initState(){super.initState();load();}
+ Future<void> load()async{if(mounted)setState(()=>loading=true);final r=await StoreDb.instance.shortageGroups();if(mounted)setState(()=>{rows=r,loading=false});}
+ @override Widget build(BuildContext context){
+  final groups=<String,List<Map<String,Object?>>>{};for(final e in rows){final k=(e['supplier_name']??'بدون مورد').toString();(groups[k]??=[]).add(e);}
+  return RefreshIndicator(onRefresh:load,child:ListView(padding:const EdgeInsets.all(14),children:[
+   Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(22)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    const Row(children:[Icon(Icons.warning_amber_rounded,color:Colors.white,size:28),SizedBox(width:8),Text('كشف النواقص',style:TextStyle(color:Colors.white,fontSize:22,fontWeight:FontWeight.w900))]),
+    const SizedBox(height:8),Text('المنتجات التي وصلت إلى حد التنبيه أو أقل، مجمعة حسب المورد',style:TextStyle(color:Colors.white.withOpacity(.9))),
+    const SizedBox(height:12),Text('عدد المنتجات الناقصة: ${rows.length}',style:const TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.bold))
+   ])),
+   const SizedBox(height:10),
+   if(loading)const Center(child:Padding(padding:EdgeInsets.all(28),child:CircularProgressIndicator())),
+   if(!loading&&rows.isEmpty)const Card(child:Padding(padding:EdgeInsets.all(24),child:Column(children:[Icon(Icons.inventory_2_outlined,size:42),SizedBox(height:8),Text('لا توجد نواقص حالياً',style:TextStyle(fontWeight:FontWeight.bold)),Text('تظهر هنا المنتجات التي لها مبيعات ووصل رصيدها إلى حد التنبيه أو أقل.')]))),
+   ...groups.entries.map((g){final sold=g.value.fold<int>(0,(v,e)=>v+(e['sold_qty'] as int));return Card(clipBehavior:Clip.antiAlias,child:ExpansionTile(leading:CircleAvatar(child:Icon(g.key=='بدون مورد'?Icons.help_outline:Icons.local_shipping_outlined)),title:Text(g.key,style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${g.value.length} منتج ناقص • إجمالي المباع: $sold'),children:g.value.map((e){final qty=e['qty'] as int,min=e['min_qty'] as int,soldQty=e['sold_qty'] as int;return ListTile(leading:const Icon(Icons.inventory_2_outlined),title:Text(e['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.bold)),subtitle:Text('مباع: $soldQty • المتبقي: $qty ${e['unit']} • حد التنبيه: $min\nالمطلوب للوصول لحد التنبيه: ${math.max(min-qty,0)}'),isThreeLine:true,trailing:Text('كود ${e['sku']}',style:Theme.of(context).textTheme.labelSmall));}).toList()));})
+  ]));
+ }
+}
