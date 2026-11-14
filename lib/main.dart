@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:package_info_plus/package_info_plus.dart';
+import 'package:workmanager/workmanager.dart';
 import 'notification_service.dart';
 import 'package:image/image.dart' as img;
 import 'package:image_picker/image_picker.dart';
@@ -29,6 +30,119 @@ import 'premium_assistant.dart';
 import 'scientific_calculator.dart';
 
 String currencyLabel='ج.م';
+const String _updateManifestUrl =
+    'https://raw.githubusercontent.com/aa25791113-web/my-app-inventory/premium-redesign-v1/update_manifest.json';
+
+@pragma('vm:entry-point')
+void updateBackgroundDispatcher() {
+  Workmanager().executeTask((taskName, inputData) async {
+    if (taskName != 'checkAppUpdates') return true;
+    try {
+      WidgetsFlutterBinding.ensureInitialized();
+      ui.DartPluginRegistrant.ensureInitialized();
+      final prefs = await SharedPreferences.getInstance();
+      if (!(prefs.getBool('notifications_enabled') ?? false) ||
+          !(prefs.getBool('update_alerts') ?? true)) {
+        return true;
+      }
+
+      final client = HttpClient();
+      Map<String, dynamic>? manifest;
+      try {
+        final uri = Uri.parse(_updateManifestUrl).replace(
+          queryParameters: {'v': DateTime.now().millisecondsSinceEpoch.toString()},
+        );
+        final request = await client.getUrl(uri).timeout(const Duration(seconds: 12));
+        final response = await request.close().timeout(const Duration(seconds: 12));
+        if (response.statusCode == HttpStatus.ok) {
+          final decoded = jsonDecode(await response.transform(utf8.decoder).join());
+          if (decoded is Map<String, dynamic>) manifest = decoded;
+        }
+      } finally {
+        client.close(force: true);
+      }
+      if (manifest == null) return true;
+
+      final packageInfo = await PackageInfo.fromPlatform();
+      final installedVersion = '${packageInfo.version}+${packageInfo.buildNumber}';
+      final remoteVersion = (manifest['release_version'] ?? '').toString();
+      final patchNumber = (manifest['patch_number'] as num?)?.toInt() ?? 0;
+      String key;
+      String title;
+      String body;
+      if (remoteVersion.isNotEmpty && remoteVersion != installedVersion) {
+        key = 'apk:$remoteVersion';
+        title = 'إصدار جديد من البرنامج متاح';
+        body = 'الإصدار $remoteVersion يحتاج إلى تنزيل ملف APK وتثبيته. افتح البرنامج لمراجعة التفاصيل.';
+      } else if (patchNumber > 0) {
+        key = 'patch:$remoteVersion:$patchNumber';
+        title = 'تحديث برمجي جديد متاح';
+        final notes = (manifest['notes'] ?? 'تحسينات وإصلاحات جديدة.').toString();
+        body = 'يتوفر تحديث صغير للبرنامج. افتح البرنامج لمعرفة التفاصيل. $notes';
+      } else {
+        return true;
+      }
+
+      if (prefs.getString('last_update_notification_key') == key) return true;
+      final notifications = FlutterLocalNotificationsPlugin();
+      await notifications.initialize(
+        const InitializationSettings(
+          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+        ),
+      );
+      final android = notifications.resolvePlatformSpecificImplementation<
+          AndroidFlutterLocalNotificationsPlugin>();
+      final permitted = await android?.areNotificationsEnabled() ?? true;
+      if (!permitted) return true;
+      await android?.createNotificationChannel(
+        const AndroidNotificationChannel(
+          'app_updates',
+          'تحديثات البرنامج',
+          description: 'إشعارات توفر تحديثات جديدة للبرنامج',
+          importance: Importance.high,
+        ),
+      );
+      await notifications.show(
+        3300000,
+        title,
+        body,
+        const NotificationDetails(
+          android: AndroidNotificationDetails(
+            'app_updates',
+            'تحديثات البرنامج',
+            channelDescription: 'إشعارات توفر تحديثات جديدة للبرنامج',
+            importance: Importance.high,
+            priority: Priority.high,
+            category: AndroidNotificationCategory.system,
+            icon: '@mipmap/ic_launcher',
+            playSound: true,
+            enableVibration: true,
+          ),
+        ),
+        payload: 'app_update',
+      );
+      await prefs.setString('last_update_notification_key', key);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  });
+}
+
+Future<void> registerBackgroundUpdateChecks() async {
+  if (!Platform.isAndroid) return;
+  try {
+    await Workmanager().initialize(updateBackgroundDispatcher);
+    await Workmanager().registerPeriodicTask(
+      'my-app-online-update-check',
+      'checkAppUpdates',
+      frequency: const Duration(minutes: 15),
+      constraints: Constraints(networkType: NetworkType.connected),
+      existingWorkPolicy: ExistingPeriodicWorkPolicy.keep,
+    );
+  } catch (_) {}
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   final preferences=await SharedPreferences.getInstance();currencyLabel=preferences.getString('currencyLabel')??'ج.م';
@@ -38,6 +152,7 @@ Future<void> main() async {
   }
   await StoreDb.instance.init();
   await AppNotificationService.instance.initialize();
+  await registerBackgroundUpdateChecks();
   runApp(const MyApp());
 }
 
