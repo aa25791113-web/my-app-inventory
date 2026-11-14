@@ -4,3 +4,4 @@ This marker is intentionally required for a one-time controlled APK build.
 Retry final release after adding a bounded Shorebird initialization and standard APK fallback.
 
 Run isolated resilient APK workflow.
+Retry final Android APK after fixing the Shorebird fallback guard.
