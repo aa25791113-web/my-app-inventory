@@ -142,7 +142,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
         if(i>=msgs.length)return const Padding(padding:EdgeInsets.all(12),child:LinearProgressIndicator());
         final m=msgs[i];final user=m['role']=='user';
         return Align(alignment:user?Alignment.centerLeft:Alignment.centerRight,child:ConstrainedBox(
-          constraints:BoxConstraints(maxWidth:MediaQuery.of(context).size.width*(wide?.62:.82)),
+          constraints:BoxConstraints(maxWidth:MediaQuery.of(context).size.width*(wide ? .62 : .82)),
           child:Container(margin:const EdgeInsets.symmetric(vertical:6),padding:const EdgeInsets.all(14),decoration:BoxDecoration(
             color:user?Theme.of(context).colorScheme.primaryContainer:Theme.of(context).colorScheme.surfaceContainerHighest,
             borderRadius:BorderRadius.only(topLeft:const Radius.circular(18),topRight:const Radius.circular(18),bottomLeft:Radius.circular(user?4:18),bottomRight:Radius.circular(user?18:4)),
