@@ -26,3 +26,5 @@ Final compatibility fix: replace four glyphs missing from the actual 3.9.5+46 ba
 Retry Shorebird patch after exact installed base glyph and Flutter SDK match.
 
 APP LOL 4.0.0+47: use WhatsApp support number configured in the owner dashboard.
+
+APP LOL 4.0.0+47 Shorebird patch: add ten structurally distinct responsive invoice designs; repair customer creation/selection using inserted customer ID; display invoice validation and save errors in a top-of-form banner.
