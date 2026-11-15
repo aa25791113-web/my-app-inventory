@@ -15,5 +15,7 @@ jobs:
           cache: true
       - name: Resolve dependencies
         run: flutter pub get
+      - name: Format Dart and Flutter source
+        run: dart format lib
       - name: Analyze Dart and Flutter source
         run: flutter analyze --no-fatal-infos
