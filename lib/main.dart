@@ -2956,7 +2956,7 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       else if(reportStyle==5){canvas!.drawRRect(ui.RRect.fromRectAndRadius(rowRect,const ui.Radius.circular(28)),ui.Paint()..color=lineIndex.isEven?reportSoft:const ui.Color(0xFFFFFFFF));canvas!.drawCircle(ui.Offset(pad+10,y+painter.height/2+2),6,ui.Paint()..color=reportAccent);}
       else if(reportStyle==7){canvas!.drawRect(ui.Rect.fromLTWH(pad-8,y+painter.height+10,w-2*pad+16,1.5),ui.Paint()..color=reportAccent.withOpacity(.45));}
       else if(reportStyle==8){canvas!.drawRect(rowRect,ui.Paint()..color=lineIndex.isEven?reportSoft:const ui.Color(0xFFFFFFFF));canvas!.drawRect(ui.Rect.fromLTWH(pad-8,y-7,9,painter.height+18),ui.Paint()..color=reportAccent);}
-      else{canvas!.drawRRect(ui.RRect.fromRectAndRadius(rowRect,const ui.Radius.circular(reportStyle==6?5:12)),ui.Paint()..color=reportSoft);canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=reportAccent);}
+      else{canvas!.drawRRect(ui.RRect.fromRectAndRadius(rowRect,ui.Radius.circular(reportStyle==6?5:12)),ui.Paint()..color=reportSoft);canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=reportAccent);}
       painter.paint(canvas!,Offset(pad,y));
       y+=painter.height+(reportStyle==1||reportStyle==7?34:reportStyle==5?32:28);
     }
