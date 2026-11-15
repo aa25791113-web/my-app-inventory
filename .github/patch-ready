@@ -10,3 +10,6 @@ Analyzer syntax fixes — retry validation for shift ledger and split invoice pa
 Retry patch validation after generated test cleanup.
 
 Re-run patch validation with informational lint findings non-fatal.
+
+
+Retry: use only Material icons present in the installed base release to avoid font asset changes.
