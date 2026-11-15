@@ -1,0 +1,30 @@
+APP LOL invoice workflow update
+Release: 3.9.5+46
+Track: stable
+Features: suspend and resume multiple invoices; edit saved invoices; save invoice as PNG or PDF; separate print action; payment method labels and icons.
+
+APP LOL — invoice search, split payment methods and daily shift inventory ledger.
+
+Analyzer syntax fixes — retry validation for shift ledger and split invoice payments.
+
+Retry patch validation after generated test cleanup.
+
+Re-run patch validation with informational lint findings non-fatal.
+
+
+Retry: use only Material icons present in the installed base release to avoid font asset changes.
+
+Exact base Material icon glyph set preserved for Shorebird patch validation.
+
+
+Final retry after matching all original Material icon glyphs.
+
+Material glyph references across all Dart files now match the installed base release glyph set.
+Final compatibility fix: replace four glyphs missing from the actual 3.9.5+46 base release; all Dart Material icon references are now a subset of the base glyph set.
+
+
+Retry Shorebird patch after exact installed base glyph and Flutter SDK match.
+
+APP LOL 4.0.0+47: use WhatsApp support number configured in the owner dashboard.
+
+APP LOL 4.0.0+47 Shorebird patch: add ten structurally distinct responsive invoice designs; repair customer creation/selection using inserted customer ID; display invoice validation and save errors in a top-of-form banner.

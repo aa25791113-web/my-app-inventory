@@ -1,20 +1,48 @@
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFilter, ImageFont
 from pathlib import Path
-size=1024
-im=Image.new("RGBA",(size,size),(10,12,34,255))
-d=ImageDraw.Draw(im)
-d.rounded_rectangle((36,36,988,988),radius=230,fill=(13,16,48,255),outline=(177,92,255,255),width=24)
-d.rounded_rectangle((70,70,954,954),radius=195,outline=(255,190,72,255),width=8)
-gold=(255,190,72,255); white=(245,247,255,255); purple=(167,92,255,255)
-d.polygon([(245,390),(785,390),(700,650),(330,650)],fill=purple)
-d.line([(245,390),(785,390),(700,650),(330,650),(245,390)],fill=white,width=28,joint="curve")
-d.line([(330,650),(700,650)],fill=gold,width=24)
-for x in (390,500,610): d.line([(x,420),(x+12,615)],fill=white,width=18)
-d.line([(200,300),(285,300),(350,420)],fill=white,width=34)
-d.ellipse((350,690,445,785),fill=gold);d.ellipse((580,690,675,785),fill=gold)
-d.ellipse((375,715,420,760),fill=(13,16,48,255));d.ellipse((605,715,650,760),fill=(13,16,48,255))
-d.polygon([(390,265),(435,185),(510,245),(590,170),(635,270)],fill=gold);d.rectangle((390,270,635,300),fill=gold)
-d.line([(650,360),(730,300),(790,330),(850,245)],fill=purple,width=24)
-d.polygon([(850,245),(785,255),(835,310)],fill=purple)
+import math
+
+S = 1024
+im = Image.new("RGBA", (S, S))
+px = im.load()
+for y in range(S):
+    for x in range(S):
+        t = (x + y) / (2 * S)
+        glow = max(0.0, 1.0 - math.sqrt((x-360)**2 + (y-250)**2) / 900)
+        px[x, y] = (int(8 + 24*t + 8*glow), int(17 + 18*t + 18*glow), int(43 + 55*t + 22*glow), 255)
+
+for color, bounds, blur in [
+    ((112, 75, 255, 75), (80, 70, 780, 780), 105),
+    ((0, 205, 220, 50), (340, 300, 1020, 980), 115),
+]:
+    layer = Image.new("RGBA", (S, S), (0,0,0,0))
+    ImageDraw.Draw(layer).ellipse(bounds, fill=color)
+    im = Image.alpha_composite(im, layer.filter(ImageFilter.GaussianBlur(blur)))
+
+d = ImageDraw.Draw(im)
+d.rounded_rectangle((34, 34, 990, 990), radius=235, outline=(255,255,255,65), width=5)
+d.rounded_rectangle((62, 62, 962, 962), radius=205, outline=(120,190,255,100), width=3)
+panel = Image.new("RGBA", (S, S), (0,0,0,0))
+pd = ImageDraw.Draw(panel)
+pd.rounded_rectangle((116, 170, 908, 850), radius=125, fill=(255,255,255,18), outline=(255,255,255,55), width=4)
+im = Image.alpha_composite(im, panel)
+d = ImageDraw.Draw(im)
+
+font = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 248)
+label = "LOL"
+bbox = d.textbbox((0,0), label, font=font, stroke_width=2)
+tw, th = bbox[2]-bbox[0], bbox[3]-bbox[1]
+d.text(((S-tw)//2, 300-bbox[1]), label, font=font, fill=(255,255,255,255), stroke_width=2, stroke_fill=(190,215,255,150))
+
+gold = (255, 196, 92, 255)
+cyan = (71, 220, 224, 255)
+d.rounded_rectangle((260, 650, 764, 760), radius=34, fill=(255,255,255,20), outline=(255,255,255,80), width=4)
+d.rounded_rectangle((294, 682, 420, 730), radius=14, fill=gold)
+d.rounded_rectangle((448, 665, 574, 730), radius=14, fill=cyan)
+d.rounded_rectangle((602, 640, 728, 730), radius=14, fill=(166,135,255,255))
+d.rounded_rectangle((330, 790, 694, 806), radius=8, fill=(255,255,255,180))
+d.ellipse((476, 858, 548, 930), fill=gold)
+d.ellipse((496, 878, 528, 910), fill=(15,28,62,255))
+
 Path("assets").mkdir(exist_ok=True)
-im.save("assets/launcher_icon.png")
+im.save("assets/launcher_icon.png", optimize=True)

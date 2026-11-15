@@ -1,26 +1,51 @@
 name: Build Android APK
 concurrency:
-  group: android-release-v3-${{ github.ref }}
+  group: android-release-v4-${{ github.ref }}
   cancel-in-progress: true
 on:
-  workflow_dispatch:
   push:
-    branches: [main]
-    paths: ["lib/**", "pubspec.yaml", "tool/**", "assets/**", ".github/workflows/android-apk.yml"]
+    branches:
+      - premium-redesign-v1
+    paths:
+      - .github/release-ready
+  workflow_dispatch:
+    inputs:
+      release_notes:
+        description: "ملاحظات الإصدار التي ستظهر في إشعار التحديث"
+        required: false
+        type: string
+permissions:
+  contents: write
 jobs:
   build:
     runs-on: ubuntu-latest
+    env:
+      SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
     steps:
       - uses: actions/checkout@v4
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: "3.50.0"
           cache: true
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: "21"
       - run: flutter create --platforms=android,windows --project-name my_app_inventory --org com.myapp.inventory .
+      - name: Remove only Flutter's generated sample test
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          sample = Path('test/widget_test.dart')
+          if sample.exists() and 'package:material_ui/material_ui.dart' in sample.read_text():
+              sample.unlink()
+              print('Removed incompatible Flutter template test; project tests are preserved.')
+          PY
       - name: Set Android compile SDK to 36
         shell: bash
         run: |
@@ -42,26 +67,143 @@ jobs:
           target.write_text(updated)
           print(f"Configured {target} to compileSdk 36")
           PY
-      - run: rm -rf test
+      - name: Configure Android notification permissions and scheduler
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          candidates = [Path("android/app/build.gradle.kts"), Path("android/app/build.gradle")]
+          gradle = next((p for p in candidates if p.exists()), None)
+          if gradle is None:
+              raise SystemExit("Android app Gradle file was not generated")
+          source = gradle.read_text()
+          source, _ = re.subn(
+              r'(?m)^(\s*minSdk\s*=\s*)(flutter\.minSdkVersion|\d+)',
+              lambda m: m.group(0) if m.group(2).isdigit() and int(m.group(2)) >= 23 else m.group(1) + '23',
+              source, count=1
+          )
+          source, _ = re.subn(
+              r'(?m)^(\s*minSdkVersion\s+)(flutter\.minSdkVersion|\d+)',
+              lambda m: m.group(0) if m.group(2).isdigit() and int(m.group(2)) >= 23 else m.group(1) + '23',
+              source, count=1
+          )
+          if gradle.suffix == ".kts":
+              if "isCoreLibraryDesugaringEnabled" not in source:
+                  source, count = re.subn(r"compileOptions\s*\{", "compileOptions {\n        isCoreLibraryDesugaringEnabled = true", source, count=1)
+                  if count == 0:
+                      source, count = re.subn(r"android\s*\{", "android {\n    compileOptions { isCoreLibraryDesugaringEnabled = true }", source, count=1)
+                  if count == 0:
+                      raise SystemExit("Could not enable core library desugaring")
+              dependency = 'coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")'
+          else:
+              if "coreLibraryDesugaringEnabled true" not in source:
+                  source, count = re.subn(r"compileOptions\s*\{", "compileOptions {\n        coreLibraryDesugaringEnabled true", source, count=1)
+                  if count == 0:
+                      source, count = re.subn(r"android\s*\{", "android {\n    compileOptions { coreLibraryDesugaringEnabled true }", source, count=1)
+                  if count == 0:
+                      raise SystemExit("Could not enable core library desugaring")
+              dependency = "coreLibraryDesugaring 'com.android.tools:desugar_jdk_libs:2.1.4'"
+          if dependency not in source:
+              if re.search(r"dependencies\s*\{", source):
+                  source = re.sub(r"dependencies\s*\{", lambda m: m.group(0) + "\n    " + dependency, source, count=1)
+              else:
+                  source += "\ndependencies {\n    " + dependency + "\n}\n"
+          gradle.write_text(source)
+          manifest = Path("android/app/src/main/AndroidManifest.xml")
+          xml = manifest.read_text()
+          for permission in [
+              '<uses-permission android:name="android.permission.POST_NOTIFICATIONS" />',
+              '<uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />',
+          ]:
+              if permission not in xml:
+                  xml, count = re.subn(r"(<manifest\b[^>]*>)", r"\1\n    " + permission, xml, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not add Android permission: " + permission)
+          receivers = """    <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationReceiver" />
+              <receiver android:exported="false" android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver">
+                  <intent-filter>
+                      <action android:name="android.intent.action.BOOT_COMPLETED"/>
+                      <action android:name="android.intent.action.MY_PACKAGE_REPLACED"/>
+                      <action android:name="android.intent.action.QUICKBOOT_POWERON" />
+                      <action android:name="com.htc.intent.action.QUICKBOOT_POWERON"/>
+                  </intent-filter>
+              </receiver>"""
+          if "ScheduledNotificationReceiver" not in xml:
+              xml, count = re.subn(r"(<application\b[^>]*>)", r"\1\n" + receivers, xml, count=1)
+              if count != 1:
+                  raise SystemExit("Could not register notification receivers in AndroidManifest.xml")
+          manifest.write_text(xml)
+          print("Configured notification permission, boot rescheduling and Java desugaring")
+          PY
       - name: Generate launcher icon and app label
         run: |
           python -m pip install --quiet pillow
           python tool/generate_icon.py
-          sed -i 's/android:label="my_app_inventory"/android:label="MY APP"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="my_app_inventory"/android:label="APP LOL • إدارة المخزون"/' android/app/src/main/AndroidManifest.xml
           python - <<'PY'
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
           source = manifest.read_text()
-          permission = '<uses-permission android:name="android.permission.CAMERA" />'
-          if permission not in source:
-              import re
-              source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
-              if count != 1:
-                  raise SystemExit("Could not insert camera permission into manifest")
-              manifest.write_text(source)
-          print("Verified Android camera permission in manifest")
+          permissions = [
+              '<uses-permission android:name="android.permission.CAMERA" />',
+              '<uses-permission android:name="android.permission.INTERNET" />',
+          ]
+          for permission in permissions:
+              if permission not in source:
+                  import re
+                  source, count = re.subn(r'(<manifest\b[^>]*>)', r'\1\n    ' + permission, source, count=1)
+                  if count != 1:
+                      raise SystemExit("Could not insert Android permission: " + permission)
+          manifest.write_text(source)
+          print("Verified Android camera and internet permissions in manifest")
           PY
+      - name: Create dedicated monochrome notification icon
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_app_lol.xml <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M20,7.5 L12,3 4,7.5 12,12 20,7.5z M3,9.2 L11,13.7 11,21 3,16.5z M13,13.7 L21,9.2 21,16.5 13,21z"/>
+          </vector>
+          XML
+          echo "Created APP LOL monochrome status-bar notification icon"
       - run: flutter pub get
+      - name: Require and initialize Shorebird
+        shell: bash
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::SHOREBIRD_TOKEN is missing. Refusing to create a non-Shorebird APK."
+            exit 1
+          fi
+          if [ ! -s shorebird.yaml ]; then
+            echo "Creating the Shorebird app in organization 62776..."
+            shorebird init --org-id 62776 --display-name "APP LOL" --json
+          fi
+          if [ ! -s shorebird.yaml ]; then
+            echo "::error::Shorebird did not create shorebird.yaml."
+            exit 1
+          fi
+          python - <<'PY'
+          from pathlib import Path
+          import re
+          config = Path("shorebird.yaml")
+          source = config.read_text()
+          if not re.search(r"(?m)^app_id:\s*[^\s]+", source):
+              raise SystemExit("shorebird.yaml has no valid app_id; refusing a standard Flutter build.")
+          if not re.search(r"(?m)^auto_update:\s*false\s*$", source):
+              source = re.sub(r"(?m)^auto_update:.*$", "", source).rstrip()
+              source += "\nauto_update: false\n"
+              config.write_text(source)
+          print("Shorebird app configuration verified; manual in-app update controls remain enabled.")
+          PY
+          flutter pub get
       - name: Align Android plugin compile SDK versions
         shell: bash
         run: |
@@ -88,11 +230,83 @@ jobs:
           print("Aligned compile SDK in", len(changed), "Gradle files")
           PY
       - run: dart run flutter_launcher_icons
+      - name: Format Dart and Flutter source
+        run: dart format lib
       - run: flutter analyze --no-fatal-infos
-      - run: flutter build apk --release --split-per-abi
+      - name: Publish Shorebird-enabled Android release APK
+        run: |
+          if [ -z "$SHOREBIRD_TOKEN" ]; then
+            echo "::error::Add SHOREBIRD_TOKEN to repository Actions secrets before running this workflow."
+            exit 1
+          fi
+          shorebird release android --artifact apk --target-platform android-arm64
+      - name: Publish version and release notes for in-app update alerts
+        shell: bash
+        env:
+          RELEASE_NOTES: ${{ inputs.release_notes }}
+        run: |
+          python - <<'PY'
+          import json, os, re, shutil
+          from datetime import datetime, timezone
+          from pathlib import Path
+          pubspec = Path("pubspec.yaml").read_text()
+          match = re.search(r"(?m)^version:\s*([^\s]+)", pubspec)
+          if not match:
+              raise SystemExit("Could not read version from pubspec.yaml")
+          version = match.group(1)
+          apks = list(Path("build/app/outputs/flutter-apk").glob("*.apk"))
+          if not apks:
+              raise SystemExit("Shorebird release succeeded but no APK artifact was found.")
+          size_bytes = sum(p.stat().st_size for p in apks)
+          release_asset = apks[0].parent / "app-lol-android-arm64.apk"
+          shutil.copy2(apks[0], release_asset)
+          release_tag = f"app-{os.environ.get('GITHUB_RUN_NUMBER', 'latest')}"
+          apk_url = f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/{release_tag}/app-lol-android-arm64.apk"
+          if size_bytes < 1024:
+              size_label = f"{size_bytes} بايت"
+          elif size_bytes < 1024 * 1024:
+              size_label = f"{size_bytes / 1024:.1f} كيلوبايت"
+          else:
+              size_label = f"{size_bytes / (1024 * 1024):.2f} ميجابايت"
+          manifest = {
+              "release_version": version,
+              "patch_number": 0,
+              "track": "stable",
+              "size_bytes": size_bytes,
+              "size_label": size_label,
+              "notes": os.environ.get("RELEASE_NOTES", "").strip() or "إصدار جديد يتضمن تحسينات وإصلاحات.",
+              "apk_url": apk_url,
+              "update_type": "apk",
+              "published_at": datetime.now(timezone.utc).isoformat()
+          }
+          Path("update_manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n")
+          PY
+      - name: Publish downloadable APK on GitHub Releases
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: app-${{ github.run_number }}
+          name: APP LOL 4.0 — إدارة المخزون والمبيعات
+          body: "نسخة Android رسمية من APP LOL — مبنية عبر Shorebird."
+          files: build/app/outputs/flutter-apk/app-lol-android-arm64.apk
+          overwrite_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Commit release metadata
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin "${GITHUB_REF_NAME}"
+          git reset --mixed "origin/${GITHUB_REF_NAME}"
+          git add update_manifest.json
+          if [ -f shorebird.yaml ]; then
+            git add shorebird.yaml
+          fi
+          git commit -m "Publish Android release metadata"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
       - uses: actions/upload-artifact@v4
         with:
-          name: my-app-android-apk
+          name: my-app-shorebird-android-apk-arm64
           path: build/app/outputs/flutter-apk/*.apk
           if-no-files-found: error
           retention-days: 14

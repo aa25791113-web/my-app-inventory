@@ -1,0 +1,39 @@
+APP LOL 3.9.1+42 — final Shorebird Android arm64 release.
+Final source verification passed; build the latest integrated Android release.
+Build Shorebird base release 3.9.2+43 after previous release version conflict.
+Publish final integrated Shorebird Android release 3.9.3+44 with resilient GitHub asset upload.
+Final integrated release 3.9.4+45 — owner branding, searchable invoices, announcement deep links, remote theme and public APK delivery.
+Final integrated Shorebird release 3.9.5+46 — includes detailed bulk invoice line review and reliable public release manifest publishing.
+
+APP LOL 4.0.0+47 — new Shorebird base APK with refreshed identity, five invoice templates and four report templates.
+
+APP LOL 4.0.1+48 — invoice and report redesign, customer selection and validation fixes, improved card spacing, and Shift in bottom navigation. Publish full Shorebird Android APK.
+
+APP LOL 4.0.2+49 — fix invoice customer creation and split payment validation; add five distinct invoice designs; improve app theme, payment marks, shift navigation and offline assistant.
+
+APP LOL 4.0.2+49 FINAL BUILD — repair invoice customer add flow; validate split cash and InstaPay payments; 15 invoice layouts; readable theme and text; shift in bottom navigation; separate AI assistant screen with offline FAQs, calculator and suggested prompts; payment badges and logos.
+
+APP LOL 4.0.3+50 — include robust Arabic InstaPay logo recognition in the final Android build.
+
+APP LOL 4.0.4+51 — expanded bundled offline knowledge, local teach-and-recall memory, Arabic normalization and assistant learning controls.
+
+APP LOL 4.0.4+51 — retry Shorebird build after fixing Dart null-aware matcher syntax.
+
+APP LOL 4.0.4+51 — retry build after restoring offline calculator parser.
+
+APP LOL 4.0.4+51 — final retry with corrected Arabic calculator and assistant matching regex.
+
+APP LOL 4.0.4+51 — clean analyzer warnings and publish updated offline assistant.
+
+APP LOL 4.0.5+52 — redesigned Android notifications with a dedicated monochrome status icon, branded large icon, expanded BigText layout and refreshed notification channels.
+
+APP LOL 4.0.5+52 — rebuild after fixing notification style const constructor.
+
+APP LOL 4.0.6+53 — fix Shift bottom-navigation index, add WhatsApp/Facebook support center, improve Arabic assistant greetings and add a Canva-inspired two-column invoice template with contrast refinements. Build and verify the final Android APK.
+
+APP LOL 4.0.7+54 — launch Flutter UI before database initialization; show a polished recoverable startup screen and retry on database errors; isolate notifications/background update checks so optional failures cannot block app launch; improve offline assistant conversation fallback.
+
+APP LOL 4.0.8+55 — upgrade connected assistant to the current stable Gemini 3.8 Flash model and improve Egyptian Arabic conversation, contextual answers and safe operational guidance. Rebuild the Shorebird Android APK.
+
+APP LOL 4.0.8+55 FINAL INTEGRATED BUILD — build from commit 85c88123557aa66db1c6de5fd7260119755191f3 or its descendants; include Gemini 3.8 Flash with thinkingLevel medium, resilient chat/error handling, correct target-chat replies, and all 12 coordinated color themes. Run source analysis and publish the verified Shorebird Android arm64 APK.
+APP LOL 4.0.8+56 FINAL RETRY — resolve Shorebird duplicate-release conflict by incrementing build number; include Gemini 3.8 Flash medium thinking, chat-bound conversation context, 16-message history window, one retry for transient server/network failures, clearer API errors, and all 12 coordinated themes. Run source verification and publish the final Shorebird Android arm64 APK.

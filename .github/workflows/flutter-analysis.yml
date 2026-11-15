@@ -1,0 +1,25 @@
+name: Flutter source verification
+on:
+  push:
+    branches:
+      - premium-redesign-v1
+    paths:
+      - "lib/**"
+      - "pubspec.yaml"
+      - "pubspec.lock"
+      - ".github/workflows/flutter-analysis.yml"
+  pull_request:
+    branches:
+      - premium-redesign-v1
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: dart format lib
+      - run: flutter analyze --no-pub --no-fatal-infos
