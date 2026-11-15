@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -155,7 +156,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       HttpClient? client;
       try{
         client=HttpClient()..connectionTimeout=const Duration(seconds:15);
-        final request=await client.postUrl(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/\$modelName:generateContent')).timeout(const Duration(seconds:20));
+        final request=await client.postUrl(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent')).timeout(const Duration(seconds:20));
         request.headers.set(HttpHeaders.contentTypeHeader,'application/json; charset=utf-8');
         request.headers.set('x-goog-api-key',key);
         request.add(utf8.encode(jsonEncode(payload)));
@@ -169,13 +170,13 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
             reason=(error['error']?['message']??reason).toString();
           }catch(_){}
           if(response.statusCode==429)return 'وصلنا للحد المؤقت للطلبات المجانية. استنى شوية وجرب تاني.';
-          if(response.statusCode==400)return 'طلب Gemini غير مقبول. راجع إعدادات النموذج أو جرّب سؤالاً أقصر. (\$reason)';
-          if(response.statusCode==401||response.statusCode==403)return 'مفتاح Gemini غير صالح أو لا يملك صلاحية استخدام النموذج. راجع المفتاح من إعدادات المساعد. (\$reason)';
+          if(response.statusCode==400)return 'طلب Gemini غير مقبول. راجع إعدادات النموذج أو جرّب سؤالاً أقصر. ($reason)';
+          if(response.statusCode==401||response.statusCode==403)return 'مفتاح Gemini غير صالح أو لا يملك صلاحية استخدام النموذج. راجع المفتاح من إعدادات المساعد. ($reason)';
           if([500,502,503,504].contains(response.statusCode)&&attempt==0){
             await Future<void>.delayed(const Duration(milliseconds:900));
             continue;
           }
-          return '\$reason (HTTP \${response.statusCode})';
+          return '$reason (HTTP ${response.statusCode})';
         }
 
         final data=jsonDecode(body) as Map<String,dynamic>;
@@ -189,21 +190,21 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
         final answer=parts.map((p)=>(p['text']??'').toString()).where((s)=>s.isNotEmpty).join('\n').trim();
         return answer.isEmpty?null:answer;
       }on TimeoutException catch(e,stack){
-        debugPrint('APP LOL Gemini timeout: \$e\n\$stack');
+        debugPrint('APP LOL Gemini timeout: $e\n$stack');
         if(attempt==0){
           await Future<void>.delayed(const Duration(milliseconds:900));
           continue;
         }
         return 'الاتصال بالذكاء الاصطناعي استغرق وقتاً أطول من المعتاد. جرّب مرة أخرى.';
       }on SocketException catch(e,stack){
-        debugPrint('APP LOL Gemini network error: \$e\n\$stack');
+        debugPrint('APP LOL Gemini network error: $e\n$stack');
         if(attempt==0){
           await Future<void>.delayed(const Duration(milliseconds:900));
           continue;
         }
         return 'مفيش اتصال إنترنت مستقر حالياً. تأكد من الشبكة وجرب تاني.';
       }catch(e,stack){
-        debugPrint('APP LOL Gemini request failed: \$e\n\$stack');
+        debugPrint('APP LOL Gemini request failed: $e\n$stack');
         return null;
       }finally{
         client?.close(force:true);
