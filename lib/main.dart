@@ -2928,12 +2928,36 @@ class SettingsPage extends StatelessWidget {
     const NotificationSettingsCard(),
     Card(child:Column(children:[ListTile(leading:const Icon(Icons.wallpaper_outlined),title:const Text('تغيير خلفية البرنامج'),subtitle:Text(backgroundPath==null?'لم يتم اختيار خلفية':'تم حفظ خلفية مخصصة على هذا الجهاز'),onTap:changeBackground),if(backgroundPath!=null) Align(alignment:Alignment.centerLeft,child:TextButton.icon(onPressed:clearBackground,icon:const Icon(Icons.delete_outline),label:const Text('إزالة الخلفية')))])),
     Card(child:SwitchListTile(secondary:const Icon(Icons.dark_mode_outlined),title:const Text('الوضع الليلي'),value:dark,onChanged:(_)=>toggle())),
-    Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-      const Text('لون واجهة البرنامج',style:TextStyle(fontWeight:FontWeight.bold)),
-      const SizedBox(height:10),
-      Wrap(spacing:10,runSpacing:8,children:[
-        for(final c in [0xFF087F68,0xFF1565C0,0xFF6A1B9A,0xFFAD1457,0xFFEF6C00,0xFF455A64,0xFF3949AB])
-          InkWell(onTap:()=>changeSeed(c),child:CircleAvatar(backgroundColor:Color(c),child:seedColor.value==c?const Icon(Icons.check,color:Colors.white):null))
+    Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+      const Row(children:[Icon(Icons.palette_outlined),SizedBox(width:8),Text('ثيمات APP LOL',style:TextStyle(fontWeight:FontWeight.w900,fontSize:16))]),
+      const SizedBox(height:5),
+      Text('اختار لوحة ألوان متناسقة؛ التغيير بيتطبق على الأزرار والمؤشرات والعناصر النشطة.',style:TextStyle(fontSize:12,color:Theme.of(context).colorScheme.onSurfaceVariant)),
+      const SizedBox(height:14),
+      Wrap(spacing:14,runSpacing:14,children:[
+        for(final option in const <Map<String,Object>>[
+          {'color':0xFF087F68,'label':'زمردي'},
+          {'color':0xFF1565C0,'label':'محيطي'},
+          {'color':0xFF6A1B9A,'label':'ملكي'},
+          {'color':0xFFAD1457,'label':'ياقوتي'},
+          {'color':0xFFEF6C00,'label':'غروب'},
+          {'color':0xFF3949AB,'label':'نيلي'},
+          {'color':0xFF00838F,'label':'فيروزي'},
+          {'color':0xFF558B2F,'label':'زيتوني'},
+          {'color':0xFF5D4037,'label':'قهوة'},
+          {'color':0xFF455A64,'label':'جرافيت'},
+          {'color':0xFF7B1FA2,'label':'أوركيد'},
+          {'color':0xFF0277BD,'label':'سماوي'},
+        ])
+          InkWell(
+            borderRadius:BorderRadius.circular(12),
+            onTap:()=>changeSeed(option['color'] as int),
+            child:Column(mainAxisSize:MainAxisSize.min,children:[
+              CircleAvatar(radius:19,backgroundColor:Color(option['color'] as int),
+                child:seedColor.value==(option['color'] as int)?const Icon(Icons.check_rounded,color:Colors.white,size:21):null),
+              const SizedBox(height:5),
+              Text(option['label'] as String,style:const TextStyle(fontSize:10,fontWeight:FontWeight.w700)),
+            ]),
+          )
       ])
     ]))),
     Card(child:ListTile(leading:const Icon(Icons.backup_outlined),title:const Text('تصدير نسخة احتياطية إلى ملف'),
