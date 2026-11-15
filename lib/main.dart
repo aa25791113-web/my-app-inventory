@@ -1865,7 +1865,7 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
         IconButton(onPressed:()=>Navigator.pop(context,false),icon:const Icon(Icons.close,color:Colors.white),tooltip:'إغلاق'),
       ])),
       Expanded(child:SingleChildScrollView(controller:formScroll,padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        if(formError!=null)Container(key:const ValueKey('invoice-error-banner'),margin:const EdgeInsets.only(bottom:14),padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFFFFEEEE),borderRadius:BorderRadius.circular(15),border:Border.all(color:const Color(0xFFE45B5B),width:1.3)),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.error_outline,color:Color(0xFFB42318),size:24),const SizedBox(width:9),Expanded(child:Text(formError!,style:const TextStyle(color:Color(0xFF8F1D18),fontWeight:FontWeight.w800,fontSize:13,height:1.45))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>setState(()=>formError=null),icon:const Icon(Icons.close,color:Color(0xFF8F1D18))) ])),
+        if(formError!=null)Container(key:const ValueKey('invoice-error-banner'),margin:const EdgeInsets.only(bottom:14),padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFFFFEEEE),borderRadius:BorderRadius.circular(15),border:Border.all(color:const Color(0xFFE45B5B),width:1.3)),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.warning_amber,color:Color(0xFFB42318),size:24),const SizedBox(width:9),Expanded(child:Text(formError!,style:const TextStyle(color:Color(0xFF8F1D18),fontWeight:FontWeight.w800,fontSize:13,height:1.45))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>setState(()=>formError=null),icon:const Icon(Icons.close,color:Color(0xFF8F1D18))) ])),
         if(widget.invoice==null)...[_sectionTitle('بيانات العميل',Icons.person_outline),Row(children:[
           Expanded(flex:3,child:_searchField(
             options:widget.customers.map((x)=>x['name'].toString()).toList(),
@@ -1969,7 +1969,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   Future<void> savePdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();final path=await FilePicker.platform.saveFile(dialogTitle:'حفظ الفاتورة PDF',fileName:'APP_LOL_'+widget.invoice['invoice_no'].toString()+'.pdf',type:FileType.custom,allowedExtensions:['pdf'],bytes:bytes);if(mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم حفظ الفاتورة PDF.');}catch(e){if(mounted)toast(context,'تعذر حفظ PDF: '+e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>busy=false);}}
   Future<void> printPdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();await Printing.layoutPdf(name:'APP_LOL_'+widget.invoice['invoice_no'].toString()+'.pdf',onLayout:(_)async=>bytes);}catch(e){if(mounted)toast(context,'تعذرت الطباعة: '+e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>busy=false);}}
   Widget _brand(Color primary,Color accent,{bool centered=false,bool dark=false})=>Row(mainAxisAlignment:centered?MainAxisAlignment.center:MainAxisAlignment.start,children:[
-    Container(width:52,height:52,decoration:BoxDecoration(color:dark?Colors.white.withOpacity(.13):primary,borderRadius:BorderRadius.circular(16),border:Border.all(color:accent.withOpacity(.55),width:1.4)),child:Icon(Icons.storefront_rounded,color:dark?accent:Colors.white,size:30)),
+    Container(width:52,height:52,decoration:BoxDecoration(color:dark?Colors.white.withOpacity(.13):primary,borderRadius:BorderRadius.circular(16),border:Border.all(color:accent.withOpacity(.55),width:1.4)),child:Icon(Icons.storefront_outlined,color:dark?accent:Colors.white,size:30)),
     const SizedBox(width:12),
     Column(crossAxisAlignment:centered?CrossAxisAlignment.center:CrossAxisAlignment.start,children:[
       Text('APP LOL',style:TextStyle(color:dark?Colors.white:primary,fontSize:25,fontWeight:FontWeight.w900,letterSpacing:1.4)),
@@ -2006,7 +2006,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     final markColor=isInsta?const Color(0xFFF36B35):isVodafone?const Color(0xFFE60000):const Color(0xFF16865A);
     final title=isInsta?'InstaPay':isVodafone?'Vodafone Cash':isWallet?'محفظة إلكترونية':method;
     return Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(13),border:Border.all(color:markColor.withOpacity(.22))),child:Row(mainAxisSize:MainAxisSize.min,children:[
-      Container(width:32,height:32,decoration:BoxDecoration(color:markColor,borderRadius:BorderRadius.circular(9)),child:Icon(isInsta?Icons.swap_horiz_rounded:isVodafone?Icons.currency_exchange_rounded:Icons.account_balance_wallet_rounded,color:Colors.white,size:20)),
+      Container(width:32,height:32,decoration:BoxDecoration(color:markColor,borderRadius:BorderRadius.circular(9)),child:Icon(isInsta?Icons.south_west:isVodafone?Icons.account_balance:Icons.account_balance_wallet,color:Colors.white,size:20)),
       const SizedBox(width:8),Text(title,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:12)),
     ]));
   }
@@ -2047,10 +2047,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
       _brand(primary,accent),const SizedBox(height:16),Container(height:5,color:primary),const SizedBox(height:8),Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('فاتورة بيع',style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:22)),Text(no,style:TextStyle(color:accent,fontWeight:FontWeight.w900,fontSize:16))]),Text(date,style:const TextStyle(color:Colors.blueGrey,fontSize:11)),
     ])
     :template==5?Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(26)),child:Column(children:[
-      Container(width:65,height:65,decoration:BoxDecoration(color:primary,shape:BoxShape.circle),child:Icon(Icons.shopping_bag_rounded,color:accent,size:34)),const SizedBox(height:10),_brand(primary,accent,centered:true),const SizedBox(height:14),Text('إيصال بيع',style:TextStyle(color:primary,fontSize:22,fontWeight:FontWeight.w900)),Text(no+'  |  '+date,style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w800)),
+      Container(width:65,height:65,decoration:BoxDecoration(color:primary,shape:BoxShape.circle),child:Icon(Icons.shopping_bag,color:accent,size:34)),const SizedBox(height:10),_brand(primary,accent,centered:true),const SizedBox(height:14),Text('إيصال بيع',style:TextStyle(color:primary,fontSize:22,fontWeight:FontWeight.w900)),Text(no+'  |  '+date,style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w800)),
     ]))
     :template==6?Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(border:Border.all(color:primary,width:2),borderRadius:BorderRadius.circular(8)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-      Row(children:[_brand(primary,accent),const Spacer(),Icon(Icons.qr_code_2,color:accent,size:38)]),const Divider(height:24),Text('فاتورة ضريبية / بيع',style:TextStyle(color:primary,fontSize:20,fontWeight:FontWeight.w900)),Text(no+'   •   '+date,style:TextStyle(color:accent,fontWeight:FontWeight.w800,fontSize:11)),
+      Row(children:[_brand(primary,accent),const Spacer(),Icon(Icons.qr_code,color:accent,size:38)]),const Divider(height:24),Text('فاتورة ضريبية / بيع',style:TextStyle(color:primary,fontSize:20,fontWeight:FontWeight.w900)),Text(no+'   •   '+date,style:TextStyle(color:accent,fontWeight:FontWeight.w800,fontSize:11)),
     ]))
     :template==7?Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Center(child:_brand(primary,accent,centered:true)),const SizedBox(height:16),Center(child:Text('INVOICE',style:TextStyle(color:accent,fontSize:12,letterSpacing:5,fontWeight:FontWeight.w900))),Center(child:Text('فاتورة بيع',style:TextStyle(color:primary,fontSize:26,fontWeight:FontWeight.w900))),Center(child:Text(no+'  •  '+date,style:const TextStyle(color:Colors.blueGrey,fontSize:11))),const SizedBox(height:14),Divider(color:primary,thickness:2),
@@ -2069,7 +2069,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
       Expanded(child:_labelValue('العميل',customer,primary)),Container(width:1,height:42,color:accent),const SizedBox(width:12),Expanded(child:_labelValue('رقم الهاتف',phone.isEmpty?'غير مسجل':phone,primary)),
     ])
     :Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(template==5?28:14)),child:Row(children:[
-      Icon(Icons.person_pin_circle_rounded,color:accent,size:30),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('العميل',style:TextStyle(color:primary.withOpacity(.65),fontSize:10)),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:15)),if(phone.isNotEmpty)Text(phone,style:const TextStyle(color:Colors.blueGrey,fontSize:10))])),
+      Icon(Icons.person_outline,color:accent,size:30),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('العميل',style:TextStyle(color:primary.withOpacity(.65),fontSize:10)),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:15)),if(phone.isNotEmpty)Text(phone,style:const TextStyle(color:Colors.blueGrey,fontSize:10))])),
     ]));
     final itemHeader=Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:11),decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(template==5?18:7)),child:const Row(children:[
       Expanded(flex:5,child:Text('الصنف',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:11))),
@@ -2100,7 +2100,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(6),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:900,maxHeight:MediaQuery.of(context).size.height*.97),child:Column(children:[
       Padding(padding:const EdgeInsets.fromLTRB(12,8,12,4),child:Row(children:[
         const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
-        PopupMenuButton<int>(tooltip:'اختيار واحد من 10 تصميمات كاملة',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>List.generate(names.length,(i)=>PopupMenuItem(value:i,child:Text((i+1).toString()+'. '+names[i]))),icon:const Icon(Icons.dashboard_customize_rounded)),
+        PopupMenuButton<int>(tooltip:'اختيار واحد من 10 تصميمات كاملة',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>List.generate(names.length,(i)=>PopupMenuItem(value:i,child:Text((i+1).toString()+'. '+names[i]))),icon:const Icon(Icons.dashboard_outlined)),
         IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close)),
       ])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(7,5,7,12),child:RepaintBoundary(key:captureKey,child:ConstrainedBox(constraints:BoxConstraints(minWidth:paperWidth),child:SizedBox(width:paperWidth,child:_design(c[0],c[1],c[2])))))),
@@ -2108,7 +2108,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
         OutlinedButton.icon(onPressed:busy?null:saveImage,icon:const Icon(Icons.image_outlined),label:const Text('صورة')),
         FilledButton.icon(onPressed:busy?null:savePdf,icon:const Icon(Icons.picture_as_pdf),label:const Text('PDF')),
         OutlinedButton.icon(onPressed:busy?null:printPdf,icon:const Icon(Icons.print_outlined),label:const Text('طباعة')),
-        TextButton.icon(onPressed:(){Navigator.pop(context);widget.onEdit();},icon:const Icon(Icons.edit_note),label:const Text('تعديل')),
+        TextButton.icon(onPressed:(){Navigator.pop(context);widget.onEdit();},icon:const Icon(Icons.note_add),label:const Text('تعديل')),
         TextButton.icon(onPressed:(){Navigator.pop(context);widget.onAppend();},icon:const Icon(Icons.add_shopping_cart),label:const Text('إضافة أصناف')),
       ])),if(busy)const LinearProgressIndicator(minHeight:2),
     ]))));
