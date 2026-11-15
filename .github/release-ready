@@ -32,3 +32,5 @@ APP LOL 4.0.5+52 — rebuild after fixing notification style const constructor.
 APP LOL 4.0.6+53 — fix Shift bottom-navigation index, add WhatsApp/Facebook support center, improve Arabic assistant greetings and add a Canva-inspired two-column invoice template with contrast refinements. Build and verify the final Android APK.
 
 APP LOL 4.0.7+54 — launch Flutter UI before database initialization; show a polished recoverable startup screen and retry on database errors; isolate notifications/background update checks so optional failures cannot block app launch; improve offline assistant conversation fallback.
+
+APP LOL 4.0.8+55 — upgrade connected assistant to the current stable Gemini 3.8 Flash model and improve Egyptian Arabic conversation, contextual answers and safe operational guidance. Rebuild the Shorebird Android APK.
