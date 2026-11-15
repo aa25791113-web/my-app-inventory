@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 /// Versioned, bundled offline knowledge. Each APK update can expand this pack.
 class AssistantKnowledge {
   static const version = 2;
