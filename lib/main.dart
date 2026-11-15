@@ -2887,22 +2887,23 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
   try {
     final reportStyle=await showDialog<int>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
       title:const Text('اختار تصميم التقرير'),
-      content:Column(mainAxisSize:MainAxisSize.min,children:[
-        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFF087F8C),child:Icon(Icons.water_drop,color:Colors.white)),title:const Text('ملكي — أزرق وتركواز'),onTap:()=>Navigator.pop(ctx,0)),
-        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFFC59B52),child:Icon(Icons.workspace_premium,color:Colors.white)),title:const Text('فاخر — أسود وذهبي'),onTap:()=>Navigator.pop(ctx,1)),
-        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFF23865A),child:Icon(Icons.eco,color:Colors.white)),title:const Text('زمردي — أخضر'),onTap:()=>Navigator.pop(ctx,2)),
-        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFF7651B5),child:Icon(Icons.auto_awesome,color:Colors.white)),title:const Text('عصري — بنفسجي'),onTap:()=>Navigator.pop(ctx,3)),
-      ]),
+      content:SizedBox(width:360,height:420,child:ListView.builder(itemCount:reportNames.length,itemBuilder:(ctx,i)=>ListTile(leading:CircleAvatar(backgroundColor:reportSwatches[i],child:Text((i+1).toString(),style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900))),title:Text(reportNames[i],style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text('تخطيط '+(i+1).toString()+' من 10'),onTap:()=>Navigator.pop(ctx,i)))),
       actions:[TextButton(onPressed:()=>Navigator.pop(ctx,null),child:const Text('إلغاء'))],
     )));
     if(reportStyle==null)return;
     final reportPalettes=<List<ui.Color>>[
       [const ui.Color(0xFF082D3A),const ui.Color(0xFF087F8C),const ui.Color(0xFFEAF1F2),const ui.Color(0xFFE8F2EF)],
       [const ui.Color(0xFF20242C),const ui.Color(0xFFC59B52),const ui.Color(0xFFF2EEE6),const ui.Color(0xFFF4F1EA)],
-      [const ui.Color(0xFF14532D),const ui.Color(0xFF23865A),const ui.Color(0xFFEAF4EC),const ui.Color(0xFFE7F3E9)],
       [const ui.Color(0xFF39246B),const ui.Color(0xFF7651B5),const ui.Color(0xFFF0ECF8),const ui.Color(0xFFEDE7F8)],
+      [const ui.Color(0xFF123B55),const ui.Color(0xFF2D7FA3),const ui.Color(0xFFEAF3F8),const ui.Color(0xFFE5F0F5)],
+      [const ui.Color(0xFF14532D),const ui.Color(0xFF23865A),const ui.Color(0xFFEAF4EC),const ui.Color(0xFFE7F3E9)],
+      [const ui.Color(0xFF7C2D12),const ui.Color(0xFFEA580C),const ui.Color(0xFFFFF1E8),const ui.Color(0xFFFFE6D5)],
+      [const ui.Color(0xFF312E81),const ui.Color(0xFF6366F1),const ui.Color(0xFFEEF2FF),const ui.Color(0xFFE0E7FF)],
+      [const ui.Color(0xFF334155),const ui.Color(0xFF94A3B8),const ui.Color(0xFFF1F5F9),const ui.Color(0xFFE2E8F0)],
+      [const ui.Color(0xFF7F1D1D),const ui.Color(0xFFDC2626),const ui.Color(0xFFFEF2F2),const ui.Color(0xFFFEE2E2)],
+      [const ui.Color(0xFF164E63),const ui.Color(0xFF0E7490),const ui.Color(0xFFECFEFF),const ui.Color(0xFFCFFAFE)],
     ];
-    final palette=reportPalettes[reportStyle.clamp(0,3).toInt()];
+    final palette=reportPalettes[reportStyle.clamp(0,9).toInt()];
     final reportPrimary=palette[0],reportAccent=palette[1],reportBg=palette[2],reportSoft=palette[3];
     const double w=1240,h=1754,pad=64;
     final images=<Uint8List>[];
@@ -2915,10 +2916,14 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=reportBg);
       canvas!.drawCircle(const ui.Offset(1110,1540),250,ui.Paint()..color=reportSoft);
       canvas!.drawCircle(const ui.Offset(90,260),190,ui.Paint()..color=reportSoft);
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,h-56),const ui.Radius.circular(34)),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
-      final headerPaint=ui.Paint()..shader=ui.Gradient.linear(const ui.Offset(28,28),const ui.Offset(w-28,218),[reportPrimary,reportAccent]);
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,190),const ui.Radius.circular(34)),headerPaint);
-      canvas!.drawRect(const ui.Rect.fromLTWH(28,150,w-56,218),headerPaint);
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,h-56),ui.Radius.circular(reportStyle==1?4:reportStyle==5?60:reportStyle==7?8:34)),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
+      final headerPaint=ui.Paint()..shader=ui.Gradient.linear(const ui.Offset(28,28),const ui.Offset(w-28,260),[reportPrimary,reportAccent]);
+      if(reportStyle==1){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,255),ui.Paint()..color=reportPrimary);canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,8),ui.Paint()..color=reportAccent);canvas!.drawRect(const ui.Rect.fromLTWH(28,275,w-56,3),ui.Paint()..color=reportAccent);}
+      else if(reportStyle==3){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,24,h-56),ui.Paint()..color=reportAccent);canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(70,28,w-98,210),const ui.Radius.circular(22)),headerPaint);}
+      else if(reportStyle==5){canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,260),const ui.Radius.circular(60)),headerPaint);canvas!.drawCircle(const ui.Offset(w/2,70),130,ui.Paint()..color=const ui.Color(0x18FFFFFF));}
+      else if(reportStyle==7){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,10),ui.Paint()..color=reportPrimary);canvas!.drawRect(const ui.Rect.fromLTWH(28,45,w-56,2),ui.Paint()..color=reportAccent);}
+      else if(reportStyle==8){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,270),ui.Paint()..color=reportPrimary);canvas!.drawRect(const ui.Rect.fromLTWH(28,28,18,270),ui.Paint()..color=reportAccent);}
+      else{canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,230),ui.Radius.circular(reportStyle==6?6:34)),headerPaint);canvas!.drawRect(const ui.Rect.fromLTWH(28,190,w-56,68),headerPaint);}
       canvas!.drawCircle(const ui.Offset(1110,75),130,ui.Paint()..color=const ui.Color(0x22FFFFFF));
       canvas!.drawCircle(const ui.Offset(1010,180),65,ui.Paint()..color=const ui.Color(0x18FFFFFF));
       final watermark=TextPainter(text:const TextSpan(text:'APP LOL',style:TextStyle(fontSize:74,fontWeight:FontWeight.w900,color:Color(0x087F8A90),letterSpacing:5)),textDirection:ui.TextDirection.ltr);
@@ -2928,7 +2933,7 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       heading.paint(canvas!,Offset(pad,pad));
       final date=TextPainter(text:TextSpan(text:'تاريخ الطباعة: ${DateTime.now().toLocal().toString().substring(0,16)}',style:const TextStyle(fontSize:22,color:Color(0xFFE2F4EF))),textDirection:ui.TextDirection.rtl,textAlign:TextAlign.right);
       date.layout(maxWidth:w-2*pad);date.paint(canvas!,Offset(pad,pad+heading.height+18));
-      y=pad+heading.height+date.height+65;
+      y=pad+heading.height+date.height+(reportStyle==1?105:reportStyle==3?90:reportStyle==7?35:75);
     }
     Future<void> finishPage() async {
       final picture=recorder!.endRecording();
@@ -2938,14 +2943,20 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       image.dispose();
     }
     beginPage();
-    for(final line in lines) {
-      final painter=TextPainter(text:TextSpan(text:line,style:const TextStyle(fontSize:27,color:Color(0xFF161616))),textDirection:ui.TextDirection.rtl,textAlign:TextAlign.right);
+    for(var lineIndex=0;lineIndex<lines.length;lineIndex++) {
+      final line=lines[lineIndex];
+      final painter=TextPainter(text:TextSpan(text:line,style:TextStyle(fontSize:reportStyle==4||reportStyle==9?24:27,color:const ui.Color(0xFF161616),fontWeight:reportStyle==8?FontWeight.w700:FontWeight.normal)),textDirection:ui.TextDirection.rtl,textAlign:TextAlign.right);
       painter.layout(maxWidth:w-2*pad);
-      if(y+painter.height+24>h-pad) { await finishPage(); beginPage(); }
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18),const ui.Radius.circular(12)),ui.Paint()..color=reportSoft);
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=reportAccent);
+      if(y+painter.height+34>h-pad) { await finishPage(); beginPage(); }
+      final rowRect=ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18);
+      if(reportStyle==1){canvas!.drawRect(rowRect,ui.Paint()..color=lineIndex.isEven?reportSoft:const ui.Color(0xFFFFFFFF));canvas!.drawRect(ui.Rect.fromLTWH(pad-8,y+painter.height+8,w-2*pad+16,2),ui.Paint()..color=reportAccent);canvas!.drawCircle(ui.Offset(w-pad-8,y+painter.height/2+2),7,ui.Paint()..color=reportAccent);}
+      else if(reportStyle==3){canvas!.drawRRect(ui.RRect.fromRectAndRadius(rowRect,const ui.Radius.circular(4)),ui.Paint()..color=reportSoft);canvas!.drawRect(ui.Rect.fromLTWH(pad-8,y-7,13,painter.height+18),ui.Paint()..color=reportAccent);}
+      else if(reportStyle==5){canvas!.drawRRect(ui.RRect.fromRectAndRadius(rowRect,const ui.Radius.circular(28)),ui.Paint()..color=lineIndex.isEven?reportSoft:const ui.Color(0xFFFFFFFF));canvas!.drawCircle(ui.Offset(pad+10,y+painter.height/2+2),6,ui.Paint()..color=reportAccent);}
+      else if(reportStyle==7){canvas!.drawRect(ui.Rect.fromLTWH(pad-8,y+painter.height+10,w-2*pad+16,1.5),ui.Paint()..color=reportAccent.withOpacity(.45));}
+      else if(reportStyle==8){canvas!.drawRect(rowRect,ui.Paint()..color=lineIndex.isEven?reportSoft:const ui.Color(0xFFFFFFFF));canvas!.drawRect(ui.Rect.fromLTWH(pad-8,y-7,9,painter.height+18),ui.Paint()..color=reportAccent);}
+      else{canvas!.drawRRect(ui.RRect.fromRectAndRadius(rowRect,const ui.Radius.circular(reportStyle==6?5:12)),ui.Paint()..color=reportSoft);canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=reportAccent);}
       painter.paint(canvas!,Offset(pad,y));
-      y+=painter.height+28;
+      y+=painter.height+(reportStyle==1||reportStyle==7?34:reportStyle==5?32:28);
     }
     await finishPage();
     final choice=await showDialog<String>(context:context,builder:(dialogContext)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
