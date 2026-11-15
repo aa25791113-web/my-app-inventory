@@ -34,6 +34,7 @@ import 'premium_assistant.dart';
 import 'scientific_calculator.dart';
 
 String currencyLabel='ج.م';
+String? _appRemoteSupportUrl;
 const String _adminSupabaseUrl='https://xesbhvqivavfvipnwykh.supabase.co';
 const String _adminSupabaseKey='sb_publishable_Uxl-meIJXZPaTxzNglGCPQ_7CcGOxuK';
 
@@ -965,6 +966,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
       if(logoUrl.startsWith('https://'))remoteLogoUrl=logoUrl;
       if(tagline.isNotEmpty)remoteTagline=tagline;
       if(support.startsWith('https://'))remoteSupportUrl=support;
+      _appRemoteSupportUrl=support.startsWith('https://')?support:null;
       if(website.startsWith('https://'))remoteWebsiteUrl=website;
       if(owner.isNotEmpty)remoteOwner=owner;
       if(backgroundUrl.startsWith('https://'))remoteBackgroundUrl=backgroundUrl;
@@ -1530,9 +1532,10 @@ class _AssistantPageState extends State<AssistantPage> {
     finally{if(mounted)setState(()=>busy=false);}
   }
   Future<void> contactSupport()async{
-    const phone='584263545601';
-    final message=Uri.encodeComponent('مرحباً فريق دعم APP LOL 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 3.8.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
-    final uri=Uri.parse('https://wa.me/$phone?text=$message');
+    final message=Uri.encodeComponent('مرحباً فريق دعم APP LOL 👋\n\nنوع الطلب: استفسار / شكوى / الإبلاغ عن مشكلة\n\nإصدار التطبيق: 4.0.0\nالجهاز: \n\nتفاصيل المشكلة أو الطلب:\n');
+    final configured=Uri.tryParse(_appRemoteSupportUrl??'');
+    final base=(configured!=null&&configured.host.toLowerCase()=='wa.me')?configured:Uri.parse('https://wa.me/201555954312');
+    final uri=base.replace(queryParameters:{...base.queryParameters,'text':message});
     if(!await launchUrl(uri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح واتساب. تأكد من تثبيته أو افتح الرابط من المتصفح.');
   }
   @override Widget build(BuildContext context)=>ListView(padding:const EdgeInsets.all(14),children:[
