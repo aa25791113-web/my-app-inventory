@@ -158,6 +158,22 @@ jobs:
           manifest.write_text(source)
           print("Verified Android camera and internet permissions in manifest")
           PY
+      - name: Create dedicated monochrome notification icon
+        shell: bash
+        run: |
+          mkdir -p android/app/src/main/res/drawable
+          cat > android/app/src/main/res/drawable/ic_stat_app_lol.xml <<'XML'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="24dp"
+              android:height="24dp"
+              android:viewportWidth="24"
+              android:viewportHeight="24">
+              <path
+                  android:fillColor="#FFFFFFFF"
+                  android:pathData="M20,7.5 L12,3 4,7.5 12,12 20,7.5z M3,9.2 L11,13.7 11,21 3,16.5z M13,13.7 L21,9.2 21,16.5 13,21z"/>
+          </vector>
+          XML
+          echo "Created APP LOL monochrome status-bar notification icon"
       - run: flutter pub get
       - name: Require and initialize Shorebird
         shell: bash
