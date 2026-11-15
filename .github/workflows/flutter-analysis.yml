@@ -21,5 +21,5 @@ jobs:
           channel: stable
           cache: true
       - run: flutter pub get
-      - run: dart format --output=none lib
+      - run: dart format lib
       - run: flutter analyze --no-pub --no-fatal-infos
