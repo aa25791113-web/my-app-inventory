@@ -30,3 +30,5 @@ APP LOL 4.0.5+52 — redesigned Android notifications with a dedicated monochrom
 APP LOL 4.0.5+52 — rebuild after fixing notification style const constructor.
 
 APP LOL 4.0.6+53 — fix Shift bottom-navigation index, add WhatsApp/Facebook support center, improve Arabic assistant greetings and add a Canva-inspired two-column invoice template with contrast refinements. Build and verify the final Android APK.
+
+APP LOL 4.0.7+54 — launch Flutter UI before database initialization; show a polished recoverable startup screen and retry on database errors; isolate notifications/background update checks so optional failures cannot block app launch; improve offline assistant conversation fallback.
