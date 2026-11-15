@@ -66,6 +66,6 @@ class AssistantKnowledge {
         best = entry;
       }
     }
-    return bestScore >= .67 ? best?['answer'] : null;
+    return bestScore >= .67 && best != null ? best['answer'] : null;
   }
 }
