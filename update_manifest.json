@@ -1,9 +1,11 @@
 {
-  "release_version": "4.0.0+47",
-  "patch_number": 1,
+  "release_version": "4.0.1+48",
+  "patch_number": 0,
   "track": "stable",
-  "size_bytes": 80271,
-  "size_label": "78.4 كيلوبايت",
-  "notes": "إضافة فواتير معلّقة متعددة مع الاستئناف، وتعديل الفواتير المحفوظة، وحفظ صورة وPDF، وتسجيل طرق الدفع بأيقوناتها.",
-  "published_at": "2026-11-15T14:02:13.326464+00:00"
+  "size_bytes": 42065774,
+  "size_label": "40.12 ميجابايت",
+  "notes": "إصدار جديد يتضمن تحسينات وإصلاحات.",
+  "apk_url": "https://github.com/aa25791113-web/my-app-inventory/releases/download/app-167/app-lol-android-arm64.apk",
+  "update_type": "apk",
+  "published_at": "2026-11-15T14:33:55.124572+00:00"
 }
