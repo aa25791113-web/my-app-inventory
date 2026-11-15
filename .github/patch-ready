@@ -18,3 +18,5 @@ Exact base Material icon glyph set preserved for Shorebird patch validation.
 
 
 Final retry after matching all original Material icon glyphs.
+
+Material glyph references across all Dart files now match the installed base release glyph set.
