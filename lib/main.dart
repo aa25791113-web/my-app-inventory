@@ -2005,8 +2005,14 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     final isWallet=v.contains('محفظ')||v.contains('wallet');
     final markColor=isInsta?const Color(0xFFF36B35):isVodafone?const Color(0xFFE60000):const Color(0xFF16865A);
     final title=isInsta?'InstaPay':isVodafone?'Vodafone Cash':isWallet?'محفظة إلكترونية':method;
+    final fallback=Icon(isInsta?Icons.south_west:isVodafone?Icons.account_balance:Icons.account_balance_wallet,color:Colors.white,size:20);
+    final logo=isInsta
+      ?Image.network('https://play-lh.googleusercontent.com/_ks0_XUbrZOkeiXkjaiZEK1S-j1skuQgF1E8S3ff702CoVyaiGnbfXPK74WjgxMk0Q4v2hlhu8WTHxp52Wq0=w240-h480',width:32,height:32,fit:BoxFit.cover,errorBuilder:(_,__,___)=>fallback)
+      :isVodafone
+        ?Image.network('https://arabhardware.net/wp-content/uploads/2021/05/vodafone-cash.jpeg',width:32,height:32,fit:BoxFit.cover,errorBuilder:(_,__,___)=>fallback)
+        :fallback;
     return Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(13),border:Border.all(color:markColor.withOpacity(.22))),child:Row(mainAxisSize:MainAxisSize.min,children:[
-      Container(width:32,height:32,decoration:BoxDecoration(color:markColor,borderRadius:BorderRadius.circular(9)),child:Icon(isInsta?Icons.south_west:isVodafone?Icons.account_balance:Icons.account_balance_wallet,color:Colors.white,size:20)),
+      ClipRRect(borderRadius:BorderRadius.circular(9),child:Container(width:32,height:32,color:markColor,child:logo)),
       const SizedBox(width:8),Text(title,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:12)),
     ]));
   }
