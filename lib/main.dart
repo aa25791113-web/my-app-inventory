@@ -1771,6 +1771,8 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
   final List<TextEditingController> splitAmounts=[TextEditingController(text:'0')];final List<String> splitMethods=['كاش'];
   int? customerId,draftId;
   bool percent=false,saving=false;
+  String? formError;
+  final ScrollController formScroll=ScrollController();
   @override void initState(){super.initState();_loadInitial();}
   Future<void> _loadInitial()async{if(widget.draft!=null){final d=widget.draft!;draftId=d['id'] as int;customerId=d['customer_id'] as int?;customerName.text=(d['customer_name']??'').toString();customerPhone.text=(d['customer_phone']??'').toString();discount.text=(d['discount_value']??0).toString();percent=(d['discount_percent'] as int? ?? 0)==1;paid.text=(d['paid']??0).toString();splitAmounts.first.text=paid.text;note.text=(d['note']??'').toString();paymentMethod.text=(d['payment_method']??'').toString();try{items.addAll((jsonDecode((d['items_json']??'[]').toString()) as List).map((x)=>Map<String,Object?>.from(x as Map)));}catch(_){}if(mounted)setState((){});return;}if(widget.invoice!=null){final e=widget.invoice!;customerId=e['customer_id'] as int?;customerName.text=(e['customer_name']??'').toString();customerPhone.text=(e['customer_phone']??'').toString();discount.text=(e['discount_value']??0).toString();percent=e['discount_mode']=='percent';paid.text=(e['paid']??0).toString();splitAmounts.first.text=paid.text;note.text=(e['note']??'').toString();paymentMethod.text=(e['payment_method']??'').toString();if(widget.editing){final saved=await StoreDb.instance.invoiceItems(e['id'] as int);if(mounted)setState(()=>items.addAll(saved.map((x)=>Map<String,Object?>.from(x))));}}}
   double get subtotal=>items.fold<double>(0,(s,e)=>s+((e['qty'] as int? ?? 0)*(e['unit_price'] as num? ?? 0).toDouble()));
@@ -1779,7 +1781,8 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
   double get paidValue=>splitAmounts.fold<double>(0,(v,c)=>v+(double.tryParse(c.text)??0));
   void addPaymentPart(){setState((){splitAmounts.add(TextEditingController(text:'0'));splitMethods.add('إنستا باي');});}
   void removePaymentPart(int i){if(splitAmounts.length<=1)return;setState((){splitAmounts.removeAt(i).dispose();splitMethods.removeAt(i);});}
-  @override void dispose(){discount.dispose();paid.dispose();for(final c in splitAmounts){c.dispose();}note.dispose();customerName.dispose();customerPhone.dispose();paymentMethod.dispose();super.dispose();}
+  @override void dispose(){formScroll.dispose();discount.dispose();paid.dispose();for(final c in splitAmounts){c.dispose();}note.dispose();customerName.dispose();customerPhone.dispose();paymentMethod.dispose();super.dispose();}
+  void showInvoiceError(String message){if(!mounted)return;setState(()=>formError=message);WidgetsBinding.instance.addPostFrameCallback((_){if(formScroll.hasClients)formScroll.animateTo(0,duration:const Duration(milliseconds:280),curve:Curves.easeOut);});}
   void addItem(){
     final available=widget.products.where((p)=>(p['qty'] as int? ?? 0)>0).toList();
     if(available.isEmpty){toast(context,'لا توجد كميات متاحة للبيع.');return;}
@@ -1798,13 +1801,13 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
   void changeQty(int index,String value){final n=int.tryParse(value);if(n!=null&&n>=0)setState(()=>items[index]['qty']=n);}
   void changePrice(int index,String value){final n=double.tryParse(value);if(n!=null&&n>=0)setState(()=>items[index]['unit_price']=n);}
   Future<void> save()async{
-    if(saving)return;if(items.isEmpty){toast(context,'أضف صنفاً واحداً على الأقل قبل حفظ الفاتورة.');return;}
+    if(saving)return;setState(()=>formError=null);if(widget.invoice==null&&customerName.text.trim().isEmpty){showInvoiceError('اسم العميل مطلوب. اختر عميلاً أو أضف اسمه قبل حفظ الفاتورة.');return;}if(items.isEmpty){showInvoiceError('الفاتورة لا تحتوي على أصناف. اضغط «إضافة صنف» وأضف منتجاً واحداً على الأقل.');return;}
     for(final item in items){final product=widget.products.where((p)=>p['id']==item['product_id']).toList();final qty=item['qty'] as int? ?? 0;
-      if(product.isEmpty){toast(context,'اختر صنفًا من نتائج البحث لكل سطر قبل حفظ الفاتورة.');return;}
-      if(qty<=0){toast(context,'راجع كميات الأصناف؛ يجب أن تكون أكبر من صفر.');return;}
-      final originalQty=widget.editing?items.where((x)=>x['product_id']==item['product_id']).fold<int>(0,(v,x)=>v+(x['qty'] as int? ?? 0)):0;final availableQty=(product.first['qty'] as int? ?? 0)+originalQty;if(qty>availableQty){toast(context,'الكمية المطلوبة من ${item['product_name']} أكبر من المخزون المتاح.');return;}
+      if(product.isEmpty){showInvoiceError('الصنف رقم '+(items.indexOf(item)+1).toString()+' غير مكتمل. اختر منتجاً من نتائج البحث قبل الحفظ.');return;}
+      if(qty<=0){showInvoiceError('كمية الصنف '+item['product_name'].toString()+' يجب أن تكون أكبر من صفر.');return;}
+      final originalQty=widget.editing?items.where((x)=>x['product_id']==item['product_id']).fold<int>(0,(v,x)=>v+(x['qty'] as int? ?? 0)):0;final availableQty=(product.first['qty'] as int? ?? 0)+originalQty;if(qty>availableQty){showInvoiceError('الكمية المطلوبة من '+item['product_name'].toString()+' أكبر من المخزون المتاح.');return;}
     }
-    if(widget.invoice==null&&(paidValue<0||paidValue>total)){toast(context,'راجع المبلغ المدفوع؛ لا يمكن أن يتجاوز إجمالي الفاتورة.');return;}
+    if(widget.invoice==null&&(paidValue<0||paidValue>total)){showInvoiceError('المبلغ المدفوع غير صحيح؛ لا يمكن أن يتجاوز إجمالي الفاتورة.');return;}
     setState(()=>saving=true);
     try{if(widget.editing&&widget.invoice!=null){await StoreDb.instance.updateInvoice(invoiceId:widget.invoice!['id'] as int,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,note:note.text,paymentMethod:paymentMethod.text.trim());}else if(widget.invoice!=null){await StoreDb.instance.appendInvoiceItems(widget.invoice!['id'] as int,items);}else{await StoreDb.instance.createInvoice(customerName:customerName.text.trim(),customerPhone:customerPhone.text.trim(),customerId:customerId,items:items,discountValue:double.tryParse(discount.text)??0,discountPercent:percent,paid:paidValue,note:note.text,paymentMethod:splitMethods.toSet().join(' + '),paymentParts:List.generate(splitAmounts.length,(i)=>{'method':splitMethods[i],'amount':double.tryParse(splitAmounts[i].text)??0}));}if(draftId!=null)await StoreDb.instance.deleteInvoiceDraft(draftId!);if(mounted)Navigator.pop(context,true);}
     catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>saving=false);}
@@ -1850,7 +1853,7 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
       ),
     );
   }
-  Future<void> addCustomerFromInvoice()async{final name=TextEditingController(text:customerName.text),phone=TextEditingController(text:customerPhone.text);final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إضافة عميل جديد'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل')),const SizedBox(height:9),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إضافة واختيار'))])));if(ok==true&&name.text.trim().isNotEmpty){try{final duplicate=widget.customers.where((c)=>c['name'].toString().trim().toLowerCase()==name.text.trim().toLowerCase()||(phone.text.trim().isNotEmpty&&c['phone'].toString()==phone.text.trim())).toList();if(duplicate.isNotEmpty){setState((){customerId=duplicate.first['id'] as int?;customerName.text=duplicate.first['name'].toString();customerPhone.text=(duplicate.first['phone']??'').toString();});toast(context,'العميل موجود بالفعل وتم اختياره.');}else{await StoreDb.instance.saveParty('customers',{'name':name.text.trim(),'phone':phone.text.trim(),'email':'','address':'','notes':'أُضيف من شاشة الفاتورة','balance':0},null);final all=await StoreDb.instance.parties('customers');final created=all.firstWhere((c)=>c['name'].toString()==name.text.trim());widget.customers.add(created);setState((){customerId=created['id'] as int?;customerName.text=created['name'].toString();customerPhone.text=(created['phone']??'').toString();});}}catch(e){if(mounted)toast(context,e.toString());}}name.dispose();phone.dispose();}
+  Future<void> addCustomerFromInvoice()async{final name=TextEditingController(text:customerName.text),phone=TextEditingController(text:customerPhone.text);final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إضافة عميل جديد'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,autofocus:true,decoration:const InputDecoration(labelText:'اسم العميل *')),const SizedBox(height:9),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إضافة واختيار'))])));if(ok==true){if(name.text.trim().isEmpty){showInvoiceError('لا يمكن إضافة العميل بدون اسم. اكتب اسم العميل أولاً.');}else{try{final cleanName=name.text.trim();final cleanPhone=phone.text.trim();final duplicate=widget.customers.where((c)=>c['name'].toString().trim().toLowerCase()==cleanName.toLowerCase()||(cleanPhone.isNotEmpty&&c['phone'].toString().trim()==cleanPhone)).toList();Map<String,Object?> created;if(duplicate.isNotEmpty){created=duplicate.first;}else{final id=await StoreDb.instance.addParty('customers',{'name':cleanName,'phone':cleanPhone,'email':'','address':'','notes':'أُضيف من شاشة الفاتورة','balance':0});final rows=await StoreDb.instance.parties('customers');created=rows.firstWhere((c)=>(c['id'] as num).toInt()==id);}widget.customers.removeWhere((c)=>(c['id'] as num?)?.toInt()==(created['id'] as num?)?.toInt());widget.customers.add(created);setState((){customerId=(created['id'] as num?)?.toInt();customerName.text=created['name'].toString();customerPhone.text=(created['phone']??'').toString();formError=null;});}catch(e){showInvoiceError('تعذر إضافة العميل: '+e.toString().replaceFirst('Exception: ',''));}}}name.dispose();phone.dispose();}
   Widget _sectionTitle(String title,IconData icon)=>Padding(padding:const EdgeInsets.only(bottom:9),child:Row(children:[Icon(icon,size:18,color:Theme.of(context).colorScheme.primary),const SizedBox(width:8),Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:14))]));
   Widget _moneyBox(String label,String value,{bool strong=false,Color? color})=>Expanded(child:Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:10),decoration:BoxDecoration(color:strong?Theme.of(context).colorScheme.primaryContainer:Theme.of(context).colorScheme.surfaceContainerLow,borderRadius:BorderRadius.circular(13),border:Border.all(color:Theme.of(context).colorScheme.outlineVariant.withOpacity(.45))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant)),const SizedBox(height:5),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:strong?15:12,fontWeight:FontWeight.w900,color:color??Theme.of(context).colorScheme.onSurface))])));
   @override Widget build(BuildContext context){
@@ -1861,12 +1864,13 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
         const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(widget.editing?'تعديل الفاتورة':widget.invoice==null?'إنشاء فاتورة بيع':'إضافة أصناف للفاتورة',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:19)),Text(widget.invoice==null?'اكتب بيانات الفاتورة وشاهد شكلها النهائي مباشرة':'رقم الفاتورة ${widget.invoice!['invoice_no']}',style:const TextStyle(color:Colors.white70,fontSize:11))])),
         IconButton(onPressed:()=>Navigator.pop(context,false),icon:const Icon(Icons.close,color:Colors.white),tooltip:'إغلاق'),
       ])),
-      Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Expanded(child:SingleChildScrollView(controller:formScroll,padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+        if(formError!=null)Container(key:const ValueKey('invoice-error-banner'),margin:const EdgeInsets.only(bottom:14),padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFFFFEEEE),borderRadius:BorderRadius.circular(15),border:Border.all(color:const Color(0xFFE45B5B),width:1.3)),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[const Icon(Icons.error_outline,color:Color(0xFFB42318),size:24),const SizedBox(width:9),Expanded(child:Text(formError!,style:const TextStyle(color:Color(0xFF8F1D18),fontWeight:FontWeight.w800,fontSize:13,height:1.45))),IconButton(visualDensity:VisualDensity.compact,onPressed:()=>setState(()=>formError=null),icon:const Icon(Icons.close,color:Color(0xFF8F1D18))) ])),
         if(widget.invoice==null)...[_sectionTitle('بيانات العميل',Icons.person_outline),Row(children:[
           Expanded(flex:3,child:_searchField(
             options:widget.customers.map((x)=>x['name'].toString()).toList(),
             initialValue:customerName.text,label:'ابحث عن العميل أو اكتب اسمه',
-            onChanged:(v){customerName.text=v;customerId=null;},
+            onChanged:(v){customerName.text=v;customerId=null;if(formError!=null)setState(()=>formError=null);},
             onSelected:(name){
               final found=widget.customers.where((x)=>x['name'].toString()==name).toList();
               setState((){
@@ -1875,6 +1879,7 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
                   customerId=found.first['id'] as int?;
                   customerPhone.text=(found.first['phone']??'').toString();
                 }
+                formError=null;
               });
             },
           )),
@@ -1941,82 +1946,170 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   final GlobalKey captureKey=GlobalKey();
   bool busy=false;
   int template=0;
+  static const names=['ملكي كلاسيكي','تحريري فاخر','بطاقة عصرية','عمود جانبي','جدول احترافي','إيصال مميز','هندسي','مساحات بيضاء','تجاري جريء','أرشيف رسمي'];
+  static const colors=[
+    [Color(0xFF102A43),Color(0xFF087F8C),Color(0xFFEAF4F5)],
+    [Color(0xFF20242C),Color(0xFFC59B52),Color(0xFFF4F1EA)],
+    [Color(0xFF39246B),Color(0xFF7651B5),Color(0xFFF1ECFA)],
+    [Color(0xFF123B55),Color(0xFF2D7FA3),Color(0xFFEAF3F8)],
+    [Color(0xFF14532D),Color(0xFF23865A),Color(0xFFEAF5EC)],
+    [Color(0xFF7C2D12),Color(0xFFEA580C),Color(0xFFFFF1E8)],
+    [Color(0xFF312E81),Color(0xFF6366F1),Color(0xFFEEF2FF)],
+    [Color(0xFF334155),Color(0xFF94A3B8),Color(0xFFF1F5F9)],
+    [Color(0xFF7F1D1D),Color(0xFFDC2626),Color(0xFFFEF2F2)],
+    [Color(0xFF164E63),Color(0xFF0E7490),Color(0xFFECFEFF)],
+  ];
   @override void initState(){super.initState();_loadTemplate();}
-  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,4).toInt());}
+  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,9).toInt());}
   Future<void> _selectTemplate(int value)async{final prefs=await SharedPreferences.getInstance();await prefs.setInt('invoice_template',value);if(mounted)setState(()=>template=value);}
   double n(Object? v)=>(v as num?)?.toDouble()??0;
-  Future<Uint8List> capture() async {
-    await WidgetsBinding.instance.endOfFrame;
-    final render=captureKey.currentContext?.findRenderObject();
-    if(render is! RenderRepaintBoundary)throw Exception('تعذر تجهيز صورة الفاتورة.');
-    final image=await render.toImage(pixelRatio:3);
-    final data=await image.toByteData(format:ui.ImageByteFormat.png);
-    image.dispose();
-    if(data==null)throw Exception('تعذر تحويل الفاتورة إلى صورة.');
-    return data.buffer.asUint8List();
+  Future<Uint8List> capture()async{await WidgetsBinding.instance.endOfFrame;final render=captureKey.currentContext?.findRenderObject();if(render is! RenderRepaintBoundary)throw Exception('تعذر تجهيز صورة الفاتورة.');final image=await render.toImage(pixelRatio:2.5);final data=await image.toByteData(format:ui.ImageByteFormat.png);image.dispose();if(data==null)throw Exception('تعذر تحويل الفاتورة إلى صورة.');return data.buffer.asUint8List();}
+  Future<void> saveImage()async{if(busy)return;setState(()=>busy=true);try{final bytes=await capture();final path=await FilePicker.platform.saveFile(dialogTitle:'حفظ الفاتورة كصورة',fileName:'APP_LOL_'+widget.invoice['invoice_no'].toString()+'.png',type:FileType.custom,allowedExtensions:['png'],bytes:bytes);if(mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم حفظ الفاتورة كصورة PNG.');}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>busy=false);}}
+  Future<Uint8List> pdfBytes()async{final bytes=await capture();final doc=pw.Document();doc.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:const pw.EdgeInsets.all(12),build:(_)=>pw.Center(child:pw.Image(pw.MemoryImage(bytes),fit:pw.BoxFit.contain))));return doc.save();}
+  Future<void> savePdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();final path=await FilePicker.platform.saveFile(dialogTitle:'حفظ الفاتورة PDF',fileName:'APP_LOL_'+widget.invoice['invoice_no'].toString()+'.pdf',type:FileType.custom,allowedExtensions:['pdf'],bytes:bytes);if(mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم حفظ الفاتورة PDF.');}catch(e){if(mounted)toast(context,'تعذر حفظ PDF: '+e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>busy=false);}}
+  Future<void> printPdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();await Printing.layoutPdf(name:'APP_LOL_'+widget.invoice['invoice_no'].toString()+'.pdf',onLayout:(_)async=>bytes);}catch(e){if(mounted)toast(context,'تعذرت الطباعة: '+e.toString().replaceFirst('Exception: ',''));}finally{if(mounted)setState(()=>busy=false);}}
+  Widget _brand(Color primary,Color accent,{bool centered=false,bool dark=false})=>Row(mainAxisAlignment:centered?MainAxisAlignment.center:MainAxisAlignment.start,children:[
+    Container(width:52,height:52,decoration:BoxDecoration(color:dark?Colors.white.withOpacity(.13):primary,borderRadius:BorderRadius.circular(16),border:Border.all(color:accent.withOpacity(.55),width:1.4)),child:Icon(Icons.storefront_rounded,color:dark?accent:Colors.white,size:30)),
+    const SizedBox(width:12),
+    Column(crossAxisAlignment:centered?CrossAxisAlignment.center:CrossAxisAlignment.start,children:[
+      Text('APP LOL',style:TextStyle(color:dark?Colors.white:primary,fontSize:25,fontWeight:FontWeight.w900,letterSpacing:1.4)),
+      Text('إدارة المبيعات والمخزون',style:TextStyle(color:dark?Colors.white70:Colors.blueGrey,fontSize:11,fontWeight:FontWeight.w700)),
+    ]),
+  ]);
+  Widget _labelValue(String label,String value,Color primary)=>Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+    Text(label,style:const TextStyle(color:Color(0xFF64748B),fontSize:10,fontWeight:FontWeight.w600)),
+    const SizedBox(height:4),Text(value,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:13)),
+  ]);
+  Widget _itemRow(Map<String,Object?> x,int i,Color primary,Color accent,Color soft,{bool card=false,bool compact=false}){
+    final name=x['product_name'].toString();
+    final qty=x['qty'].toString();
+    final price=money(x['unit_price']);
+    final sum=money(x['total']);
+    if(card)return Container(margin:const EdgeInsets.only(bottom:8),padding:EdgeInsets.all(compact?10:13),decoration:BoxDecoration(color:i.isEven?soft:Colors.white,borderRadius:BorderRadius.circular(13),border:Border.all(color:primary.withOpacity(.10))),child:Row(children:[
+      Container(width:30,height:30,alignment:Alignment.center,decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(9)),child:Text((i+1).toString(),style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900))),
+      const SizedBox(width:9),Expanded(flex:5,child:Text(name,style:TextStyle(color:primary,fontWeight:FontWeight.w800,fontSize:compact?11:13))),
+      Expanded(flex:2,child:Text('×'+qty,textAlign:TextAlign.center,style:const TextStyle(fontSize:11))),
+      Expanded(flex:3,child:Text(sum,textAlign:TextAlign.end,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:compact?10:12))),
+    ]));
+    return Container(padding:EdgeInsets.symmetric(horizontal:8,vertical:compact?8:12),decoration:BoxDecoration(color:i.isEven?soft:Colors.white,border:Border(bottom:BorderSide(color:primary.withOpacity(.10)))),child:Row(children:[
+      Expanded(flex:5,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(name,style:TextStyle(fontWeight:FontWeight.w800,fontSize:compact?10:12,color:primary)),if((x['supplier_name']??'').toString().isNotEmpty)Text(x['supplier_name'].toString(),style:const TextStyle(fontSize:9,color:Colors.blueGrey))])),
+      Expanded(flex:2,child:Text(qty,textAlign:TextAlign.center,style:const TextStyle(fontSize:11))),
+      Expanded(flex:3,child:Text(price,textAlign:TextAlign.center,style:const TextStyle(fontSize:10))),
+      Expanded(flex:3,child:Text(sum,textAlign:TextAlign.end,style:TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:primary))),
+    ]));
   }
-  Future<void> saveImage() async {
-    if(busy)return;setState(()=>busy=true);
-    try{
-      final bytes=await capture();
-      final path=await FilePicker.platform.saveFile(dialogTitle:'حفظ الفاتورة كصورة',fileName:'APP_LOL_${widget.invoice['invoice_no']}.png',type:FileType.custom,allowedExtensions:['png'],bytes:bytes);
-      if(mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم حفظ الفاتورة كصورة PNG.');
-    }catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}
-    finally{if(mounted)setState(()=>busy=false);}
+  Widget _paymentMark(String method,Color primary,Color accent,Color soft){
+    final v=method.toLowerCase();
+    final isInsta=v.contains('insta')||v.contains('انستا');
+    final isVodafone=v.contains('vodafone')||v.contains('فودافون');
+    final isWallet=v.contains('محفظ')||v.contains('wallet');
+    final markColor=isInsta?const Color(0xFFF36B35):isVodafone?const Color(0xFFE60000):const Color(0xFF16865A);
+    final title=isInsta?'InstaPay':isVodafone?'Vodafone Cash':isWallet?'محفظة إلكترونية':method;
+    return Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(13),border:Border.all(color:markColor.withOpacity(.22))),child:Row(mainAxisSize:MainAxisSize.min,children:[
+      Container(width:32,height:32,decoration:BoxDecoration(color:markColor,borderRadius:BorderRadius.circular(9)),child:Icon(isInsta?Icons.swap_horiz_rounded:isVodafone?Icons.currency_exchange_rounded:Icons.account_balance_wallet_rounded,color:Colors.white,size:20)),
+      const SizedBox(width:8),Text(title,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:12)),
+    ]));
   }
-  Future<Uint8List> pdfBytes()async{final bytes=await capture();final doc=pw.Document();final image=pw.MemoryImage(bytes);doc.addPage(pw.Page(pageFormat:pdf.PdfPageFormat.a4,margin:const pw.EdgeInsets.all(18),build:(_)=>pw.Center(child:pw.Image(image,fit:pw.BoxFit.contain))));return doc.save();}
-  Future<void> savePdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();final path=await FilePicker.platform.saveFile(dialogTitle:'حفظ الفاتورة PDF',fileName:'APP_LOL_${widget.invoice['invoice_no']}.pdf',type:FileType.custom,allowedExtensions:['pdf'],bytes:bytes);if(mounted)toast(context,path==null?'تم إلغاء الحفظ.':'تم حفظ الفاتورة PDF.');}catch(e){if(mounted)toast(context,'تعذر حفظ PDF: ${e.toString().replaceFirst('Exception: ','')}');}finally{if(mounted)setState(()=>busy=false);}}
-  Future<void> printPdf()async{if(busy)return;setState(()=>busy=true);try{final bytes=await pdfBytes();await Printing.layoutPdf(name:'APP_LOL_${widget.invoice['invoice_no']}.pdf',onLayout:(_)async=>bytes);}catch(e){if(mounted)toast(context,'تعذرت الطباعة: ${e.toString().replaceFirst('Exception: ','')}');}finally{if(mounted)setState(()=>busy=false);}}
-  IconData paymentIcon(String value){final v=value.toLowerCase();if(v.contains('insta')||v.contains('انستا'))return Icons.qr_code;if(v.contains('vodafone')||v.contains('فودافون'))return Icons.support_agent;if(v.contains('محفظ')||v.contains('wallet'))return Icons.account_balance_wallet;if(v.contains('كاش')||v.contains('cash'))return Icons.payments_outlined;if(v.contains('فيزا')||v.contains('card'))return Icons.payments_outlined;return Icons.account_balance_wallet;}
-  Widget meta(String label,String value)=>Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:const TextStyle(color:Color(0xFF64748B),fontSize:11)),const SizedBox(height:4),Text(value,style:const TextStyle(color:Color(0xFF172B3A),fontWeight:FontWeight.w800,fontSize:13))]));
-  Widget totalRow(String label,String value,{Color color=const Color(0xFF475569)})=>Row(children:[Expanded(child:Text(label,style:const TextStyle(fontSize:12,color:Color(0xFF64748B)))),Text(value,style:TextStyle(fontSize:12,fontWeight:FontWeight.w800,color:color))]);
-  @override Widget build(BuildContext context){
-    final palettes=<Map<String,Color>>[
-      {'primary':const Color(0xFF102A43),'secondary':const Color(0xFF087F8C),'accent':const Color(0xFF087F8C),'soft':const Color(0xFFEAF4F5)},
-      {'primary':const Color(0xFF20242C),'secondary':const Color(0xFF454B57),'accent':const Color(0xFFC59B52),'soft':const Color(0xFFF4F1EA)},
-      {'primary':const Color(0xFF14532D),'secondary':const Color(0xFF2F855A),'accent':const Color(0xFF23865A),'soft':const Color(0xFFEAF5EC)},
-      {'primary':const Color(0xFF39246B),'secondary':const Color(0xFF7651B5),'accent':const Color(0xFF7651B5),'soft':const Color(0xFFF1ECFA)},
-      {'primary':const Color(0xFF334155),'secondary':const Color(0xFF64748B),'accent':const Color(0xFF334155),'soft':const Color(0xFFF1F5F9)},
+  Widget _totals(Color primary,Color accent,Color soft,double subtotal,double discount,double total,double paid,double due,{bool bold=false,bool side=false}){
+    final rows=[
+      _totalLine('الإجمالي قبل الخصم',money(subtotal),primary),
+      _totalLine('الخصم',money(discount),primary),
+      _totalLine('المدفوع',money(paid),primary),
+      _totalLine('المتبقي',money(due),due>0?const Color(0xFFB45309):const Color(0xFF15803D)),
     ];
-    final palette=palettes[template.clamp(0,4).toInt()];
-    final primary=palette['primary']!,secondary=palette['secondary']!,accent=palette['accent']!,soft=palette['soft']!;
-    final e=widget.invoice;final total=n(e['total']),paid=n(e['paid']),due=(total-paid).clamp(0,double.infinity).toDouble(),subtotal=n(e['subtotal']),discount=n(e['discount_amount']);
-    return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(12),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:640,maxHeight:MediaQuery.of(context).size.height*.94),child:Column(children:[
-      Padding(padding:const EdgeInsets.fromLTRB(18,12,18,6),child:Row(children:[const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900))),PopupMenuButton<int>(tooltip:'اختيار تصميم الفاتورة',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>const [PopupMenuItem(value:0,child:Text('ملكي — أزرق وتركواز')),PopupMenuItem(value:1,child:Text('فاخر — أسود وذهبي')),PopupMenuItem(value:2,child:Text('زمردي — أخضر')),PopupMenuItem(value:3,child:Text('عصري — بنفسجي')),PopupMenuItem(value:4,child:Text('بسيط — رمادي'))],icon:const Icon(Icons.palette_outlined)),IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close))])),
-      Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(12),child:RepaintBoundary(key:captureKey,child:Container(width:math.min(MediaQuery.of(context).size.width-70,560).toDouble(),padding:const EdgeInsets.all(22),color:Colors.white,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(gradient:LinearGradient(colors:[primary,secondary]),borderRadius:const BorderRadius.all(Radius.circular(18))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:Colors.white24,borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.inventory_2,color:Color(0xFFFFD47A),size:27)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('ＡＰＰ ＬＯＬ',style:TextStyle(color:Colors.white,fontSize:19,fontWeight:FontWeight.w900,letterSpacing:1)),Text('إدارة المبيعات والمخزون',style:TextStyle(color:Colors.white70,fontSize:11))])),const Text('فاتورة بيع',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900))]),
-          const SizedBox(height:16),Text(e['invoice_no'].toString(),style:const TextStyle(color:Color(0xFFFFD47A),fontWeight:FontWeight.w900,fontSize:18)),const SizedBox(height:4),Text(formatDateTime(e['created_at']),style:const TextStyle(color:Colors.white70,fontSize:12)),
-        ])),
-        const SizedBox(height:14),
-        Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFFF2F7F8),borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE1EAEC))),child:Row(children:[meta('العميل',(e['customer_name']??'عميل نقدي').toString()),if((e['customer_phone']??'').toString().trim().isNotEmpty)meta('رقم الهاتف',e['customer_phone'].toString())])),
-        if((e['payment_method']??'').toString().trim().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Container(padding:const EdgeInsets.symmetric(horizontal:13,vertical:11),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(13),border:Border.all(color:accent.withOpacity(.18))),child:Row(children:[Icon(paymentIcon(e['payment_method'].toString()),color:const Color(0xFF087F68),size:22),const SizedBox(width:9),const Text('طريقة الدفع:',style:TextStyle(fontSize:11,color:Color(0xFF64748B))),const SizedBox(width:6),Expanded(child:Text(e['payment_method'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,color:Color(0xFF173A43),fontSize:13)))]))),
-        const SizedBox(height:15),const Text('تفاصيل الأصناف',style:TextStyle(color:Color(0xFF173A43),fontSize:15,fontWeight:FontWeight.w900)),const SizedBox(height:8),
-        Container(padding:const EdgeInsets.symmetric(vertical:10,horizontal:8),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(9)),child:const Row(children:[
-          Expanded(flex:5,child:Text('الصنف',style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
-          Expanded(flex:2,child:Text('الكمية',textAlign:TextAlign.center,style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
-          Expanded(flex:3,child:Text('السعر',textAlign:TextAlign.center,style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
-          Expanded(flex:3,child:Text('الإجمالي',textAlign:TextAlign.end,style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
-        ])),
-        ...widget.items.asMap().entries.map((entry){final i=entry.key,x=entry.value;return Container(padding:const EdgeInsets.symmetric(vertical:10,horizontal:8),decoration:BoxDecoration(color:i.isEven?Colors.white:const Color(0xFFFAFCFC),border:const Border(bottom:BorderSide(color:Color(0xFFE8EEF0)))),child:Row(crossAxisAlignment:CrossAxisAlignment.start,children:[
-          Expanded(flex:5,child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(x['product_name'].toString(),style:const TextStyle(fontWeight:FontWeight.w800,fontSize:12,color:Color(0xFF172B3A))),Text('المورد: ${(x['supplier_name']??'بدون مورد')}',style:const TextStyle(fontSize:9,color:Color(0xFF718096))),Text('أضيف: ${formatDateTime(x['added_at']??e['created_at'])}',style:const TextStyle(fontSize:9,color:Color(0xFF718096)))])),
-          Expanded(flex:2,child:Text(x['qty'].toString(),textAlign:TextAlign.center,style:const TextStyle(fontSize:11,color:Color(0xFF334155)))),
-          Expanded(flex:3,child:Text(money(x['unit_price']),textAlign:TextAlign.center,style:const TextStyle(fontSize:10,color:Color(0xFF334155)))),
-          Expanded(flex:3,child:Text(money(x['total']),textAlign:TextAlign.end,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w800,color:Color(0xFF173A43)))),
-        ]));}),
-        const SizedBox(height:14),Container(padding:const EdgeInsets.all(15),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(14)),child:Column(children:[
-          totalRow('الإجمالي قبل الخصم',money(subtotal)),const SizedBox(height:7),totalRow('الخصم',money(discount)),const Divider(height:18),
-          Row(children:[const Expanded(child:Text('الإجمالي النهائي',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15,color:Color(0xFF163D45)))),Text(money(total),style:TextStyle(fontWeight:FontWeight.w900,fontSize:20,color:accent))]),
-          const SizedBox(height:9),totalRow('المدفوع',money(paid)),const SizedBox(height:7),totalRow('المتبقي',money(due),color:due>0?const Color(0xFFB45309):const Color(0xFF15803D)),
-        ])),
-        if((e['note']??'').toString().trim().isNotEmpty)...[const SizedBox(height:10),Text('ملاحظات: ${e['note']}',style:const TextStyle(color:Color(0xFF475569),fontSize:11))],
-        const SizedBox(height:18),const Divider(color:Color(0xFFE2E8F0)),Center(child:Text('شكراً لثقتكم وتعاملكم معنا',style:TextStyle(color:accent,fontSize:13,fontWeight:FontWeight.w900))),const SizedBox(height:5),const Center(child:Text('APP LOL • نظام إدارة المخزون والمبيعات',style:TextStyle(color:Color(0xFF94A3B8),fontSize:9))),
-      ]))))),
-      Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Wrap(spacing:8,runSpacing:8,alignment:WrapAlignment.spaceBetween,children:[
-        OutlinedButton.icon(onPressed:busy?null:saveImage,icon:const Icon(Icons.image_outlined),label:const Text('حفظ صورة')),
-        FilledButton.icon(onPressed:busy?null:savePdf,icon:const Icon(Icons.picture_as_pdf),label:const Text('حفظ PDF')),
+    return Container(padding:EdgeInsets.all(bold?18:14),decoration:BoxDecoration(color:side?primary:soft,borderRadius:BorderRadius.circular(bold?5:17),border:Border.all(color:accent.withOpacity(.28))),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      ...rows.map((w)=>Padding(padding:const EdgeInsets.symmetric(vertical:5),child:w)),
+      Divider(color:side?Colors.white24:primary.withOpacity(.2),height:20),
+      Row(children:[Expanded(child:Text('الإجمالي النهائي',style:TextStyle(color:side?Colors.white:primary,fontSize:bold?17:14,fontWeight:FontWeight.w900))),Text(money(total),style:TextStyle(color:side?accent:primary,fontSize:bold?23:19,fontWeight:FontWeight.w900))]),
+    ]));
+  }
+  Widget _totalLine(String label,String value,Color color)=>Row(children:[Expanded(child:Text(label,style:TextStyle(color:color.withOpacity(.72),fontSize:11))),Text(value,style:TextStyle(color:color,fontWeight:FontWeight.w800,fontSize:11))]);
+  Widget _design(Color primary,Color accent,Color soft){
+    final e=widget.invoice;
+    final total=n(e['total']),paid=n(e['paid']),due=(total-paid).clamp(0,double.infinity).toDouble(),subtotal=n(e['subtotal']),discount=n(e['discount_amount']);
+    final no=e['invoice_no'].toString(),date=formatDateTime(e['created_at']),customer=(e['customer_name']??'عميل نقدي').toString(),phone=(e['customer_phone']??'').toString();
+    final isDark=template==1||template==8;
+    final header=template==0?Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(gradient:LinearGradient(colors:[primary,accent]),borderRadius:BorderRadius.circular(20)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Row(children:[Expanded(child:_brand(primary,accent,dark:true)),Text('INVOICE',style:TextStyle(color:Colors.white.withOpacity(.75),fontSize:12,letterSpacing:3,fontWeight:FontWeight.w900))]),
+      const SizedBox(height:22),Text('فاتورة بيع',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:23)),Text(no,style:TextStyle(color:accent,fontWeight:FontWeight.w900,fontSize:20)),Text(date,style:const TextStyle(color:Colors.white70,fontSize:11)),
+    ]))
+    :template==1?Container(padding:const EdgeInsets.symmetric(vertical:22,horizontal:18),decoration:BoxDecoration(color:primary,border:Border.all(color:accent,width:2)),child:Column(children:[
+      _brand(primary,accent,centered:true,dark:true),const SizedBox(height:16),Container(height:1,color:accent,width:100),const SizedBox(height:12),Text('فاتورة مبيعات',style:TextStyle(color:accent,fontSize:22,fontWeight:FontWeight.w900)),Text(no,style:const TextStyle(color:Colors.white,fontSize:16)),Text(date,style:const TextStyle(color:Colors.white70,fontSize:10)),
+    ]))
+    :template==2?Row(crossAxisAlignment:CrossAxisAlignment.center,children:[
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[_brand(primary,accent),const SizedBox(height:12),Text('فاتورة بيع',style:TextStyle(color:primary,fontSize:22,fontWeight:FontWeight.w900)),Text(no,style:TextStyle(color:accent,fontSize:16,fontWeight:FontWeight.w900))])),
+      Container(width:92,height:92,decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(26)),child:Icon(Icons.receipt_long,color:accent,size:52)),
+    ])
+    :template==3?Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Container(width:16,decoration:BoxDecoration(color:accent,borderRadius:BorderRadius.circular(8))),
+      const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[_brand(primary,accent),const SizedBox(height:13),Text('فاتورة بيع',style:TextStyle(color:primary,fontSize:21,fontWeight:FontWeight.w900)),Text(no+'  •  '+date,style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w800))])),
+    ])
+    :template==4?Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      _brand(primary,accent),const SizedBox(height:16),Container(height:5,color:primary),const SizedBox(height:8),Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('فاتورة بيع',style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:22)),Text(no,style:TextStyle(color:accent,fontWeight:FontWeight.w900,fontSize:16))]),Text(date,style:const TextStyle(color:Colors.blueGrey,fontSize:11)),
+    ])
+    :template==5?Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(26)),child:Column(children:[
+      Container(width:65,height:65,decoration:BoxDecoration(color:primary,shape:BoxShape.circle),child:Icon(Icons.shopping_bag_rounded,color:accent,size:34)),const SizedBox(height:10),_brand(primary,accent,centered:true),const SizedBox(height:14),Text('إيصال بيع',style:TextStyle(color:primary,fontSize:22,fontWeight:FontWeight.w900)),Text(no+'  |  '+date,style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w800)),
+    ]))
+    :template==6?Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(border:Border.all(color:primary,width:2),borderRadius:BorderRadius.circular(8)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Row(children:[_brand(primary,accent),const Spacer(),Icon(Icons.qr_code_2,color:accent,size:38)]),const Divider(height:24),Text('فاتورة ضريبية / بيع',style:TextStyle(color:primary,fontSize:20,fontWeight:FontWeight.w900)),Text(no+'   •   '+date,style:TextStyle(color:accent,fontWeight:FontWeight.w800,fontSize:11)),
+    ]))
+    :template==7?Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Center(child:_brand(primary,accent,centered:true)),const SizedBox(height:16),Center(child:Text('INVOICE',style:TextStyle(color:accent,fontSize:12,letterSpacing:5,fontWeight:FontWeight.w900))),Center(child:Text('فاتورة بيع',style:TextStyle(color:primary,fontSize:26,fontWeight:FontWeight.w900))),Center(child:Text(no+'  •  '+date,style:const TextStyle(color:Colors.blueGrey,fontSize:11))),const SizedBox(height:14),Divider(color:primary,thickness:2),
+    ])
+    :template==8?Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(4)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      _brand(primary,accent,dark:true),const SizedBox(height:18),Text('SALES / فاتورة بيع',style:TextStyle(color:accent,fontSize:21,fontWeight:FontWeight.w900)),Text(no,style:const TextStyle(color:Colors.white,fontSize:18,fontWeight:FontWeight.w900)),Text(date,style:const TextStyle(color:Colors.white70,fontSize:11)),
+    ]))
+    :Row(children:[
+      Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[_brand(primary,accent),const SizedBox(height:14),Text('فاتورة مبيعات',style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:23)),Text(no,style:TextStyle(color:accent,fontWeight:FontWeight.w900,fontSize:17)),Text(date,style:const TextStyle(color:Colors.blueGrey,fontSize:10))])),
+      Container(width:6,height:112,color:accent),
+    ]);
+    final customerCard=template==1?Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(border:Border.all(color:accent,width:1.2)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      Text('BILL TO  /  بيانات العميل',style:TextStyle(color:accent,fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1)),const SizedBox(height:8),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:17)),if(phone.isNotEmpty)Text(phone,style:const TextStyle(color:Colors.blueGrey,fontSize:11)),
+    ]))
+    :template==3?Row(children:[
+      Expanded(child:_labelValue('العميل',customer,primary)),Container(width:1,height:42,color:accent),const SizedBox(width:12),Expanded(child:_labelValue('رقم الهاتف',phone.isEmpty?'غير مسجل':phone,primary)),
+    ])
+    :Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(template==5?28:14)),child:Row(children:[
+      Icon(Icons.person_pin_circle_rounded,color:accent,size:30),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('العميل',style:TextStyle(color:primary.withOpacity(.65),fontSize:10)),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:15)),if(phone.isNotEmpty)Text(phone,style:const TextStyle(color:Colors.blueGrey,fontSize:10))])),
+    ]));
+    final itemHeader=Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:11),decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(template==5?18:7)),child:const Row(children:[
+      Expanded(flex:5,child:Text('الصنف',style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:11))),
+      Expanded(flex:2,child:Text('الكمية',textAlign:TextAlign.center,style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:10))),
+      Expanded(flex:3,child:Text('السعر',textAlign:TextAlign.center,style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:10))),
+      Expanded(flex:3,child:Text('الإجمالي',textAlign:TextAlign.end,style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:10))),
+    ]));
+    final itemWidgets=widget.items.asMap().entries.map((entry)=>_itemRow(entry.value,entry.key,primary,accent,soft,card:template==2||template==5||template==8,compact:template==4||template==9)).toList();
+    final payment=(e['payment_method']??'').toString().trim();
+    return Container(color:Colors.white,padding:EdgeInsets.all(template==9?16:22),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+      header,const SizedBox(height:18),customerCard,
+      if(payment.isNotEmpty)...[const SizedBox(height:10),_paymentMark(payment,primary,accent,soft)],
+      const SizedBox(height:18),Row(children:[Expanded(child:Text('تفاصيل الأصناف',style:TextStyle(color:primary,fontSize:16,fontWeight:FontWeight.w900))),Text(widget.items.length.toString()+' أصناف',style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w800))]),
+      const SizedBox(height:8),itemHeader,...itemWidgets,
+      const SizedBox(height:16),
+      if(template==3)Row(crossAxisAlignment:CrossAxisAlignment.start,children:[Expanded(flex:3,child:_totals(primary,accent,soft,subtotal,discount,total,paid,due,side:true)),const SizedBox(width:10),Expanded(flex:2,child:Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(12)),child:Text('APP LOL\\nشكراً لثقتكم',textAlign:TextAlign.center,style:TextStyle(color:primary,fontWeight:FontWeight.w900,height:1.8))))])
+      else _totals(primary,accent,soft,subtotal,discount,total,paid,due,bold:template==8,side:template==8),
+      if((e['note']??'').toString().trim().isNotEmpty)...[const SizedBox(height:14),Container(padding:const EdgeInsets.all(12),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(10)),child:Text('ملاحظات: '+e['note'].toString(),style:TextStyle(color:primary,fontSize:11)))],
+      const SizedBox(height:22),Divider(color:accent.withOpacity(.55),thickness:template==1||template==6?2:1),
+      Center(child:Text(template==5?'نشكركم على زيارتكم':template==1?'THANK YOU FOR YOUR BUSINESS':'شكراً لثقتكم وتعاملكم معنا',style:TextStyle(color:primary,fontSize:14,fontWeight:FontWeight.w900))),
+      const SizedBox(height:6),Center(child:Text('APP LOL  •  نظام إدارة المخزون والمبيعات',style:TextStyle(color:primary.withOpacity(.6),fontSize:10,fontWeight:FontWeight.w700))),
+    ]));
+  }
+  @override Widget build(BuildContext context){
+    final c=colors[template.clamp(0,9).toInt()];
+    final screenWidth=MediaQuery.of(context).size.width;
+    final paperWidth=math.min(screenWidth-28,760).toDouble();
+    return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(6),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:900,maxHeight:MediaQuery.of(context).size.height*.97),child:Column(children:[
+      Padding(padding:const EdgeInsets.fromLTRB(12,8,12,4),child:Row(children:[
+        const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
+        PopupMenuButton<int>(tooltip:'اختيار واحد من 10 تصميمات كاملة',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>List.generate(names.length,(i)=>PopupMenuItem(value:i,child:Text((i+1).toString()+'. '+names[i]))),icon:const Icon(Icons.dashboard_customize_rounded)),
+        IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close)),
+      ])),
+      Expanded(child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(7,5,7,12),child:RepaintBoundary(key:captureKey,child:ConstrainedBox(constraints:BoxConstraints(minWidth:paperWidth),child:SizedBox(width:paperWidth,child:_design(c[0],c[1],c[2])))))),
+      Padding(padding:const EdgeInsets.fromLTRB(8,5,8,9),child:Wrap(spacing:7,runSpacing:7,alignment:WrapAlignment.spaceEvenly,children:[
+        OutlinedButton.icon(onPressed:busy?null:saveImage,icon:const Icon(Icons.image_outlined),label:const Text('صورة')),
+        FilledButton.icon(onPressed:busy?null:savePdf,icon:const Icon(Icons.picture_as_pdf),label:const Text('PDF')),
         OutlinedButton.icon(onPressed:busy?null:printPdf,icon:const Icon(Icons.print_outlined),label:const Text('طباعة')),
-        TextButton.icon(onPressed:(){Navigator.pop(context);widget.onEdit();},icon:const Icon(Icons.note_add),label:const Text('تعديل الفاتورة')),
+        TextButton.icon(onPressed:(){Navigator.pop(context);widget.onEdit();},icon:const Icon(Icons.edit_note),label:const Text('تعديل')),
         TextButton.icon(onPressed:(){Navigator.pop(context);widget.onAppend();},icon:const Icon(Icons.add_shopping_cart),label:const Text('إضافة أصناف')),
       ])),if(busy)const LinearProgressIndicator(minHeight:2),
     ]))));
