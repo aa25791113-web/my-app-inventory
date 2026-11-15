@@ -155,7 +155,7 @@ void updateBackgroundDispatcher() {
       final notifications = FlutterLocalNotificationsPlugin();
       await notifications.initialize(
         const InitializationSettings(
-          android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+          android: AndroidInitializationSettings('@drawable/ic_stat_app_lol'),
         ),
       );
       final android = notifications.resolvePlatformSpecificImplementation<
@@ -164,7 +164,7 @@ void updateBackgroundDispatcher() {
       if (!permitted) return true;
       await android?.createNotificationChannel(
         const AndroidNotificationChannel(
-          'app_updates',
+          'app_updates_v2',
           'تحديثات البرنامج',
           description: 'إشعارات توفر تحديثات جديدة للبرنامج',
           importance: Importance.high,
@@ -176,13 +176,23 @@ void updateBackgroundDispatcher() {
         body,
         const NotificationDetails(
           android: AndroidNotificationDetails(
-            'app_updates',
+            'app_updates_v2',
             'تحديثات البرنامج',
             channelDescription: 'إشعارات توفر تحديثات جديدة للبرنامج',
             importance: Importance.high,
             priority: Priority.high,
             category: AndroidNotificationCategory.system,
-            icon: '@mipmap/ic_launcher',
+            icon: '@drawable/ic_stat_app_lol',
+            largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+            color: const Color(0xFF0C6678),
+            subText: 'APP LOL',
+            ticker: 'APP LOL',
+            onlyAlertOnce: true,
+            styleInformation: BigTextStyleInformation(
+              body,
+              contentTitle: title,
+              summaryText: 'تحديثات التطبيق • APP LOL',
+            ),
             playSound: true,
             enableVibration: true,
           ),
