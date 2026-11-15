@@ -21,3 +21,6 @@ Final retry after matching all original Material icon glyphs.
 
 Material glyph references across all Dart files now match the installed base release glyph set.
 Final compatibility fix: replace four glyphs missing from the actual 3.9.5+46 base release; all Dart Material icon references are now a subset of the base glyph set.
+
+
+Retry Shorebird patch after exact installed base glyph and Flutter SDK match.
