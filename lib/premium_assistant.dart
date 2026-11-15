@@ -37,14 +37,14 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
         const SizedBox(height:12),
         const SelectableText('احصل على مفتاح من Google AI Studio: aistudio.google.com/apikey'),
         const SizedBox(height:12),
-        TextField(controller:controller,obscureText:true,autocorrect:false,enableSuggestions:false,decoration:InputDecoration(labelText:'مفتاح Gemini API',hintText:'الصق المفتاح هنا',prefixIcon:const Icon(Icons.key),border:OutlineInputBorder(borderRadius:BorderRadius.circular(14)))),
+        TextField(controller:controller,obscureText:true,autocorrect:false,enableSuggestions:false,decoration:InputDecoration(labelText:'مفتاح Gemini API',hintText:'الصق المفتاح هنا',prefixIcon:const Icon(Icons.info_outline),border:OutlineInputBorder(borderRadius:BorderRadius.circular(14)))),
         const SizedBox(height:8),
         const Text('المفتاح يُحفظ على هذا الجهاز فقط. لا تشاركه مع أحد. استخدام الخدمة قد يخضع لحدود مجانية أو رسوم حسب حساب مزود الخدمة.',style:TextStyle(fontSize:11,color:Colors.grey)),
       ])),
       actions:[
         TextButton(onPressed:()=>Navigator.pop(ctx,null),child:const Text('إلغاء')),
         TextButton(onPressed:()=>Navigator.pop(ctx,''),child:const Text('مسح المفتاح')),
-        FilledButton.icon(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),icon:const Icon(Icons.save_outlined),label:const Text('حفظ المفتاح')),
+        FilledButton.icon(onPressed:()=>Navigator.pop(ctx,controller.text.trim()),icon:const Icon(Icons.backup_outlined),label:const Text('حفظ المفتاح')),
       ],
     )));
     controller.dispose();
@@ -210,7 +210,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     if(ok==true){setState((){chats.removeAt(i);active=chats.isEmpty?-1:active.clamp(0,chats.length-1);});await save();}
   }
   Widget history()=>SizedBox(width:250,child:Column(children:[
-    Padding(padding:const EdgeInsets.all(12),child:Row(children:[const Expanded(child:Text('سجل المحادثات',style:TextStyle(fontWeight:FontWeight.bold,fontSize:17))),IconButton(onPressed:fresh,icon:const Icon(Icons.add_comment))])),
+    Padding(padding:const EdgeInsets.all(12),child:Row(children:[const Expanded(child:Text('سجل المحادثات',style:TextStyle(fontWeight:FontWeight.bold,fontSize:17))),IconButton(onPressed:fresh,icon:const Icon(Icons.add))])),
     Expanded(child:ListView.builder(itemCount:chats.length,itemBuilder:(c,i)=>ListTile(selected:i==active,title:Text(chats[i]['title'],maxLines:1,overflow:TextOverflow.ellipsis),onTap:()=>setState(()=>active=i),trailing:IconButton(onPressed:()=>delete(i),icon:const Icon(Icons.delete_outline)))))
   ]));
   @override Widget build(BuildContext context){
@@ -224,7 +224,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       ])),
       const SizedBox(height:10),
       Expanded(child:msgs.isEmpty?Center(child:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
-        Icon(Icons.forum_rounded,size:58,color:Theme.of(context).colorScheme.primary),const SizedBox(height:12),
+        Icon(Icons.chat,size:58,color:Theme.of(context).colorScheme.primary),const SizedBox(height:12),
         const Text('أهلاً بيك، أقدر أساعدك في إيه؟',style:TextStyle(fontSize:19,fontWeight:FontWeight.bold)),
         const SizedBox(height:12),
         Wrap(spacing:8,runSpacing:8,alignment:WrapAlignment.center,children:[
@@ -242,11 +242,11 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
         ));
       })),
       Row(children:[
-        Expanded(child:TextField(controller:input,minLines:1,maxLines:5,textInputAction:TextInputAction.send,onSubmitted:(_)=>send(),decoration:InputDecoration(hintText:'اسأل بالمصري أو اكتب طلبك...',prefixIcon:const Icon(Icons.chat_bubble_outline),suffixIcon:IconButton(onPressed:input.clear,icon:const Icon(Icons.close))))),
+        Expanded(child:TextField(controller:input,minLines:1,maxLines:5,textInputAction:TextInputAction.send,onSubmitted:(_)=>send(),decoration:InputDecoration(hintText:'اسأل بالمصري أو اكتب طلبك...',prefixIcon:const Icon(Icons.chat),suffixIcon:IconButton(onPressed:input.clear,icon:const Icon(Icons.close))))),
         const SizedBox(width:8),
-        IconButton.filledTonal(onPressed:busy?null:fresh,tooltip:'محادثة جديدة',icon:const Icon(Icons.add_comment_outlined)),
+        IconButton.filledTonal(onPressed:busy?null:fresh,tooltip:'محادثة جديدة',icon:const Icon(Icons.add)),
         const SizedBox(width:4),
-        IconButton.filled(onPressed:busy?null:()=>send(),tooltip:'إرسال',icon:const Icon(Icons.arrow_upward)),
+        IconButton.filled(onPressed:busy?null:()=>send(),tooltip:'إرسال',icon:const Icon(Icons.north_east)),
       ]),
       Padding(padding:const EdgeInsets.only(top:6),child:Text(onlineConfigured?'الذكاء الاصطناعي متصل عند توفر الإنترنت؛ المساعد المحلي يعمل عند انقطاعه.':'المساعد المحلي يعمل دون إنترنت. اضغط الإعدادات لربط خدمة الذكاء الاصطناعي.',style:const TextStyle(fontSize:10,color:Colors.grey))),
     ]);
