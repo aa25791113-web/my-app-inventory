@@ -125,28 +125,33 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   }
 
   Future<String?> _onlineAnswer(String question) async {
-    final key=((await secureStorage.read(key:apiKeyStore))??'').trim();
-    if(key.isEmpty)return null;
-    final recent=msgs.take(msgs.isEmpty?0:msgs.length-1).toList();
-    final contents=<Map<String,dynamic>>[];
-    for(final m in recent){
-      final role=m['role']=='assistant'?'model':'user';
-      final text=(m['text']??'').toString().trim();
-      if(text.isNotEmpty)contents.add({'role':role,'parts':[{'text':text}]});
-    }
-    contents.add({'role':'user','parts':[{'text':question}]});
-    final payload={
-      'systemInstruction':{'parts':[{'text':'أنت مساعد APP LOL الذكي. تحدث بالمصرية الطبيعية الواضحة، وافهم التحيات والمحادثات القصيرة والسياق السابق قبل الإجابة. أجب عن الأسئلة العامة والتعليمية والتقنية والحسابية التي تستطيع الإجابة عنها، واشرح ببساطة وبأمثلة مناسبة، ولا تكرر عبارة أنك لا تفهم إذا كان المقصود واضحاً. إذا كانت الرسالة تحية فرد بتحية طبيعية ومختصرة. أنت أيضاً خبير استخدام APP LOL لإدارة المخزون والفواتير والمبيعات والمشتريات والعملاء والموردين والمصروفات والتقارير والشيفتات؛ اشرح الخطوات بدقة وبترتيب. لا تدّعِ أنك نفذت عملية أو فتحت صفحة أو قرأت بيانات الجهاز إلا إذا نفذ التطبيق ذلك فعلاً. لا تخترع أرقام مخزون أو فواتير أو أرصدة أو نتائج. إذا احتجت معلومة غير متاحة فقل ذلك بوضوح واسأل سؤالاً واحداً محدداً. اجعل الإجابة مباشرة ومنظمة وباللهجة المصرية، وتجنب الحشو، وراعِ أن المستخدم قد يكون مبتدئاً.'}]},
-      'contents':contents,
-      'generationConfig':{'temperature':0.65,'maxOutputTokens':1200},
-    };
-    final client=HttpClient()..connectionTimeout=const Duration(seconds:12);
-    try{
-      final request=await client.postUrl(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent')).timeout(const Duration(seconds:15));
+    HttpClient? client;
+    try {
+      final key=((await secureStorage.read(key:apiKeyStore))??'').trim();
+      if(key.isEmpty)return null;
+      final recent=msgs.take(msgs.isEmpty?0:msgs.length-1).toList();
+      final contents=<Map<String,dynamic>>[];
+      for(final m in recent){
+        final role=m['role']=='assistant'?'model':'user';
+        final text=(m['text']??'').toString().trim();
+        if(text.isNotEmpty)contents.add({'role':role,'parts':[{'text':text}]});
+      }
+      contents.add({'role':'user','parts':[{'text':question}]});
+      final payload={
+        'systemInstruction':{'parts':[{'text':'أنت مساعد APP LOL الذكي. تحدث بالمصرية الطبيعية الواضحة، وافهم التحيات والمحادثات القصيرة والسياق السابق قبل الإجابة. أجب عن الأسئلة العامة والتعليمية والتقنية والحسابية التي تستطيع الإجابة عنها، واشرح ببساطة وبأمثلة مناسبة. إذا كانت الرسالة تحية فرد بتحية طبيعية ومختصرة. أنت أيضاً خبير استخدام APP LOL لإدارة المخزون والفواتير والمبيعات والمشتريات والعملاء والموردين والمصروفات والتقارير والشيفتات؛ اشرح الخطوات بدقة وبترتيب. لا تدّعِ أنك نفذت عملية أو فتحت صفحة أو قرأت بيانات الجهاز إلا إذا نفذ التطبيق ذلك فعلاً. لا تخترع أرقام مخزون أو فواتير أو أرصدة أو نتائج. إذا احتجت معلومة غير متاحة فقل ذلك بوضوح واسأل سؤالاً واحداً محدداً. إذا كان السؤال يحتاج معلومات حديثة أو مصدراً موثوقاً فلا تختلق مصدراً أو تاريخاً. اجعل الإجابة مباشرة ومنظمة وباللهجة المصرية، وراعِ أن المستخدم قد يكون مبتدئاً.'}]},
+        'contents':contents,
+        'generationConfig':{
+          'temperature':0.55,
+          'maxOutputTokens':4096,
+          'thinkingConfig':{'thinkingLevel':'medium'},
+        },
+      };
+      client=HttpClient()..connectionTimeout=const Duration(seconds:15);
+      final request=await client.postUrl(Uri.parse('https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent')).timeout(const Duration(seconds:20));
       request.headers.set(HttpHeaders.contentTypeHeader,'application/json; charset=utf-8');
       request.headers.set('x-goog-api-key',key);
       request.add(utf8.encode(jsonEncode(payload)));
-      final response=await request.close().timeout(const Duration(seconds:35));
+      final response=await request.close().timeout(const Duration(seconds:45));
       final body=await response.transform(utf8.decoder).join();
       if(response.statusCode<200||response.statusCode>=300){
         String reason='حصلت مشكلة في الاتصال بخدمة الذكاء الاصطناعي.';
@@ -159,11 +164,14 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       final candidates=data['candidates'] as List? ?? [];
       if(candidates.isEmpty)return 'الخدمة لم ترجع إجابة حالياً. جرّب صياغة السؤال بشكل مختلف.';
       final parts=candidates.first['content']?['parts'] as List? ?? [];
-      final answer=parts.map((p)=>(p['text']??'').toString()).where((s)=>s.isNotEmpty).join('\n').trim();
+      final answer=parts.map((p)=>(p['text']??'').toString()).where((s)=>s.isNotEmpty).join('\\n').trim();
       return answer.isEmpty?null:answer;
-    }catch(e){
-      return 'تعذر الاتصال بخدمة الذكاء الاصطناعي. اتأكد من الإنترنت.\n\n${_answer(question)}';
-    }finally{client.close(force:true);}
+    }catch(e,stack){
+      debugPrint('APP LOL Gemini request failed: $e\\n$stack');
+      return null;
+    }finally{
+      client?.close(force:true);
+    }
   }
   @override void initState(){super.initState();load();_loadAiConfig();}
   @override void dispose(){input.dispose();scroll.dispose();super.dispose();}
@@ -288,7 +296,9 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   }
   Future<void> send([String? suggested])async{
     final q=(suggested??input.text).trim();if(q.isEmpty||busy)return;
-    if(active<0)fresh();input.clear();
+    if(active<0)fresh();
+    final targetChat=chats[active];
+    input.clear();
     setState((){
       chats[active]['messages']=[...(chats[active]['messages'] as List),{'role':'user','text':q}];
       if(chats[active]['title']=='محادثة جديدة')chats[active]['title']=q.length>32?q.substring(0,32)+'…':q;
@@ -312,8 +322,10 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       response=online??await _learnedAnswer(q)??_answer(q);
     }
     setState((){
-      chats[active]['messages']=[...(chats[active]['messages'] as List),{'role':'assistant','text':response}];
-      chats[active]['updated']=DateTime.now().toIso8601String();
+      final targetMessages=List<Map<String,dynamic>>.from(targetChat['messages'] as List? ?? []);
+      targetMessages.add({'role':'assistant','text':response});
+      targetChat['messages']=targetMessages;
+      targetChat['updated']=DateTime.now().toIso8601String();
       busy=false;
     });
     await save();
