@@ -174,7 +174,7 @@ void updateBackgroundDispatcher() {
         3300000,
         title,
         body,
-        const NotificationDetails(
+        NotificationDetails(
           android: AndroidNotificationDetails(
             'app_updates_v2',
             'تحديثات البرنامج',
