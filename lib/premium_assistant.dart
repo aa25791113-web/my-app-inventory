@@ -4,6 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:math_expressions/math_expressions.dart';
+import 'assistant_knowledge.dart';
 
 class PremiumAssistantPage extends StatefulWidget {
   const PremiumAssistantPage({super.key,this.onNavigate,this.onCreateInvoice});
@@ -20,12 +21,80 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   bool onlineConfigured=false;
   static const storeKey='assistant_chats_v2';
   static const apiKeyStore='assistant_gemini_api_key';
+  static const learnedStoreKey='assistant_learned_faq_v1';
   static const modelName='gemini-3.5-flash-lite';
   static const secureStorage=FlutterSecureStorage();
 
   Future<void> _loadAiConfig() async {
     onlineConfigured=((await secureStorage.read(key:apiKeyStore))??'').trim().isNotEmpty;
     if(mounted)setState((){});
+  }
+
+  String _normalizeLearned(String value) => value.toLowerCase()
+      .replaceAll(RegExp(r'[ًٌٍَُِّْـٰ]'), '')
+      .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
+      .replaceAll('ى', 'ي')
+      .replaceAll('ة', 'ه')
+      .replaceAll(RegExp(r'[^ء-يa-z0-9 ]'), ' ')
+      .replaceAll(RegExp(r'\\s+'), ' ')
+      .trim();
+
+  Future<String?> _learnedAnswer(String question) async {
+    final prefs=await SharedPreferences.getInstance();
+    final saved=prefs.getString(learnedStoreKey);
+    if(saved==null)return null;
+    try{
+      final entries=(jsonDecode(saved) as List).whereType<Map>().map((e)=>Map<String,String>.from(e)).toList();
+      final q=_normalizeLearned(question);
+      for(final entry in entries){
+        final phrase=_normalizeLearned(entry['question']??'');
+        if(phrase.isNotEmpty&&(q==phrase||q.contains(phrase)||phrase.contains(q)))return entry['answer'];
+      }
+      final qTokens=q.split(' ').where((e)=>e.length>1).toSet();
+      Map<String,String>? best;var score=0.0;
+      for(final entry in entries){
+        final tokens=_normalizeLearned(entry['question']??'').split(' ').where((e)=>e.length>1).toSet();
+        final overlap=qTokens.intersection(tokens).length;
+        final candidate=qTokens.isEmpty?0.0:overlap/qTokens.length;
+        if(overlap>=2&&candidate>score){score=candidate;best=entry;}
+      }
+      return score>=.75?best?['answer']:null;
+    }catch(_){return null;}
+  }
+
+  Future<void> _showTeachDialog() async {
+    final question=TextEditingController();
+    final answer=TextEditingController();
+    final saved=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(
+      textDirection:TextDirection.rtl,
+      child:AlertDialog(
+        shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(22)),
+        title:const Row(children:[Icon(Icons.school_outlined),SizedBox(width:8),Text('علّم المساعد معلومة')]),
+        content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,children:[
+          const Text('اكتب سؤالاً متوقعاً وإجابته الصحيحة. سيحفظها المساعد على هذا الجهاز ويسترجعها دون إنترنت عند سؤال مشابه.'),
+          const SizedBox(height:12),
+          TextField(controller:question,minLines:1,maxLines:3,decoration:const InputDecoration(labelText:'السؤال أو العبارة',hintText:'مثلاً: إزاي أراجع رصيد عميل؟')),
+          const SizedBox(height:10),
+          TextField(controller:answer,minLines:3,maxLines:6,decoration:const InputDecoration(labelText:'الإجابة التي تريد تعليمه إياها')),
+        ])),
+        actions:[
+          TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),
+          FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('حفظ المعلومة')),
+        ],
+      ),
+    ));
+    if(saved==true&&question.text.trim().isNotEmpty&&answer.text.trim().isNotEmpty){
+      final prefs=await SharedPreferences.getInstance();
+      List<Map<String,String>> entries=[];
+      try{entries=(jsonDecode(prefs.getString(learnedStoreKey)??'[]') as List).whereType<Map>().map((e)=>Map<String,String>.from(e)).toList();}catch(_){}
+      final q=question.text.trim();
+      entries.removeWhere((e)=>_normalizeLearned(e['question']??'')==_normalizeLearned(q));
+      entries.insert(0,{'question':q,'answer':answer.text.trim()});
+      if(entries.length>100)entries=entries.take(100).toList();
+      await prefs.setString(learnedStoreKey,jsonEncode(entries));
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('اتحفظت المعلومة. المساعد يقدر يستخدمها محلياً دون إنترنت.')));
+    }
+    question.dispose();answer.dispose();
   }
 
   Future<void> _showAiSettings() async {
@@ -144,6 +213,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     }catch(_){return null;}
   }
   String _answer(String raw){
+    final bundled=AssistantKnowledge.answer(raw);if(bundled!=null)return bundled;
     final calculation=_calculateOffline(raw);if(calculation!=null)return calculation;
     final q=raw.trim().toLowerCase();
     if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|أهلا|اهلين|هاي|hi|hello)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\nأهلاً بيك! أنا مساعد APP LOL المحلي. أقدر أشرح لك استخدام البرنامج، أوجّهك للصفحة المطلوبة، وأساعدك في الحسابات والمخزون والفواتير.';
@@ -232,7 +302,8 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     else if(actionRoute!=null){
       response=actionRoute==14?'فتحت لك صفحة الفواتير. اختار الفاتورة اللي عايز تراجعها أو اضغط «فاتورة جديدة».':actionRoute==19?'فتحت لك كشف النواقص.':actionRoute==8?'فتحت لك صفحة التقارير.':actionRoute==9?'فتحت لك الإعدادات.':actionRoute==1?'فتحت لك المنتجات.':actionRoute==4?'فتحت لك صفحة الموردين.':actionRoute==5?'فتحت لك صفحة العملاء.':actionRoute==2?'فتحت لك صفحة المبيعات.':actionRoute==3?'فتحت لك صفحة المشتريات.':actionRoute==16?'فتحت لك الآلة العلمية.':'فتحت لك الصفحة المطلوبة.';
     }else{
-      response=await _onlineAnswer(q)??_answer(q);
+      final online=await _onlineAnswer(q);
+      response=online??await _learnedAnswer(q)??_answer(q);
     }
     setState((){
       chats[active]['messages']=[...(chats[active]['messages'] as List),{'role':'assistant','text':response}];
@@ -256,6 +327,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(gradient:LinearGradient(colors:[Theme.of(context).colorScheme.primary,Theme.of(context).colorScheme.tertiary]),borderRadius:BorderRadius.circular(20)),child:Row(children:[
         Icon(Icons.auto_awesome,color:Colors.white,size:28),SizedBox(width:12),
         Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('مساعد APP LOL',style:TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w900)),Text('اسأل عن أي موضوع أو اطلب مساعدة داخل البرنامج',style:TextStyle(color:Colors.white70,fontSize:12))])),
+        IconButton(onPressed:_showTeachDialog,tooltip:'علّم المساعد',icon:const Icon(Icons.school_outlined,color:Colors.white)),
         IconButton(onPressed:_showAiSettings,tooltip:'إعداد الذكاء الاصطناعي',icon:const Icon(Icons.settings_outlined,color:Colors.white)),
         Container(padding:const EdgeInsets.symmetric(horizontal:8,vertical:5),decoration:BoxDecoration(color:onlineConfigured?Colors.green.withOpacity(.22):Colors.white.withOpacity(.16),borderRadius:BorderRadius.circular(20)),child:Text(onlineConfigured?'AI ON':'LOCAL',style:const TextStyle(color:Colors.white,fontSize:10,fontWeight:FontWeight.bold))),
       ])),
