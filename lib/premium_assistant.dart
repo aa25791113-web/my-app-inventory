@@ -189,7 +189,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     if(RegExp(r'(المشتريات|شراء بضاعة|عملية شراء)').hasMatch(q))return 3;
     if(RegExp(r'(الآلة الحاسبة|الحاسبة|احسب|احسبلي)').hasMatch(q))return 16;
     if(RegExp(r'(بحث الأسعار|بحث عن سعر|دور على سعر)').hasMatch(q))return 10;
-    if(RegExp(r'(الشيفت|الوردية|الجرد اليومي|فتح الشيفت|قفل الشيفت)').hasMatch(q))return 21;
+    if(RegExp(r'(الشيفت|الوردية|الجرد اليومي|فتح الشيفت|قفل الشيفت)').hasMatch(q))return 20;
     if(RegExp(r'(الأدوات الذكية|ادوات ذكية|الأدوات)').hasMatch(q))return 12;
     if(RegExp(r'(المساعد الذكي|المساعد|الشات)').hasMatch(q))return 13;
     if(RegExp(r'(حسابات العملاء|كشف حساب|كشف حركة)').hasMatch(q))return 18;
@@ -215,9 +215,12 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   String _answer(String raw){
     final bundled=AssistantKnowledge.answer(raw);if(bundled!=null)return bundled;
     final calculation=_calculateOffline(raw);if(calculation!=null)return calculation;
-    final q=raw.trim().toLowerCase();
-    if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|أهلا|اهلين|هاي|hi|hello)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\nأهلاً بيك! أنا مساعد APP LOL المحلي. أقدر أشرح لك استخدام البرنامج، أوجّهك للصفحة المطلوبة، وأساعدك في الحسابات والمخزون والفواتير.';
-    if(q.contains('شكرا')||q.contains('متشكر'))return 'العفو، تحت أمرك. لو محتاج تنفّذ حاجة داخل البرنامج اكتبها بصيغة واضحة، وهوجّهك للمكان المناسب.';
+    final q=_normalizeLearned(raw);
+    if(RegExp(r'^(ازيك|ازايك|عامل ايه|عامله ايه|اخبارك|اخبار|كيف حالك|how are you|what s up)').hasMatch(q))return 'أنا تمام، تسلم على سؤالك! 😊 إنت عامل إيه؟ تحب أساعدك في حاجة في APP LOL ولا عندك سؤال تاني؟';
+    if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|اهلين|هاي|hi|hello|صباح الخير|مساء الخير)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\nأهلاً بيك! أنا مساعد APP LOL. أقدر أساعدك في استخدام البرنامج، والفواتير والمخزون والحسابات، وكمان أجاوب عن أسئلة عامة لما تكون خدمة الذكاء الاصطناعي متصلة.';
+    if(q.contains('شكرا')||q.contains('متشكر')||q.contains('تسلم'))return 'العفو، ده واجبي! لو عندك سؤال أو فكرة لتطوير APP LOL قولّي وأنا أساعدك.';
+    if(q.contains('بتعمل ايه')||q.contains('وظيفتك')||q.contains('تقدر تعمل ايه'))return 'أنا مساعد APP LOL. أقدر أشرح لك الشاشات، وأساعدك في الفواتير والمخزون والعملاء والموردين والتقارير والحسابات. ومع اتصال Gemini أقدر أتعامل كمان مع أسئلة عامة وأحافظ على سياق المحادثة.';
+    if(q.contains('مين عملك')||q.contains('مين صنعك')||q.contains('مين طورك'))return 'أنا المساعد المدمج داخل APP LOL، واتطورت عشان أساعدك في تشغيل البرنامج وفهم بياناته وخطواته.';
     if(q.contains('اسمك')||q.contains('انت مين')||q.contains('إنت مين'))return 'أنا مساعد APP LOL. شغلي أساعدك في فهم البرنامج، وأوصلّك لصفحات الفواتير والمخزون والتقارير والإعدادات، وأشرح لك خطوات العمل.';
     if(q.contains('كاش')||q.contains('انستا')||q.contains('إنستا')||q.contains('فودافون كاش')||q.contains('تقسيم الدفع')||q.contains('وسيلة الدفع')){
       return 'تقدر تقسّم التحصيل في نفس الفاتورة على أكتر من وسيلة. اضغط «إضافة وسيلة»، اختار كاش أو إنستا باي أو فودافون كاش أو محفظة، واكتب مبلغ كل وسيلة. البرنامج بيجمع المبالغ وبيحفظ كل وسيلة في سجل الدفعات بشكل منفصل.';
