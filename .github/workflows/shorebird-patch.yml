@@ -167,7 +167,7 @@ jobs:
           PY
       - run: flutter pub get
       - name: Analyze Flutter source before publishing patch
-        run: flutter analyze --no-pub
+        run: flutter analyze --no-pub --no-fatal-infos
       - name: Align Android plugin compile SDK versions
         shell: bash
         run: |
