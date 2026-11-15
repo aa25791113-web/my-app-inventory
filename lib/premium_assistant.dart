@@ -36,7 +36,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
       .replaceAll('ى', 'ي')
       .replaceAll('ة', 'ه')
       .replaceAll(RegExp(r'[^ء-يa-z0-9 ]'), ' ')
-      .replaceAll(RegExp(r'\\s+'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
 
   Future<String?> _learnedAnswer(String question) async {
@@ -198,7 +198,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     return null;
   }
   String? _calculateOffline(String raw){
-    final match=RegExp(r'(?:احسب(?:لي)?|احسبلي|ناتج|يساوي)\s*([0-9٠-٩۰-۹][0-9٠-٩۰-۹\s+\-*/().٫,×÷]*)',caseSensitive:false).firstMatch(raw);
+      .replaceAll(RegExp(r'\s+'), ' ')
     if(match==null)return null;
     var expression=match.group(1)??'';
     const arabic='٠١٢٣٤٥٦٧٨٩';const persian='۰۱۲۳۴۵۶۷۸۹';
