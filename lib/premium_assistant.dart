@@ -58,7 +58,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
         final candidate=qTokens.isEmpty?0.0:overlap/qTokens.length;
         if(overlap>=2&&candidate>score){score=candidate;best=entry;}
       }
-      return score>=.75?best?['answer']:null;
+      return score >= .75 && best != null ? best['answer'] : null;
     }catch(_){return null;}
   }
 
