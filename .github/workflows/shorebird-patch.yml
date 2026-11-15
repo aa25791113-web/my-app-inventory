@@ -156,6 +156,8 @@ jobs:
           manifest.write_text(source)
           PY
       - run: flutter pub get
+      - name: Analyze Flutter source before publishing patch
+        run: flutter analyze --no-pub
       - name: Align Android plugin compile SDK versions
         shell: bash
         run: |
