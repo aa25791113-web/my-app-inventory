@@ -1,6 +1,6 @@
 /// Versioned, bundled offline knowledge. Each APK update can expand this pack.
 class AssistantKnowledge {
-  static const version = 2;
+  static const version = 3;
   static const entries = <Map<String, String>>[
     {'keys':'رصيد المخزون;كمية المنتج;المخزون الحالي;الكمية المتاحة', 'answer':'رصيد المخزون هو الكمية الموجودة فعلياً والمتاحة للبيع. البيع يقلله والمشتريات تزيده. راجع سجل حركة الصنف لو محتاج تعرف سبب أي فرق.'},
     {'keys':'حد التنبيه;الحد الادنى;تنبيه المخزون;نواقص', 'answer':'حد التنبيه هو أقل كمية تحددها للصنف. لما الرصيد يوصل له أو يقل عنه، يظهر الصنف في كشف النواقص لمراجعة طلب الشراء.'},
