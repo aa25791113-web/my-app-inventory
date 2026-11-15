@@ -2108,7 +2108,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     final payment=(e['payment_method']??'').toString().trim();
     return Container(color:Colors.white,padding:EdgeInsets.all(template==9||template==13?16:22),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       header,const SizedBox(height:18),customerCard,
-      if(payment.isNotEmpty)...[const SizedBox(height:10),Wrap(spacing:7,runSpacing:7,children:payment.split(RegExp(r'\\s*\\+\\s*')).map((method)=>_paymentMark(method.trim(),primary,accent,soft)).toList())],
+      if(payment.isNotEmpty)...[const SizedBox(height:10),Wrap(spacing:7,runSpacing:7,children:payment.split(RegExp(r'\s*\+\s*')).map((method)=>_paymentMark(method.trim(),primary,accent,soft)).toList())],
       const SizedBox(height:18),Row(children:[Expanded(child:Text('تفاصيل الأصناف',style:TextStyle(color:primary,fontSize:16,fontWeight:FontWeight.w900))),Text(widget.items.length.toString()+' أصناف',style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w800))]),
       const SizedBox(height:8),itemHeader,...itemWidgets,
       const SizedBox(height:16),
