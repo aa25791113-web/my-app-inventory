@@ -24,3 +24,5 @@ Final compatibility fix: replace four glyphs missing from the actual 3.9.5+46 ba
 
 
 Retry Shorebird patch after exact installed base glyph and Flutter SDK match.
+
+APP LOL 4.0.0+47: use WhatsApp support number configured in the owner dashboard.
