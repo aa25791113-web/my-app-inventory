@@ -1002,6 +1002,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   Future<void> clearBackground() async { final prefs=await SharedPreferences.getInstance(); await prefs.remove('backgroundPath'); if(mounted)setState(()=>backgroundPath=null); }
   ThemeData makeTheme(Brightness b)=>ThemeData(
     useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b).copyWith(secondary:remoteAccentColor),
+    textTheme:ThemeData(brightness:b).textTheme.apply(bodyColor:b==Brightness.dark?const Color(0xFFE8EEF2):const Color(0xFF17252D),displayColor:b==Brightness.dark?Colors.white:const Color(0xFF102A43)),
     scaffoldBackgroundColor:remoteBackgroundColor??(b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8)),
     cardTheme:CardThemeData(color:remoteSurfaceColor??(b==Brightness.dark?const Color(0xFF192630):Colors.white),elevation:b==Brightness.dark?0:1,margin:const EdgeInsets.symmetric(horizontal:8,vertical:6),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:BorderSide(color:b==Brightness.dark?const Color(0xFF293A45):const Color(0xFFE8EDF1)))),
     appBarTheme:AppBarTheme(centerTitle:false,elevation:0,scrolledUnderElevation:0,backgroundColor:b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8),surfaceTintColor:Colors.transparent,titleTextStyle:TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:b==Brightness.dark?Colors.white:const Color(0xFF17252D))),
@@ -1043,6 +1044,62 @@ class _HomePageState extends State<HomePage> {
       else{tab=0;}
     });
   }
+  Future<void> _showSupport() async {
+    const supportPhone='201555954312';
+    const facebookUrl='https://www.facebook.com/profile.php?id=61566243427157';
+    const message='مرحباً، أريد تقديم فكرة أو شكوى بخصوص تطبيق APP LOL:\n\n';
+    final configured=widget.remoteSupportUrl?.trim()??'';
+    final whatsappUri=Uri.parse(configured.startsWith('https://wa.me/')||configured.startsWith('https://api.whatsapp.com/')
+      ? configured
+      : 'https://wa.me/$supportPhone?text=${Uri.encodeComponent(message)}');
+    await showModalBottomSheet<void>(
+      context:context,
+      isScrollControlled:true,
+      backgroundColor:Colors.transparent,
+      builder:(sheetContext)=>Directionality(
+        textDirection:ui.TextDirection.rtl,
+        child:Container(
+          padding:const EdgeInsets.fromLTRB(18,12,18,24),
+          decoration:BoxDecoration(
+            color:Theme.of(sheetContext).colorScheme.surface,
+            borderRadius:const BorderRadius.vertical(top:Radius.circular(28)),
+          ),
+          child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.stretch,children:[
+            Center(child:Container(width:42,height:4,decoration:BoxDecoration(color:Theme.of(sheetContext).colorScheme.outlineVariant,borderRadius:BorderRadius.circular(8)))),
+            const SizedBox(height:18),
+            Row(children:[
+              Container(width:48,height:48,decoration:BoxDecoration(color:Theme.of(sheetContext).colorScheme.primaryContainer,borderRadius:BorderRadius.circular(16)),child:Icon(Icons.headset_mic_rounded,color:Theme.of(sheetContext).colorScheme.primary,size:27)),
+              const SizedBox(width:12),
+              const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+                Text('مركز دعم APP LOL',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900)),
+                Text('يسعدنا استقبال أفكارك وملاحظاتك',style:TextStyle(fontSize:12,color:Colors.grey)),
+              ])),
+            ]),
+            const SizedBox(height:16),
+            Card(child:ListTile(
+              contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:7),
+              leading:Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFFE7F7EE),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.chat_rounded,color:Color(0xFF168A4A),size:26)),
+              title:const Text('تواصل عبر واتساب',style:TextStyle(fontWeight:FontWeight.w900)),
+              subtitle:const Text('ابدأ برسالة جاهزة واكتب فكرتك أو شكواك'),
+              trailing:const Icon(Icons.open_in_new),
+              onTap:()async{Navigator.pop(sheetContext);if(!await launchUrl(whatsappUri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح واتساب. تأكد من وجود اتصال بالإنترنت.');},
+            )),
+            Card(child:ListTile(
+              contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:7),
+              leading:Container(width:44,height:44,decoration:BoxDecoration(color:const Color(0xFFEAF1FF),borderRadius:BorderRadius.circular(14)),child:const Icon(Icons.facebook,color:Color(0xFF1877F2),size:27)),
+              title:const Text('صفحتنا على فيسبوك',style:TextStyle(fontWeight:FontWeight.w900)),
+              subtitle:const Text('افتح صفحة APP LOL مباشرة'),
+              trailing:const Icon(Icons.open_in_new),
+              onTap:()async{Navigator.pop(sheetContext);final uri=Uri.parse(facebookUrl);if(!await launchUrl(uri,mode:LaunchMode.externalApplication)&&mounted)toast(context,'تعذر فتح صفحة فيسبوك.');},
+            )),
+            const SizedBox(height:4),
+            TextButton(onPressed:()=>Navigator.pop(sheetContext),child:const Text('إغلاق')),
+          ]),
+        ),
+      ),
+    );
+  }
+
   Future<void> _showAdminAnnouncement(String id) async {
     final client=HttpClient();
     try{
@@ -1115,7 +1172,7 @@ class _HomePageState extends State<HomePage> {
         title:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
         Text(widget.appName,style:const TextStyle(fontWeight:FontWeight.w900)),
         Text(widget.remoteTagline?.isNotEmpty==true?widget.remoteTagline!:'إدارة المخزون دون إنترنت',style:const TextStyle(fontSize:11))]),
-        actions:[IconButton(tooltip:'المساعد الذكي',onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(assistantContext)=>Theme(data:ThemeData.dark().copyWith(colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xFF18A999),brightness:Brightness.dark),scaffoldBackgroundColor:const Color(0xFF07131F),cardColor:const Color(0xFF112433)),child:Scaffold(backgroundColor:const Color(0xFF07131F),appBar:AppBar(backgroundColor:const Color(0xFF07131F),foregroundColor:Colors.white,title:const Text('مساعد APP LOL الذكي',style:TextStyle(fontWeight:FontWeight.w900)),leading:IconButton(icon:const Icon(Icons.arrow_back),onPressed:()=>Navigator.pop(assistantContext))),body:PremiumAssistantPage(onNavigate:(page){Navigator.pop(assistantContext);setState(()=>tab=page);},onCreateInvoice:(){Navigator.pop(assistantContext);setState((){tab=14;refreshId++;assistantCreateInvoice=true;});}))))),icon:const Icon(Icons.auto_awesome)),IconButton(tooltip:'الدعم الفني',onPressed:(){final link=widget.remoteSupportUrl;if(link!=null){final uri=Uri.tryParse(link);if(uri!=null)launchUrl(uri,mode:LaunchMode.externalApplication);}else{setState(()=>tab=13);}},icon:const Icon(Icons.support_agent)),if(widget.remoteWebsiteUrl?.isNotEmpty==true)IconButton(tooltip:'موقع التطبيق',onPressed:(){final uri=Uri.tryParse(widget.remoteWebsiteUrl!);if(uri!=null)launchUrl(uri,mode:LaunchMode.externalApplication);},icon:const Icon(Icons.settings_outlined)),const SizedBox(width:6)]),
+        actions:[IconButton(tooltip:'المساعد الذكي',onPressed:()=>Navigator.of(context).push(MaterialPageRoute<void>(builder:(assistantContext)=>Theme(data:ThemeData.dark().copyWith(colorScheme:ColorScheme.fromSeed(seedColor:const Color(0xFF18A999),brightness:Brightness.dark),scaffoldBackgroundColor:const Color(0xFF07131F),cardColor:const Color(0xFF112433)),child:Scaffold(backgroundColor:const Color(0xFF07131F),appBar:AppBar(backgroundColor:const Color(0xFF07131F),foregroundColor:Colors.white,title:const Text('مساعد APP LOL الذكي',style:TextStyle(fontWeight:FontWeight.w900)),leading:IconButton(icon:const Icon(Icons.arrow_back),onPressed:()=>Navigator.pop(assistantContext))),body:PremiumAssistantPage(onNavigate:(page){Navigator.pop(assistantContext);setState(()=>tab=page);},onCreateInvoice:(){Navigator.pop(assistantContext);setState((){tab=14;refreshId++;assistantCreateInvoice=true;});}))))),icon:const Icon(Icons.auto_awesome)),IconButton(tooltip:'الدعم والتواصل',onPressed:_showSupport,icon:const Icon(Icons.headset_mic_rounded)),if(widget.remoteWebsiteUrl?.isNotEmpty==true)IconButton(tooltip:'موقع التطبيق',onPressed:(){final uri=Uri.tryParse(widget.remoteWebsiteUrl!);if(uri!=null)launchUrl(uri,mode:LaunchMode.externalApplication);},icon:const Icon(Icons.settings_outlined)),const SizedBox(width:6)]),
       body:Stack(children:[
         if(widget.remoteBackgroundUrl?.isNotEmpty==true) Positioned.fill(child:Stack(fit:StackFit.expand,children:[
           Opacity(opacity:.16,child:Image.network(widget.remoteBackgroundUrl!,fit:BoxFit.cover,errorBuilder:(c,e,st)=>const SizedBox.shrink())),
@@ -1126,7 +1183,7 @@ class _HomePageState extends State<HomePage> {
         ])),
         IndexedStack(index:tab,children:pages)
       ]),
-      bottomNavigationBar:NavigationBar(selectedIndex:tab==10?0:tab==1?1:tab==0?2:tab==14?3:tab==8?4:tab==12?5:tab==21?6:0,onDestinationSelected:(v)=>setState(()=>tab=[10,1,0,14,8,12,21][v]),
+      bottomNavigationBar:NavigationBar(selectedIndex:tab==10?0:tab==1?1:tab==0?2:tab==14?3:tab==8?4:tab==12?5:tab==20?6:0,onDestinationSelected:(v)=>setState(()=>tab=[10,1,0,14,8,12,20][v]),
         destinations:const [
           NavigationDestination(icon:Icon(Icons.search),label:'بحث الأسعار'),
           NavigationDestination(icon:Icon(Icons.inventory_2_outlined),label:'المنتجات'),
@@ -1965,7 +2022,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   final GlobalKey captureKey=GlobalKey();
   bool busy=false;
   int template=0;
-  static const names=['ملكي كلاسيكي','تحريري فاخر','بطاقة عصرية','عمود جانبي','جدول احترافي','إيصال مميز','هندسي','مساحات بيضاء','تجاري جريء','أرشيف رسمي','Editorial Minimal','Split Ledger','Luxury Seal','Thermal Receipt','Modern Dashboard'];
+  static const names=['ملكي كلاسيكي','تحريري فاخر','بطاقة عصرية','عمود جانبي','جدول احترافي','إيصال مميز','هندسي','مساحات بيضاء','تجاري جريء','أرشيف رسمي','Editorial Minimal','Split Ledger','Luxury Seal','Thermal Receipt','Modern Dashboard','Canva • فاتورة عمودين'];
   static const colors=[
     [Color(0xFF102A43),Color(0xFF087F8C),Color(0xFFEAF4F5)],
     [Color(0xFF20242C),Color(0xFFC59B52),Color(0xFFF4F1EA)],
@@ -1982,9 +2039,10 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     [Color(0xFF3B1F2B),Color(0xFFC69C6D),Color(0xFFF8F1E8)],
     [Color(0xFF202020),Color(0xFF555555),Color(0xFFF4F4F1)],
     [Color(0xFF102A43),Color(0xFF00A6A6),Color(0xFFEAF4F4)],
+    [Color(0xFF123B55),Color(0xFF087F8C),Color(0xFFF0F6F7)],
   ];
   @override void initState(){super.initState();_loadTemplate();}
-  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,14).toInt());}
+  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,15).toInt());}
   Future<void> _selectTemplate(int value)async{final prefs=await SharedPreferences.getInstance();await prefs.setInt('invoice_template',value);if(mounted)setState(()=>template=value);}
   double n(Object? v)=>(v as num?)?.toDouble()??0;
   Future<Uint8List> capture()async{await WidgetsBinding.instance.endOfFrame;final render=captureKey.currentContext?.findRenderObject();if(render is! RenderRepaintBoundary)throw Exception('تعذر تجهيز صورة الفاتورة.');final image=await render.toImage(pixelRatio:2.5);final data=await image.toByteData(format:ui.ImageByteFormat.png);image.dispose();if(data==null)throw Exception('تعذر تحويل الفاتورة إلى صورة.');return data.buffer.asUint8List();}
@@ -2094,6 +2152,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     :template==11?Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Expanded(child:Container(padding:const EdgeInsets.all(16),decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(16)),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[_brand(primary,accent,dark:true),const SizedBox(height:16),Text('SALES INVOICE',style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w900,letterSpacing:1.5)),Text(no,style:const TextStyle(color:Colors.white,fontSize:20,fontWeight:FontWeight.w900)),Text(date,style:const TextStyle(color:Colors.white70,fontSize:10))]))),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,mainAxisAlignment:MainAxisAlignment.center,children:[Text('فاتورة بيع',style:TextStyle(color:primary,fontSize:23,fontWeight:FontWeight.w900)),const SizedBox(height:6),Text('APP LOL',style:TextStyle(color:accent,fontSize:13,fontWeight:FontWeight.w900)),Text('إدارة المبيعات والمخزون',style:const TextStyle(color:Color(0xFF475569),fontSize:10))]))])
     :template==12?Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(4),border:Border.all(color:accent,width:2)),child:Column(children:[Container(width:64,height:64,decoration:BoxDecoration(shape:BoxShape.circle,border:Border.all(color:accent,width:2)),child:Icon(Icons.workspace_premium,color:accent,size:34)),const SizedBox(height:10),_brand(primary,accent,centered:true,dark:true),const SizedBox(height:18),Text('فاتورة مبيعات',style:TextStyle(color:accent,fontSize:24,fontWeight:FontWeight.w900)),Text(no,style:const TextStyle(color:Colors.white,fontSize:19,fontWeight:FontWeight.w900)),Text(date,style:const TextStyle(color:Colors.white70,fontSize:11))]))
     :template==13?Container(padding:const EdgeInsets.symmetric(horizontal:18,vertical:16),decoration:BoxDecoration(color:soft,border:Border.all(color:primary.withOpacity(.5),style:BorderStyle.solid),borderRadius:BorderRadius.circular(4)),child:Column(children:[Text('APP LOL',style:TextStyle(color:primary,fontSize:24,fontWeight:FontWeight.w900,letterSpacing:2)),Text('فاتورة بيع / RECEIPT',style:TextStyle(color:primary,fontSize:15,fontWeight:FontWeight.w900)),const SizedBox(height:10),Divider(color:primary,thickness:1.5),Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('رقم الفاتورة',style:TextStyle(color:primary,fontWeight:FontWeight.w700)),Text(no,style:TextStyle(color:primary,fontWeight:FontWeight.w900))]),Row(mainAxisAlignment:MainAxisAlignment.spaceBetween,children:[Text('التاريخ',style:TextStyle(color:primary,fontWeight:FontWeight.w700)),Text(date,style:TextStyle(color:primary,fontWeight:FontWeight.w800,fontSize:10))]),Divider(color:primary)]))
+    :template==15?Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(18),border:Border.all(color:primary.withOpacity(.18))),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Row(children:[Expanded(child:_brand(primary,accent)),Container(padding:const EdgeInsets.symmetric(horizontal:12,vertical:9),decoration:BoxDecoration(color:primary,borderRadius:BorderRadius.circular(12)),child:Column(crossAxisAlignment:CrossAxisAlignment.end,children:[const Text('فاتورة بيع',style:TextStyle(color:Colors.white70,fontSize:10,fontWeight:FontWeight.w700)),Text(no,style:const TextStyle(color:Colors.white,fontSize:16,fontWeight:FontWeight.w900))]))]),const SizedBox(height:16),Container(height:3,decoration:BoxDecoration(gradient:LinearGradient(colors:[primary,accent]),borderRadius:BorderRadius.circular(3))),const SizedBox(height:12),Row(children:[Expanded(child:Text('تفاصيل الفاتورة',style:TextStyle(color:primary,fontSize:18,fontWeight:FontWeight.w900))),Text(date,style:const TextStyle(color:Color(0xFF475569),fontSize:11,fontWeight:FontWeight.w700))])]))
     :Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(gradient:LinearGradient(begin:Alignment.topRight,end:Alignment.bottomLeft,colors:[primary,accent]),borderRadius:BorderRadius.circular(22)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Row(children:[Expanded(child:_brand(primary,accent,dark:true)),Icon(Icons.dashboard_customize,color:Colors.white.withOpacity(.85),size:32)]),const SizedBox(height:18),Text('INVOICE SUMMARY',style:TextStyle(color:Colors.white.withOpacity(.8),fontSize:10,fontWeight:FontWeight.w900,letterSpacing:2)),Row(crossAxisAlignment:CrossAxisAlignment.end,children:[Expanded(child:Text('فاتورة مبيعات',style:const TextStyle(color:Colors.white,fontSize:23,fontWeight:FontWeight.w900))),Text(no,style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900))]),Text(date,style:const TextStyle(color:Colors.white70,fontSize:11))]));
     final customerCard=template==1?Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(border:Border.all(color:accent,width:1.2)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Text('BILL TO  /  بيانات العميل',style:TextStyle(color:accent,fontSize:10,fontWeight:FontWeight.w900,letterSpacing:1)),const SizedBox(height:8),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:17)),if(phone.isNotEmpty)Text(phone,style:const TextStyle(color:Colors.blueGrey,fontSize:11)),
@@ -2106,6 +2165,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     :template==12?Container(padding:const EdgeInsets.all(15),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(3),border:Border.all(color:accent,width:1.2)),child:Row(children:[Icon(Icons.verified_user_outlined,color:accent,size:30),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('بيانات العميل',style:TextStyle(color:accent,fontSize:10,fontWeight:FontWeight.w900)),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:16)),Text(phone.isEmpty?'بدون هاتف':phone,style:const TextStyle(color:Color(0xFF475569),fontSize:10))]))]))
     :template==13?Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Divider(color:primary),Text('العميل: $customer',style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:13)),Text('الهاتف: ${phone.isEmpty?'—':phone}',style:TextStyle(color:primary,fontSize:11)),Divider(color:primary)])
     :template==14?Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Colors.white.withOpacity(.95),borderRadius:BorderRadius.circular(14)),child:Row(children:[Container(width:5,height:52,color:accent),const SizedBox(width:12),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('العميل',style:TextStyle(color:primary.withOpacity(.8),fontSize:10,fontWeight:FontWeight.w800)),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:16)),Text(phone.isEmpty?'رقم الهاتف غير مسجل':phone,style:const TextStyle(color:Color(0xFF475569),fontSize:10))]))]))
+    :template==15?Row(crossAxisAlignment:CrossAxisAlignment.stretch,children:[Expanded(child:Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(13),border:Border.all(color:primary.withOpacity(.12))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('بيانات العميل',style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w900)),const SizedBox(height:8),Text(customer,style:TextStyle(color:primary,fontSize:16,fontWeight:FontWeight.w900)),const SizedBox(height:4),Text(phone.isEmpty?'الهاتف غير مسجل':phone,style:const TextStyle(color:Color(0xFF475569),fontSize:11))]))),const SizedBox(width:10),Expanded(child:Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:Colors.white,borderRadius:BorderRadius.circular(13),border:Border.all(color:primary.withOpacity(.12))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('بيانات الدفع',style:TextStyle(color:accent,fontSize:11,fontWeight:FontWeight.w900)),const SizedBox(height:8),Text('طريقة الدفع',style:TextStyle(color:primary.withOpacity(.65),fontSize:10)),Text((e['payment_method']??'غير محددة').toString(),maxLines:2,overflow:TextOverflow.ellipsis,style:TextStyle(color:primary,fontSize:13,fontWeight:FontWeight.w900)),const SizedBox(height:5),Text('رقم الفاتورة: $no',style:TextStyle(color:primary,fontSize:10,fontWeight:FontWeight.w700))])))] )
     :Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(template==5?28:14)),child:Row(children:[
       Icon(Icons.person_outline,color:accent,size:30),const SizedBox(width:10),Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('العميل',style:TextStyle(color:primary.withOpacity(.65),fontSize:10)),Text(customer,style:TextStyle(color:primary,fontWeight:FontWeight.w900,fontSize:15)),if(phone.isNotEmpty)Text(phone,style:const TextStyle(color:Colors.blueGrey,fontSize:10))])),
     ]));
@@ -2115,7 +2175,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
       Expanded(flex:3,child:Text('السعر',textAlign:TextAlign.center,style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:10))),
       Expanded(flex:3,child:Text('الإجمالي',textAlign:TextAlign.end,style:TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:10))),
     ]));
-    final itemWidgets=widget.items.asMap().entries.map((entry)=>_itemRow(entry.value,entry.key,primary,accent,soft,card:template==2||template==5||template==8||template==11||template==12||template==14,compact:template==4||template==9||template==13)).toList();
+    final itemWidgets=widget.items.asMap().entries.map((entry)=>_itemRow(entry.value,entry.key,primary,accent,soft,card:template==2||template==5||template==8||template==11||template==12||template==14||template==15,compact:template==4||template==9||template==13)).toList();
     final payment=(e['payment_method']??'').toString().trim();
     return Container(color:Colors.white,padding:EdgeInsets.all(template==9||template==13?16:22),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       header,const SizedBox(height:18),customerCard,
@@ -2132,13 +2192,13 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     ]));
   }
   @override Widget build(BuildContext context){
-    final c=colors[template.clamp(0,14).toInt()];
+    final c=colors[template.clamp(0,15).toInt()];
     final screenWidth=MediaQuery.of(context).size.width;
     final paperWidth=math.min(screenWidth-28,760).toDouble();
     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(6),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:900,maxHeight:MediaQuery.of(context).size.height*.97),child:Column(children:[
       Padding(padding:const EdgeInsets.fromLTRB(12,8,12,4),child:Row(children:[
         const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:18,fontWeight:FontWeight.w900))),
-        PopupMenuButton<int>(tooltip:'اختيار واحد من 15 تصميم فاتورة مختلف',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>List.generate(names.length,(i)=>PopupMenuItem(value:i,child:Text((i+1).toString()+'. '+names[i]))),icon:const Icon(Icons.dashboard_outlined)),
+        PopupMenuButton<int>(tooltip:'اختيار واحد من 16 تصميم فاتورة مختلف',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>List.generate(names.length,(i)=>PopupMenuItem(value:i,child:Text((i+1).toString()+'. '+names[i]))),icon:const Icon(Icons.dashboard_outlined)),
         IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close)),
       ])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.fromLTRB(7,5,7,12),child:RepaintBoundary(key:captureKey,child:ConstrainedBox(constraints:BoxConstraints(minWidth:paperWidth),child:SizedBox(width:paperWidth,child:_design(c[0],c[1],c[2])))))),
