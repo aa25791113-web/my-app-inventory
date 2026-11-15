@@ -12,3 +12,5 @@ APP LOL 4.0.1+48 — invoice and report redesign, customer selection and validat
 APP LOL 4.0.2+49 — fix invoice customer creation and split payment validation; add five distinct invoice designs; improve app theme, payment marks, shift navigation and offline assistant.
 
 APP LOL 4.0.2+49 FINAL BUILD — repair invoice customer add flow; validate split cash and InstaPay payments; 15 invoice layouts; readable theme and text; shift in bottom navigation; separate AI assistant screen with offline FAQs, calculator and suggested prompts; payment badges and logos.
+
+APP LOL 4.0.3+50 — include robust Arabic InstaPay logo recognition in the final Android build.
