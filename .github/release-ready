@@ -16,3 +16,5 @@ APP LOL 4.0.2+49 FINAL BUILD — repair invoice customer add flow; validate spli
 APP LOL 4.0.3+50 — include robust Arabic InstaPay logo recognition in the final Android build.
 
 APP LOL 4.0.4+51 — expanded bundled offline knowledge, local teach-and-recall memory, Arabic normalization and assistant learning controls.
+
+APP LOL 4.0.4+51 — retry Shorebird build after fixing Dart null-aware matcher syntax.
