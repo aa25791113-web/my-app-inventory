@@ -24,3 +24,5 @@ APP LOL 4.0.4+51 — retry build after restoring offline calculator parser.
 APP LOL 4.0.4+51 — final retry with corrected Arabic calculator and assistant matching regex.
 
 APP LOL 4.0.4+51 — clean analyzer warnings and publish updated offline assistant.
+
+APP LOL 4.0.5+52 — redesigned Android notifications with a dedicated monochrome status icon, branded large icon, expanded BigText layout and refreshed notification channels.
