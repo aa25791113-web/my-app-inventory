@@ -1939,7 +1939,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   bool busy=false;
   int template=0;
   @override void initState(){super.initState();_loadTemplate();}
-  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,4));}
+  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,4).toInt());}
   Future<void> _selectTemplate(int value)async{final prefs=await SharedPreferences.getInstance();await prefs.setInt('invoice_template',value);if(mounted)setState(()=>template=value);}
   double n(Object? v)=>(v as num?)?.toDouble()??0;
   Future<Uint8List> capture() async {
@@ -1975,7 +1975,7 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
       {'primary':const Color(0xFF39246B),'secondary':const Color(0xFF7651B5),'accent':const Color(0xFF7651B5),'soft':const Color(0xFFF1ECFA)},
       {'primary':const Color(0xFF334155),'secondary':const Color(0xFF64748B),'accent':const Color(0xFF334155),'soft':const Color(0xFFF1F5F9)},
     ];
-    final palette=palettes[template.clamp(0,4)];
+    final palette=palettes[template.clamp(0,4).toInt()];
     final primary=palette['primary']!,secondary=palette['secondary']!,accent=palette['accent']!,soft=palette['soft']!;
     final e=widget.invoice;final total=n(e['total']),paid=n(e['paid']),due=(total-paid).clamp(0,double.infinity).toDouble(),subtotal=n(e['subtotal']),discount=n(e['discount_amount']);
     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(12),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:640,maxHeight:MediaQuery.of(context).size.height*.94),child:Column(children:[
@@ -2739,7 +2739,7 @@ class SettingsPage extends StatelessWidget {
     )),
     const Card(child:ListTile(leading:Icon(Icons.offline_bolt_outlined),title:Text('يعمل دون إنترنت'),
       subtitle:Text('البيانات محفوظة محلياً باستخدام SQLite. لا يحتاج التطبيق إلى حساب أو خادم.'))),
-    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 3.9.1'),
+    const Card(child:ListTile(leading:Icon(Icons.info_outline),title:Text('APP LOL — إصدار 4.0.0'),
       subtitle:Text('بحث بالاسم والكود والصورة، قارئ QR وباركود بالكاميرا والصور، حاسبة، تصنيفات، مفضلة، أرشيف، سجل أسعار ونسخ احتياطي شامل.'))),
   ]);
 }
@@ -2807,7 +2807,7 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       [const ui.Color(0xFF14532D),const ui.Color(0xFF23865A),const ui.Color(0xFFEAF4EC),const ui.Color(0xFFE7F3E9)],
       [const ui.Color(0xFF39246B),const ui.Color(0xFF7651B5),const ui.Color(0xFFF0ECF8),const ui.Color(0xFFEDE7F8)],
     ];
-    final palette=reportPalettes[reportStyle.clamp(0,3)];
+    final palette=reportPalettes[reportStyle.clamp(0,3).toInt()];
     final reportPrimary=palette[0],reportAccent=palette[1],reportBg=palette[2],reportSoft=palette[3];
     const double w=1240,h=1754,pad=64;
     final images=<Uint8List>[];
