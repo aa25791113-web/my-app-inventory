@@ -129,13 +129,13 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     return null;
   }
   String? _calculateOffline(String raw){
-    final match=RegExp(r'(?:احسب(?:لي)?|احسبلي|ناتج|يساوي)\\s*([0-9٠-٩۰-۹][0-9٠-٩۰-۹\\s+\\-*/().٫,×÷]*)',caseSensitive:false).firstMatch(raw);
+    final match=RegExp(r'(?:احسب(?:لي)?|احسبلي|ناتج|يساوي)\s*([0-9٠-٩۰-۹][0-9٠-٩۰-۹\s+\-*/().٫,×÷]*)',caseSensitive:false).firstMatch(raw);
     if(match==null)return null;
     var expression=match.group(1)??'';
     const arabic='٠١٢٣٤٥٦٧٨٩';const persian='۰۱۲۳۴۵۶۷۸۹';
     for(var i=0;i<10;i++){expression=expression.replaceAll(arabic[i],i.toString()).replaceAll(persian[i],i.toString());}
     expression=expression.replaceAll('×','*').replaceAll('÷','/').replaceAll('٫','.').replaceAll(',','.').replaceAll(' ','');
-    if(!RegExp(r'^[0-9+*/().\\-]+
+    if(!RegExp(r'^[0-9+*/().\-]+
     if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|أهلا|اهلين|هاي|hi|hello)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\nأهلاً بيك! أنا مساعد APP LOL المحلي. أقدر أشرح لك استخدام البرنامج، أوجّهك للصفحة المطلوبة، وأساعدك في الحسابات والمخزون والفواتير.';
     if(q.contains('شكرا')||q.contains('متشكر'))return 'العفو، تحت أمرك. لو محتاج تنفّذ حاجة داخل البرنامج اكتبها بصيغة واضحة، وهوجّهك للمكان المناسب.';
     if(q.contains('اسمك')||q.contains('انت مين')||q.contains('إنت مين'))return 'أنا مساعد APP LOL. شغلي أساعدك في فهم البرنامج، وأوصلّك لصفحات الفواتير والمخزون والتقارير والإعدادات، وأشرح لك خطوات العمل.';
@@ -285,7 +285,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   }
 }
 ).hasMatch(expression))return null;
-    try{final value=Parser().parse(expression).evaluate(EvaluationType.REAL,ContextModel());if(!value.isFinite)return 'الناتج غير محدود أو غير صالح.';final rounded=value.toStringAsFixed(6).replaceFirst(RegExp(r'\\.?0+
+    try{final value=Parser().parse(expression).evaluate(EvaluationType.REAL,ContextModel());if(!value.isFinite)return 'الناتج غير محدود أو غير صالح.';final rounded=value.toStringAsFixed(6).replaceFirst(RegExp(r'\.?0+
     if(RegExp(r'^(السلام عليكم|سلام عليكم|السلام|اهلا|أهلا|اهلين|هاي|hi|hello)').hasMatch(q))return 'وعليكم السلام ورحمة الله وبركاته 🌟\nأهلاً بيك! أنا مساعد APP LOL المحلي. أقدر أشرح لك استخدام البرنامج، أوجّهك للصفحة المطلوبة، وأساعدك في الحسابات والمخزون والفواتير.';
     if(q.contains('شكرا')||q.contains('متشكر'))return 'العفو، تحت أمرك. لو محتاج تنفّذ حاجة داخل البرنامج اكتبها بصيغة واضحة، وهوجّهك للمكان المناسب.';
     if(q.contains('اسمك')||q.contains('انت مين')||q.contains('إنت مين'))return 'أنا مساعد APP LOL. شغلي أساعدك في فهم البرنامج، وأوصلّك لصفحات الفواتير والمخزون والتقارير والإعدادات، وأشرح لك خطوات العمل.';
