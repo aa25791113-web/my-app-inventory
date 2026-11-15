@@ -2028,7 +2028,6 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
     final e=widget.invoice;
     final total=n(e['total']),paid=n(e['paid']),due=(total-paid).clamp(0,double.infinity).toDouble(),subtotal=n(e['subtotal']),discount=n(e['discount_amount']);
     final no=e['invoice_no'].toString(),date=formatDateTime(e['created_at']),customer=(e['customer_name']??'عميل نقدي').toString(),phone=(e['customer_phone']??'').toString();
-    final isDark=template==1||template==8;
     final header=template==0?Container(padding:const EdgeInsets.all(22),decoration:BoxDecoration(gradient:LinearGradient(colors:[primary,accent]),borderRadius:BorderRadius.circular(20)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
       Row(children:[Expanded(child:_brand(primary,accent,dark:true)),Text('INVOICE',style:TextStyle(color:Colors.white.withOpacity(.75),fontSize:12,letterSpacing:3,fontWeight:FontWeight.w900))]),
       const SizedBox(height:22),Text('فاتورة بيع',style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900,fontSize:23)),Text(no,style:TextStyle(color:accent,fontWeight:FontWeight.w900,fontSize:20)),Text(date,style:const TextStyle(color:Colors.white70,fontSize:11)),
