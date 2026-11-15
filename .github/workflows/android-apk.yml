@@ -29,7 +29,7 @@ jobs:
           cache: true
       - uses: subosito/flutter-action@v2
         with:
-          channel: stable
+          flutter-version: "3.50.0"
           cache: true
       - uses: actions/setup-java@v4
         with:
@@ -140,7 +140,7 @@ jobs:
         run: |
           python -m pip install --quiet pillow
           python tool/generate_icon.py
-          sed -i 's/android:label="my_app_inventory"/android:label="APP LOL"/' android/app/src/main/AndroidManifest.xml
+          sed -i 's/android:label="my_app_inventory"/android:label="APP LOL • إدارة المخزون"/' android/app/src/main/AndroidManifest.xml
           python - <<'PY'
           from pathlib import Path
           manifest = Path("android/app/src/main/AndroidManifest.xml")
@@ -267,7 +267,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           tag_name: app-${{ github.run_number }}
-          name: APP LOL Android ${{ github.run_number }}
+          name: APP LOL 4.0 — إدارة المخزون والمبيعات
           body: "نسخة Android رسمية من APP LOL — مبنية عبر Shorebird."
           files: build/app/outputs/flutter-apk/app-lol-android-arm64.apk
           overwrite_files: true
