@@ -15,3 +15,6 @@ Re-run patch validation with informational lint findings non-fatal.
 Retry: use only Material icons present in the installed base release to avoid font asset changes.
 
 Exact base Material icon glyph set preserved for Shorebird patch validation.
+
+
+Final retry after matching all original Material icon glyphs.
