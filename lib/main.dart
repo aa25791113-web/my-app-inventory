@@ -2885,6 +2885,8 @@ String formatUpdateSize(Object? value){
 
 Future<void> printTextReport(BuildContext context,String title,List<String> lines) async {
   try {
+    const reportNames=['ملكي تنفيذي','تقرير فاخر','لوحة مؤشرات','ملف جانبي','جدول إداري','إيصال ملون','هندسي حديث','مساحات بيضاء','تقرير جريء','أرشيف رسمي'];
+    const reportSwatches=[Color(0xFF087F8C),Color(0xFFC59B52),Color(0xFF7651B5),Color(0xFF2D7FA3),Color(0xFF23865A),Color(0xFFEA580C),Color(0xFF6366F1),Color(0xFF64748B),Color(0xFFDC2626),Color(0xFF0E7490)];
     final reportStyle=await showDialog<int>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
       title:const Text('اختار تصميم التقرير'),
       content:SizedBox(width:360,height:420,child:ListView.builder(itemCount:reportNames.length,itemBuilder:(ctx,i)=>ListTile(leading:CircleAvatar(backgroundColor:reportSwatches[i],child:Text((i+1).toString(),style:const TextStyle(color:Colors.white,fontWeight:FontWeight.w900))),title:Text(reportNames[i],style:const TextStyle(fontWeight:FontWeight.w800)),subtitle:Text('تخطيط '+(i+1).toString()+' من 10'),onTap:()=>Navigator.pop(ctx,i)))),
@@ -2920,7 +2922,7 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       final headerPaint=ui.Paint()..shader=ui.Gradient.linear(const ui.Offset(28,28),const ui.Offset(w-28,260),[reportPrimary,reportAccent]);
       if(reportStyle==1){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,255),ui.Paint()..color=reportPrimary);canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,8),ui.Paint()..color=reportAccent);canvas!.drawRect(const ui.Rect.fromLTWH(28,275,w-56,3),ui.Paint()..color=reportAccent);}
       else if(reportStyle==3){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,24,h-56),ui.Paint()..color=reportAccent);canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(70,28,w-98,210),const ui.Radius.circular(22)),headerPaint);}
-      else if(reportStyle==5){canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,260),const ui.Radius.circular(60)),headerPaint);canvas!.drawCircle(const ui.Offset(w/2,70),130,ui.Paint()..color=const ui.Color(0x18FFFFFF));}
+      else if(reportStyle==5){canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,260),const ui.Radius.circular(60)),headerPaint);canvas!.drawCircle(ui.Offset(w/2,70),130,ui.Paint()..color=const ui.Color(0x18FFFFFF));}
       else if(reportStyle==7){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,10),ui.Paint()..color=reportPrimary);canvas!.drawRect(const ui.Rect.fromLTWH(28,45,w-56,2),ui.Paint()..color=reportAccent);}
       else if(reportStyle==8){canvas!.drawRect(const ui.Rect.fromLTWH(28,28,w-56,270),ui.Paint()..color=reportPrimary);canvas!.drawRect(const ui.Rect.fromLTWH(28,28,18,270),ui.Paint()..color=reportAccent);}
       else{canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,230),ui.Radius.circular(reportStyle==6?6:34)),headerPaint);canvas!.drawRect(const ui.Rect.fromLTWH(28,190,w-56,68),headerPaint);}
