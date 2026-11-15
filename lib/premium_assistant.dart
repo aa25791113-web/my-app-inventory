@@ -22,7 +22,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
   static const storeKey='assistant_chats_v2';
   static const apiKeyStore='assistant_gemini_api_key';
   static const learnedStoreKey='assistant_learned_faq_v1';
-  static const modelName='gemini-3.5-flash-lite';
+  static const modelName='gemini-3.8-flash';
   static const secureStorage=FlutterSecureStorage();
 
   Future<void> _loadAiConfig() async {
@@ -136,7 +136,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     }
     contents.add({'role':'user','parts':[{'text':question}]});
     final payload={
-      'systemInstruction':{'parts':[{'text':'أنت مساعد APP LOL الذكي. تحدث باللهجة المصرية الواضحة والمهذبة. أجب عن أي سؤال عام تعرفه، واشرح ببساطة وبأمثلة. أنت مساعد لتطبيق إدارة مخزون وفواتير ومبيعات ومشتريات وموردين وعملاء وتقارير. اشرح للمستخدم خطوات استخدام التطبيق بدقة. لا تدّعِ أنك نفذت عملية داخل التطبيق إلا إذا نفذها التطبيق فعلاً؛ تنفيذ التنقل والفتح يتم بواسطة التطبيق وليس النموذج. لا تخترع أرقام مخزون أو فواتير أو بيانات غير موجودة. إذا طلب المستخدم إجراءً داخل التطبيق، وضح الخطوات أو اطلب منه استخدام زر الإجراء المناسب. اجعل الرد عملياً ومنظماً.'}]},
+      'systemInstruction':{'parts':[{'text':'أنت مساعد APP LOL الذكي. تحدث بالمصرية الطبيعية الواضحة، وافهم التحيات والمحادثات القصيرة والسياق السابق قبل الإجابة. أجب عن الأسئلة العامة والتعليمية والتقنية والحسابية التي تستطيع الإجابة عنها، واشرح ببساطة وبأمثلة مناسبة، ولا تكرر عبارة أنك لا تفهم إذا كان المقصود واضحاً. إذا كانت الرسالة تحية فرد بتحية طبيعية ومختصرة. أنت أيضاً خبير استخدام APP LOL لإدارة المخزون والفواتير والمبيعات والمشتريات والعملاء والموردين والمصروفات والتقارير والشيفتات؛ اشرح الخطوات بدقة وبترتيب. لا تدّعِ أنك نفذت عملية أو فتحت صفحة أو قرأت بيانات الجهاز إلا إذا نفذ التطبيق ذلك فعلاً. لا تخترع أرقام مخزون أو فواتير أو أرصدة أو نتائج. إذا احتجت معلومة غير متاحة فقل ذلك بوضوح واسأل سؤالاً واحداً محدداً. اجعل الإجابة مباشرة ومنظمة وباللهجة المصرية، وتجنب الحشو، وراعِ أن المستخدم قد يكون مبتدئاً.'}]},
       'contents':contents,
       'generationConfig':{'temperature':0.65,'maxOutputTokens':1200},
     };
