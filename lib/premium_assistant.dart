@@ -198,7 +198,7 @@ class _PremiumAssistantPageState extends State<PremiumAssistantPage>{
     return null;
   }
   String? _calculateOffline(String raw){
-      .replaceAll(RegExp(r'\s+'), ' ')
+    final match=RegExp(r'(?:احسب(?:لي)?|احسبلي|ناتج|يساوي)\\s*([0-9٠-٩۰-۹][0-9٠-٩۰-۹\\s+\\-*/().٫,×÷]*)',caseSensitive:false).firstMatch(raw);
     if(match==null)return null;
     var expression=match.group(1)??'';
     const arabic='٠١٢٣٤٥٦٧٨٩';const persian='۰۱۲۳۴۵۶۷۸۹';
