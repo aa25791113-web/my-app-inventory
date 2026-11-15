@@ -222,8 +222,8 @@ class _ScientificCalculatorPageState extends State<ScientificCalculatorPage> {
               for (final row in keys) Row(children: row.map(buildKey).toList()),
               Wrap(spacing: 8, runSpacing: 8, children: [
                 OutlinedButton.icon(onPressed: () => Clipboard.setData(ClipboardData(text: result)), icon: const Icon(Icons.copy), label: const Text('Copy result')),
-                OutlinedButton.icon(onPressed: () => setState(() => expression = ''), icon: const Icon(Icons.clear_all), label: const Text('Clear expression')),
-                OutlinedButton.icon(onPressed: () => setState(() => history.clear()), icon: const Icon(Icons.delete_sweep), label: const Text('Clear history')),
+                OutlinedButton.icon(onPressed: () => setState(() => expression = ''), icon: const Icon(Icons.delete_outline), label: const Text('Clear expression')),
+                OutlinedButton.icon(onPressed: () => setState(() => history.clear()), icon: const Icon(Icons.delete_outline), label: const Text('Clear history')),
               ]),
               const Text('يدعم العمليات الحسابية، الأقواس، الأسس، الجذور، الدوال المثلثية واللوغاريتمية، DEG/RAD، الذاكرة، وسجل العمليات.', textDirection: TextDirection.rtl, style: TextStyle(fontSize: 11)),
             ],
