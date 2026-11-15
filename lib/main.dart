@@ -2014,7 +2014,8 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   }
   Widget _paymentMark(String method,Color primary,Color accent,Color soft){
     final v=method.toLowerCase();
-    final isInsta=v.contains('insta')||v.contains('انستا');
+    final normalized=v.replaceAll('إ','ا').replaceAll('أ','ا').replaceAll('آ','ا');
+    final isInsta=normalized.contains('insta')||normalized.contains('انستا');
     final isVodafone=v.contains('vodafone')||v.contains('فودافون');
     final isWallet=v.contains('محفظ')||v.contains('wallet');
     final markColor=isInsta?const Color(0xFFF36B35):isVodafone?const Color(0xFFE60000):const Color(0xFF16865A);
