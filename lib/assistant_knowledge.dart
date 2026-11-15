@@ -42,8 +42,8 @@ class AssistantKnowledge {
       .replaceAll(RegExp(r'[أإآٱ]'), 'ا')
       .replaceAll('ى', 'ي')
       .replaceAll('ة', 'ه')
-      .replaceAll(RegExp(r'[^\\p{L}\\p{N} ]', unicode: true), ' ')
-      .replaceAll(RegExp(r'\\s+'), ' ')
+      .replaceAll(RegExp(r'[^ء-يa-z0-9 ]'), ' ')
+      .replaceAll(RegExp(r'\s+'), ' ')
       .trim();
   }
 
