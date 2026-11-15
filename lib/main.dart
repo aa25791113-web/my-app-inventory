@@ -1937,6 +1937,10 @@ class InvoicePreviewDialog extends StatefulWidget {
 class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   final GlobalKey captureKey=GlobalKey();
   bool busy=false;
+  int template=0;
+  @override void initState(){super.initState();_loadTemplate();}
+  Future<void> _loadTemplate()async{final prefs=await SharedPreferences.getInstance();if(mounted)setState(()=>template=(prefs.getInt('invoice_template')??0).clamp(0,4));}
+  Future<void> _selectTemplate(int value)async{final prefs=await SharedPreferences.getInstance();await prefs.setInt('invoice_template',value);if(mounted)setState(()=>template=value);}
   double n(Object? v)=>(v as num?)?.toDouble()??0;
   Future<Uint8List> capture() async {
     await WidgetsBinding.instance.endOfFrame;
@@ -1964,19 +1968,28 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
   Widget meta(String label,String value)=>Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:const TextStyle(color:Color(0xFF64748B),fontSize:11)),const SizedBox(height:4),Text(value,style:const TextStyle(color:Color(0xFF172B3A),fontWeight:FontWeight.w800,fontSize:13))]));
   Widget totalRow(String label,String value,{Color color=const Color(0xFF475569)})=>Row(children:[Expanded(child:Text(label,style:const TextStyle(fontSize:12,color:Color(0xFF64748B)))),Text(value,style:TextStyle(fontSize:12,fontWeight:FontWeight.w800,color:color))]);
   @override Widget build(BuildContext context){
+    final palettes=<Map<String,Color>>[
+      {'primary':const Color(0xFF102A43),'secondary':const Color(0xFF087F8C),'accent':const Color(0xFF087F8C),'soft':const Color(0xFFEAF4F5)},
+      {'primary':const Color(0xFF20242C),'secondary':const Color(0xFF454B57),'accent':const Color(0xFFC59B52),'soft':const Color(0xFFF4F1EA)},
+      {'primary':const Color(0xFF14532D),'secondary':const Color(0xFF2F855A),'accent':const Color(0xFF23865A),'soft':const Color(0xFFEAF5EC)},
+      {'primary':const Color(0xFF39246B),'secondary':const Color(0xFF7651B5),'accent':const Color(0xFF7651B5),'soft':const Color(0xFFF1ECFA)},
+      {'primary':const Color(0xFF334155),'secondary':const Color(0xFF64748B),'accent':const Color(0xFF334155),'soft':const Color(0xFFF1F5F9)},
+    ];
+    final palette=palettes[template.clamp(0,4)];
+    final primary=palette['primary']!,secondary=palette['secondary']!,accent=palette['accent']!,soft=palette['soft']!;
     final e=widget.invoice;final total=n(e['total']),paid=n(e['paid']),due=(total-paid).clamp(0,double.infinity).toDouble(),subtotal=n(e['subtotal']),discount=n(e['discount_amount']);
     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(insetPadding:const EdgeInsets.all(12),child:ConstrainedBox(constraints:BoxConstraints(maxWidth:640,maxHeight:MediaQuery.of(context).size.height*.94),child:Column(children:[
-      Padding(padding:const EdgeInsets.fromLTRB(18,12,18,6),child:Row(children:[const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900))),IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close))])),
+      Padding(padding:const EdgeInsets.fromLTRB(18,12,18,6),child:Row(children:[const Expanded(child:Text('معاينة الفاتورة',style:TextStyle(fontSize:19,fontWeight:FontWeight.w900))),PopupMenuButton<int>(tooltip:'اختيار تصميم الفاتورة',initialValue:template,onSelected:_selectTemplate,itemBuilder:(_)=>const [PopupMenuItem(value:0,child:Text('ملكي — أزرق وتركواز')),PopupMenuItem(value:1,child:Text('فاخر — أسود وذهبي')),PopupMenuItem(value:2,child:Text('زمردي — أخضر')),PopupMenuItem(value:3,child:Text('عصري — بنفسجي')),PopupMenuItem(value:4,child:Text('بسيط — رمادي'))],icon:const Icon(Icons.palette_outlined)),IconButton(onPressed:()=>Navigator.pop(context),icon:const Icon(Icons.close))])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(12),child:RepaintBoundary(key:captureKey,child:Container(width:math.min(MediaQuery.of(context).size.width-70,560).toDouble(),padding:const EdgeInsets.all(22),color:Colors.white,child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
-        Container(padding:const EdgeInsets.all(20),decoration:const BoxDecoration(gradient:LinearGradient(colors:[Color(0xFF092D3A),Color(0xFF087F68)]),borderRadius:BorderRadius.all(Radius.circular(18))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
+        Container(padding:const EdgeInsets.all(20),decoration:BoxDecoration(gradient:LinearGradient(colors:[primary,secondary]),borderRadius:const BorderRadius.all(Radius.circular(18))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[
           Row(children:[Container(width:44,height:44,decoration:BoxDecoration(color:Colors.white24,borderRadius:BorderRadius.circular(13)),child:const Icon(Icons.inventory_2,color:Color(0xFFFFD47A),size:27)),const SizedBox(width:10),const Expanded(child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text('ＡＰＰ ＬＯＬ',style:TextStyle(color:Colors.white,fontSize:19,fontWeight:FontWeight.w900,letterSpacing:1)),Text('إدارة المبيعات والمخزون',style:TextStyle(color:Colors.white70,fontSize:11))])),const Text('فاتورة بيع',style:TextStyle(color:Colors.white,fontSize:17,fontWeight:FontWeight.w900))]),
           const SizedBox(height:16),Text(e['invoice_no'].toString(),style:const TextStyle(color:Color(0xFFFFD47A),fontWeight:FontWeight.w900,fontSize:18)),const SizedBox(height:4),Text(formatDateTime(e['created_at']),style:const TextStyle(color:Colors.white70,fontSize:12)),
         ])),
         const SizedBox(height:14),
         Container(padding:const EdgeInsets.all(14),decoration:BoxDecoration(color:const Color(0xFFF2F7F8),borderRadius:BorderRadius.circular(14),border:Border.all(color:const Color(0xFFE1EAEC))),child:Row(children:[meta('العميل',(e['customer_name']??'عميل نقدي').toString()),if((e['customer_phone']??'').toString().trim().isNotEmpty)meta('رقم الهاتف',e['customer_phone'].toString())])),
-        if((e['payment_method']??'').toString().trim().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Container(padding:const EdgeInsets.symmetric(horizontal:13,vertical:11),decoration:BoxDecoration(color:const Color(0xFFEAF2F2),borderRadius:BorderRadius.circular(13),border:Border.all(color:const Color(0xFFD6E5E4))),child:Row(children:[Icon(paymentIcon(e['payment_method'].toString()),color:const Color(0xFF087F68),size:22),const SizedBox(width:9),const Text('طريقة الدفع:',style:TextStyle(fontSize:11,color:Color(0xFF64748B))),const SizedBox(width:6),Expanded(child:Text(e['payment_method'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,color:Color(0xFF173A43),fontSize:13)))]))),
+        if((e['payment_method']??'').toString().trim().isNotEmpty)Padding(padding:const EdgeInsets.only(top:12),child:Container(padding:const EdgeInsets.symmetric(horizontal:13,vertical:11),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(13),border:Border.all(color:accent.withOpacity(.18))),child:Row(children:[Icon(paymentIcon(e['payment_method'].toString()),color:const Color(0xFF087F68),size:22),const SizedBox(width:9),const Text('طريقة الدفع:',style:TextStyle(fontSize:11,color:Color(0xFF64748B))),const SizedBox(width:6),Expanded(child:Text(e['payment_method'].toString(),style:const TextStyle(fontWeight:FontWeight.w900,color:Color(0xFF173A43),fontSize:13)))]))),
         const SizedBox(height:15),const Text('تفاصيل الأصناف',style:TextStyle(color:Color(0xFF173A43),fontSize:15,fontWeight:FontWeight.w900)),const SizedBox(height:8),
-        Container(padding:const EdgeInsets.symmetric(vertical:10,horizontal:8),decoration:BoxDecoration(color:const Color(0xFFEAF2F2),borderRadius:BorderRadius.circular(9)),child:const Row(children:[
+        Container(padding:const EdgeInsets.symmetric(vertical:10,horizontal:8),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(9)),child:const Row(children:[
           Expanded(flex:5,child:Text('الصنف',style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
           Expanded(flex:2,child:Text('الكمية',textAlign:TextAlign.center,style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
           Expanded(flex:3,child:Text('السعر',textAlign:TextAlign.center,style:TextStyle(fontWeight:FontWeight.w900,fontSize:11,color:Color(0xFF23434A)))),
@@ -1988,13 +2001,13 @@ class _InvoicePreviewDialogState extends State<InvoicePreviewDialog>{
           Expanded(flex:3,child:Text(money(x['unit_price']),textAlign:TextAlign.center,style:const TextStyle(fontSize:10,color:Color(0xFF334155)))),
           Expanded(flex:3,child:Text(money(x['total']),textAlign:TextAlign.end,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w800,color:Color(0xFF173A43)))),
         ]));}),
-        const SizedBox(height:14),Container(padding:const EdgeInsets.all(15),decoration:BoxDecoration(color:const Color(0xFFF5F8F8),borderRadius:BorderRadius.circular(14)),child:Column(children:[
+        const SizedBox(height:14),Container(padding:const EdgeInsets.all(15),decoration:BoxDecoration(color:soft,borderRadius:BorderRadius.circular(14)),child:Column(children:[
           totalRow('الإجمالي قبل الخصم',money(subtotal)),const SizedBox(height:7),totalRow('الخصم',money(discount)),const Divider(height:18),
-          Row(children:[const Expanded(child:Text('الإجمالي النهائي',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15,color:Color(0xFF163D45)))),Text(money(total),style:const TextStyle(fontWeight:FontWeight.w900,fontSize:20,color:Color(0xFF087F68)))]),
+          Row(children:[const Expanded(child:Text('الإجمالي النهائي',style:TextStyle(fontWeight:FontWeight.w900,fontSize:15,color:Color(0xFF163D45)))),Text(money(total),style:TextStyle(fontWeight:FontWeight.w900,fontSize:20,color:accent))]),
           const SizedBox(height:9),totalRow('المدفوع',money(paid)),const SizedBox(height:7),totalRow('المتبقي',money(due),color:due>0?const Color(0xFFB45309):const Color(0xFF15803D)),
         ])),
         if((e['note']??'').toString().trim().isNotEmpty)...[const SizedBox(height:10),Text('ملاحظات: ${e['note']}',style:const TextStyle(color:Color(0xFF475569),fontSize:11))],
-        const SizedBox(height:18),const Divider(color:Color(0xFFE2E8F0)),const Center(child:Text('شكراً لثقتكم وتعاملكم معنا',style:TextStyle(color:Color(0xFF087F68),fontSize:13,fontWeight:FontWeight.w900))),const SizedBox(height:5),const Center(child:Text('APP LOL • نظام إدارة المخزون والمبيعات',style:TextStyle(color:Color(0xFF94A3B8),fontSize:9))),
+        const SizedBox(height:18),const Divider(color:Color(0xFFE2E8F0)),Center(child:Text('شكراً لثقتكم وتعاملكم معنا',style:TextStyle(color:accent,fontSize:13,fontWeight:FontWeight.w900))),const SizedBox(height:5),const Center(child:Text('APP LOL • نظام إدارة المخزون والمبيعات',style:TextStyle(color:Color(0xFF94A3B8),fontSize:9))),
       ]))))),
       Padding(padding:const EdgeInsets.fromLTRB(12,8,12,12),child:Wrap(spacing:8,runSpacing:8,alignment:WrapAlignment.spaceBetween,children:[
         OutlinedButton.icon(onPressed:busy?null:saveImage,icon:const Icon(Icons.image_outlined),label:const Text('حفظ صورة')),
@@ -2777,6 +2790,25 @@ String formatUpdateSize(Object? value){
 
 Future<void> printTextReport(BuildContext context,String title,List<String> lines) async {
   try {
+    final reportStyle=await showDialog<int>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(
+      title:const Text('اختار تصميم التقرير'),
+      content:Column(mainAxisSize:MainAxisSize.min,children:[
+        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFF087F8C),child:Icon(Icons.water_drop,color:Colors.white)),title:const Text('ملكي — أزرق وتركواز'),onTap:()=>Navigator.pop(ctx,0)),
+        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFFC59B52),child:Icon(Icons.workspace_premium,color:Colors.white)),title:const Text('فاخر — أسود وذهبي'),onTap:()=>Navigator.pop(ctx,1)),
+        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFF23865A),child:Icon(Icons.eco,color:Colors.white)),title:const Text('زمردي — أخضر'),onTap:()=>Navigator.pop(ctx,2)),
+        ListTile(leading:const CircleAvatar(backgroundColor:Color(0xFF7651B5),child:Icon(Icons.auto_awesome,color:Colors.white)),title:const Text('عصري — بنفسجي'),onTap:()=>Navigator.pop(ctx,3)),
+      ]),
+      actions:[TextButton(onPressed:()=>Navigator.pop(ctx,null),child:const Text('إلغاء'))],
+    )));
+    if(reportStyle==null)return;
+    final reportPalettes=<List<ui.Color>>[
+      [const ui.Color(0xFF082D3A),const ui.Color(0xFF087F8C),const ui.Color(0xFFEAF1F2),const ui.Color(0xFFE8F2EF)],
+      [const ui.Color(0xFF20242C),const ui.Color(0xFFC59B52),const ui.Color(0xFFF2EEE6),const ui.Color(0xFFF4F1EA)],
+      [const ui.Color(0xFF14532D),const ui.Color(0xFF23865A),const ui.Color(0xFFEAF4EC),const ui.Color(0xFFE7F3E9)],
+      [const ui.Color(0xFF39246B),const ui.Color(0xFF7651B5),const ui.Color(0xFFF0ECF8),const ui.Color(0xFFEDE7F8)],
+    ];
+    final palette=reportPalettes[reportStyle.clamp(0,3)];
+    final reportPrimary=palette[0],reportAccent=palette[1],reportBg=palette[2],reportSoft=palette[3];
     const double w=1240,h=1754,pad=64;
     final images=<Uint8List>[];
     ui.PictureRecorder? recorder;
@@ -2785,11 +2817,11 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
     void beginPage() {
       recorder=ui.PictureRecorder();
       canvas=ui.Canvas(recorder!);
-      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=const ui.Color(0xFFEAF1F2));
-      canvas!.drawCircle(const ui.Offset(1110,1540),250,ui.Paint()..color=const ui.Color(0xFFE8F2EF));
-      canvas!.drawCircle(const ui.Offset(90,260),190,ui.Paint()..color=const ui.Color(0xFFE8F2EF));
+      canvas!.drawRect(const ui.Rect.fromLTWH(0,0,w,h),ui.Paint()..color=reportBg);
+      canvas!.drawCircle(const ui.Offset(1110,1540),250,ui.Paint()..color=reportSoft);
+      canvas!.drawCircle(const ui.Offset(90,260),190,ui.Paint()..color=reportSoft);
       canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,h-56),const ui.Radius.circular(34)),ui.Paint()..color=const ui.Color(0xFFFFFFFF));
-      final headerPaint=ui.Paint()..shader=ui.Gradient.linear(const ui.Offset(28,28),const ui.Offset(w-28,218),const [ui.Color(0xFF082D3A),ui.Color(0xFF087F68)]);
+      final headerPaint=ui.Paint()..shader=ui.Gradient.linear(const ui.Offset(28,28),const ui.Offset(w-28,218),[reportPrimary,reportAccent]);
       canvas!.drawRRect(ui.RRect.fromRectAndRadius(const ui.Rect.fromLTWH(28,28,w-56,190),const ui.Radius.circular(34)),headerPaint);
       canvas!.drawRect(const ui.Rect.fromLTWH(28,150,w-56,218),headerPaint);
       canvas!.drawCircle(const ui.Offset(1110,75),130,ui.Paint()..color=const ui.Color(0x22FFFFFF));
@@ -2815,8 +2847,8 @@ Future<void> printTextReport(BuildContext context,String title,List<String> line
       final painter=TextPainter(text:TextSpan(text:line,style:const TextStyle(fontSize:27,color:Color(0xFF161616))),textDirection:ui.TextDirection.rtl,textAlign:TextAlign.right);
       painter.layout(maxWidth:w-2*pad);
       if(y+painter.height+24>h-pad) { await finishPage(); beginPage(); }
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18),const ui.Radius.circular(12)),ui.Paint()..color=const ui.Color(0xFFF4F8F7));
-      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=const ui.Color(0xFF087F68));
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,w-2*pad+16,painter.height+18),const ui.Radius.circular(12)),ui.Paint()..color=reportSoft);
+      canvas!.drawRRect(ui.RRect.fromRectAndRadius(ui.Rect.fromLTWH(pad-8,y-7,7,painter.height+18),const ui.Radius.circular(4)),ui.Paint()..color=reportAccent);
       painter.paint(canvas!,Offset(pad,y));
       y+=painter.height+28;
     }
