@@ -993,7 +993,7 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   ThemeData makeTheme(Brightness b)=>ThemeData(
     useMaterial3:true,colorScheme:ColorScheme.fromSeed(seedColor:seedColor,brightness:b).copyWith(secondary:remoteAccentColor),
     scaffoldBackgroundColor:remoteBackgroundColor??(b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8)),
-    cardTheme:CardThemeData(color:remoteSurfaceColor??(b==Brightness.dark?const Color(0xFF192630):Colors.white),elevation:b==Brightness.dark?0:1,margin:const EdgeInsets.symmetric(horizontal:10,vertical:7),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(20),side:BorderSide(color:b==Brightness.dark?const Color(0xFF293A45):const Color(0xFFE8EDF1)))),
+    cardTheme:CardThemeData(color:remoteSurfaceColor??(b==Brightness.dark?const Color(0xFF192630):Colors.white),elevation:b==Brightness.dark?0:1,margin:const EdgeInsets.symmetric(horizontal:8,vertical:6),shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(16),side:BorderSide(color:b==Brightness.dark?const Color(0xFF293A45):const Color(0xFFE8EDF1)))),
     appBarTheme:AppBarTheme(centerTitle:false,elevation:0,scrolledUnderElevation:0,backgroundColor:b==Brightness.dark?const Color(0xFF101820):const Color(0xFFF3F6F8),surfaceTintColor:Colors.transparent,titleTextStyle:TextStyle(fontSize:19,fontWeight:FontWeight.w900,color:b==Brightness.dark?Colors.white:const Color(0xFF17252D))),
     inputDecorationTheme:InputDecorationTheme(filled:true,isDense:true,contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:13),border:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none),enabledBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide.none),focusedBorder:OutlineInputBorder(borderRadius:BorderRadius.circular(14),borderSide:BorderSide(width:1.4,color:seedColor))),
     navigationBarTheme:NavigationBarThemeData(height:70,elevation:0,backgroundColor:b==Brightness.dark?const Color(0xFF17232C):Colors.white,indicatorColor:ColorScheme.fromSeed(seedColor:seedColor,brightness:b).primaryContainer,labelBehavior:NavigationDestinationLabelBehavior.onlyShowSelected),
@@ -1116,7 +1116,7 @@ class _HomePageState extends State<HomePage> {
         ])),
         IndexedStack(index:tab,children:pages)
       ]),
-      bottomNavigationBar:NavigationBar(selectedIndex:tab==10?0:tab==1?1:tab==0?2:tab==14?3:tab==8?4:tab==12?5:0,onDestinationSelected:(v)=>setState(()=>tab=[10,1,0,14,8,12][v]),
+      bottomNavigationBar:NavigationBar(selectedIndex:tab==10?0:tab==1?1:tab==0?2:tab==14?3:tab==8?4:tab==12?5:tab==21?6:0,onDestinationSelected:(v)=>setState(()=>tab=[10,1,0,14,8,12,21][v]),
         destinations:const [
           NavigationDestination(icon:Icon(Icons.search),label:'بحث الأسعار'),
           NavigationDestination(icon:Icon(Icons.inventory_2_outlined),label:'المنتجات'),
@@ -1124,6 +1124,7 @@ class _HomePageState extends State<HomePage> {
           NavigationDestination(icon:Icon(Icons.receipt_long),label:'الفواتير'),
           NavigationDestination(icon:Icon(Icons.analytics_outlined),label:'التقارير'),
           NavigationDestination(icon:Icon(Icons.auto_awesome),label:'الأدوات'),
+          NavigationDestination(icon:Icon(Icons.point_of_sale),label:'الشيفت'),
         ]),
     ));
   }
