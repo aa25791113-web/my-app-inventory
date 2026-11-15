@@ -20,3 +20,5 @@ APP LOL 4.0.4+51 — expanded bundled offline knowledge, local teach-and-recall 
 APP LOL 4.0.4+51 — retry Shorebird build after fixing Dart null-aware matcher syntax.
 
 APP LOL 4.0.4+51 — retry build after restoring offline calculator parser.
+
+APP LOL 4.0.4+51 — final retry with corrected Arabic calculator and assistant matching regex.
