@@ -1,11 +1,11 @@
 {
-  "release_version": "4.0.5+52",
+  "release_version": "4.0.6+53",
   "patch_number": 0,
   "track": "stable",
-  "size_bytes": 42066270,
-  "size_label": "40.12 ميجابايت",
+  "size_bytes": 42132094,
+  "size_label": "40.18 ميجابايت",
   "notes": "إصدار جديد يتضمن تحسينات وإصلاحات.",
-  "apk_url": "https://github.com/aa25791113-web/my-app-inventory/releases/download/app-177/app-lol-android-arm64.apk",
+  "apk_url": "https://github.com/aa25791113-web/my-app-inventory/releases/download/app-178/app-lol-android-arm64.apk",
   "update_type": "apk",
-  "published_at": "2026-11-15T16:33:11.640015+00:00"
+  "published_at": "2026-11-15T16:43:03.105018+00:00"
 }
