@@ -4,3 +4,5 @@ Track: stable
 Features: suspend and resume multiple invoices; edit saved invoices; save invoice as PNG or PDF; separate print action; payment method labels and icons.
 
 APP LOL — invoice search, split payment methods and daily shift inventory ledger.
+
+Analyzer syntax fixes — retry validation for shift ledger and split invoice payments.
