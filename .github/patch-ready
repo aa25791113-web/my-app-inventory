@@ -8,3 +8,5 @@ APP LOL — invoice search, split payment methods and daily shift inventory ledg
 Analyzer syntax fixes — retry validation for shift ledger and split invoice payments.
 
 Retry patch validation after generated test cleanup.
+
+Re-run patch validation with informational lint findings non-fatal.
