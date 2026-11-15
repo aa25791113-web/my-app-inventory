@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_timezone/flutter_timezone.dart';
@@ -37,7 +38,7 @@ class AppNotificationService {
       tz.setLocalLocation(tz.getLocation('Africa/Cairo'));
     }
     const settings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+      android: AndroidInitializationSettings('@drawable/ic_stat_app_lol'),
     );
     await _plugin.initialize(
       settings,
@@ -55,7 +56,7 @@ class AppNotificationService {
         AndroidFlutterLocalNotificationsPlugin>();
     await android?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'inventory_alerts',
+        'inventory_alerts_v2',
         'تنبيهات المخزون',
         description: 'تنبيهات انخفاض رصيد المنتجات عن الحد الأدنى',
         importance: Importance.max,
@@ -63,7 +64,7 @@ class AppNotificationService {
     );
     await android?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'invoice_reminders',
+        'invoice_reminders_v2',
         'تذكيرات الفواتير',
         description: 'تذكيرات الفواتير التي لم يتم تحصيلها بالكامل',
         importance: Importance.high,
@@ -71,7 +72,7 @@ class AppNotificationService {
     );
     await android?.createNotificationChannel(
       const AndroidNotificationChannel(
-        'app_updates',
+        'app_updates_v2',
         'تحديثات البرنامج',
         description: 'إشعارات توفر تحديثات جديدة للبرنامج',
         importance: Importance.high,
@@ -97,8 +98,15 @@ class AppNotificationService {
     return await android?.areNotificationsEnabled() ?? true;
   }
 
-  NotificationDetails _details(String channelId, String channelName,
-      String description, {Importance importance = Importance.high}) {
+  NotificationDetails _details(
+    String channelId,
+    String channelName,
+    String description, {
+    required String title,
+    required String body,
+    required String summary,
+    Importance importance = Importance.high,
+  }) {
     return NotificationDetails(
       android: AndroidNotificationDetails(
         channelId,
@@ -107,9 +115,22 @@ class AppNotificationService {
         importance: importance,
         priority: Priority.high,
         category: AndroidNotificationCategory.reminder,
-        icon: '@mipmap/ic_launcher',
+        icon: '@drawable/ic_stat_app_lol',
+        largeIcon: const DrawableResourceAndroidBitmap('@mipmap/ic_launcher'),
+        color: const Color(0xFF0C6678),
+        subText: 'APP LOL',
+        ticker: 'APP LOL',
+        visibility: NotificationVisibility.private,
+        onlyAlertOnce: true,
         playSound: true,
         enableVibration: true,
+        styleInformation: BigTextStyleInformation(
+          body,
+          contentTitle: title,
+          summaryText: summary,
+          htmlFormatBigText: false,
+          htmlFormatContentTitle: false,
+        ),
       ),
     );
   }
@@ -120,7 +141,14 @@ class AppNotificationService {
       _testNotificationId,
       'تم تفعيل إشعارات APP LOL',
       'الإشعارات تعمل بشكل صحيح. ستصلك تنبيهات المخزون والفواتير والتحديثات حسب الإعدادات.',
-      _details('app_updates', 'تحديثات البرنامج', 'إشعار تجريبي'),
+      _details(
+        'app_updates_v2',
+        'تحديثات البرنامج',
+        'إشعارات البرنامج والتحديثات',
+        title: 'تم تفعيل إشعارات APP LOL',
+        body: 'الإشعارات تعمل بشكل صحيح. ستصلك تنبيهات المخزون والفواتير والتحديثات حسب الإعدادات.',
+        summary: 'إعداد الإشعارات • APP LOL',
+      ),
     );
   }
 
@@ -134,7 +162,14 @@ class AppNotificationService {
       _updateNotificationId,
       title,
       body,
-      _details('app_updates', 'تحديثات البرنامج', 'إشعارات تحديث البرنامج'),
+      _details(
+        'app_updates_v2',
+        'تحديثات البرنامج',
+        'إشعارات تحديث البرنامج',
+        title: title,
+        body: body,
+        summary: 'تحديثات التطبيق • APP LOL',
+      ),
       payload: payload,
     );
   }
@@ -167,14 +202,19 @@ class AppNotificationService {
       final key = id.toString();
       if (archived == 0 && minimum > 0 && qty <= minimum) {
         if (!notified.contains(key)) {
+          final title = 'تنبيه مخزون منخفض';
+          final body = '${product['name'] ?? 'منتج'}: المتبقي $qty، وحد التنبيه $minimum.';
           await _plugin.show(
             _stockId(id),
-            'تنبيه مخزون منخفض',
-            '${product['name'] ?? 'منتج'}: المتبقي $qty، وحد التنبيه $minimum.',
+            title,
+            body,
             _details(
-              'inventory_alerts',
+              'inventory_alerts_v2',
               'تنبيهات المخزون',
               'انخفاض رصيد المنتجات',
+              title: title,
+              body: body,
+              summary: 'مراجعة المخزون • APP LOL',
               importance: Importance.max,
             ),
             payload: 'stock:$id',
@@ -249,15 +289,20 @@ class AppNotificationService {
           ? dueAt
           : now.add(const Duration(seconds: 8));
       final remaining = total - paid;
+      final title = 'تذكير بفاتورة غير مسددة';
+      final body = 'العميل ${invoice['customer_name'] ?? ''} • الفاتورة ${invoice['invoice_no'] ?? ''} • المتبقي ${remaining.toStringAsFixed(2)} ج.م';
       await _plugin.zonedSchedule(
         _invoiceId(id),
-        'تذكير بفاتورة غير مسددة',
-        'العميل ${invoice['customer_name'] ?? ''} • الفاتورة ${invoice['invoice_no'] ?? ''} • المتبقي ${remaining.toStringAsFixed(2)} ج.م',
+        title,
+        body,
         tz.TZDateTime.from(scheduleAt, tz.local),
         _details(
-          'invoice_reminders',
+          'invoice_reminders_v2',
           'تذكيرات الفواتير',
           'الفواتير غير المسددة',
+          title: title,
+          body: body,
+          summary: 'متابعة التحصيل • APP LOL',
         ),
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         payload: 'invoice:$id',
