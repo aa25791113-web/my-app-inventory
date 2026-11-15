@@ -1,7 +1,7 @@
 name: my_app_inventory
 description: APP LOL — Arabic offline inventory, sales and invoice manager.
 publish_to: "none"
-version: 4.0.6+53
+version: 4.0.7+54
 
 environment:
   sdk: ">=3.5.0 <4.0.0"
