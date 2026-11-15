@@ -214,6 +214,8 @@ jobs:
           print("Aligned compile SDK in", len(changed), "Gradle files")
           PY
       - run: dart run flutter_launcher_icons
+      - name: Format Dart and Flutter source
+        run: dart format lib
       - run: flutter analyze --no-fatal-infos
       - name: Publish Shorebird-enabled Android release APK
         run: |
