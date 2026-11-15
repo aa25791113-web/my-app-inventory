@@ -223,14 +223,8 @@ Future<void> registerBackgroundUpdateChecks() async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  final preferences=await SharedPreferences.getInstance();currencyLabel=preferences.getString('currencyLabel')??'ج.م';
-  if (Platform.isWindows || Platform.isLinux || Platform.isMacOS) {
-    sqfliteFfiInit();
-    databaseFactory = databaseFactoryFfi;
-  }
-  await StoreDb.instance.init();
-  await AppNotificationService.instance.initialize();
-  await registerBackgroundUpdateChecks();
+  // Paint the Flutter UI immediately. Database and optional services are
+  // initialized behind a recoverable startup screen instead of blocking runApp.
   runApp(const MyApp());
 }
 
@@ -913,35 +907,63 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   String? backgroundPath;
   Color? remoteBackgroundColor,remoteSurfaceColor,remoteAccentColor;
   String? remoteLogoUrl,remoteBackgroundUrl,remoteTagline,remoteSupportUrl,remoteWebsiteUrl,remoteOwner;
+  bool _startupReady=false,_startupBusy=false;
+  String? _startupError;
   @override void initState(){
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     load();
-    unawaited(registerAdminDevice());
-    WidgetsBinding.instance.addPostFrameCallback((_) async {
-      if (!Platform.isAndroid) return;
-      final prefs = await SharedPreferences.getInstance();
-      if (prefs.getBool('notification_permission_prompted') ?? false) return;
-      await prefs.setBool('notification_permission_prompted', true);
-      final granted = await AppNotificationService.instance.requestPermission();
-      if (granted) {
-        await prefs.setBool('notifications_enabled', true);
-        await syncLocalNotifications(forceInvoiceReschedule: true);
-      }
-    });
     _connectivitySubscription=Connectivity().onConnectivityChanged.listen((states){
-      if(states.any((state)=>state!=ConnectivityResult.none)){
+      if(_startupReady&&states.any((state)=>state!=ConnectivityResult.none)){
         unawaited(checkForOnlineUpdateNotification());
       }
     });
-    unawaited(syncLocalNotifications());
-    unawaited(checkForOnlineUpdateNotification());
+    unawaited(_initializeStartup());
+  }
+  Future<void> _initializeStartup() async {
+    if(_startupBusy)return;
+    if(mounted)setState((){_startupBusy=true;_startupError=null;});
+    try{
+      final preferences=await SharedPreferences.getInstance();
+      currencyLabel=preferences.getString('currencyLabel')??'ج.م';
+      if(Platform.isWindows||Platform.isLinux||Platform.isMacOS){
+        sqfliteFfiInit();
+        databaseFactory=databaseFactoryFfi;
+      }
+      await StoreDb.instance.init();
+      // Notifications and background checks are optional: their failure must
+      // never prevent the inventory UI from opening.
+      try{await AppNotificationService.instance.initialize();}
+      catch(e){debugPrint('APP LOL notification initialization skipped: $e');}
+      try{await registerBackgroundUpdateChecks();}
+      catch(e){debugPrint('APP LOL background update checks skipped: $e');}
+      if(!mounted)return;
+      setState((){_startupReady=true;_startupBusy=false;_startupError=null;});
+      unawaited(_runOptionalStartupTasks());
+    }catch(e,stack){
+      debugPrint('APP LOL startup failed: $e\n$stack');
+      if(mounted)setState((){_startupBusy=false;_startupError=e.toString();});
+    }
+  }
+  Future<void> _runOptionalStartupTasks() async {
+    try{await registerAdminDevice();}catch(e){debugPrint('Admin device registration skipped: $e');}
+    try{await syncLocalNotifications();}catch(e){debugPrint('Local notification sync skipped: $e');}
+    try{await checkForOnlineUpdateNotification();}catch(e){debugPrint('Update check skipped: $e');}
+    if(!Platform.isAndroid||!mounted)return;
+    try{
+      final prefs=await SharedPreferences.getInstance();
+      if(prefs.getBool('notification_permission_prompted')??false)return;
+      await prefs.setBool('notification_permission_prompted',true);
+      final granted=await AppNotificationService.instance.requestPermission();
+      if(granted){
+        await prefs.setBool('notifications_enabled',true);
+        await syncLocalNotifications(forceInvoiceReschedule:true);
+      }
+    }catch(e){debugPrint('Notification permission prompt skipped: $e');}
   }
   @override void didChangeAppLifecycleState(AppLifecycleState state){
-    if(state==AppLifecycleState.resumed){
-      unawaited(registerAdminDevice());
-      unawaited(syncLocalNotifications());
-      unawaited(checkForOnlineUpdateNotification());
+    if(state==AppLifecycleState.resumed&&_startupReady){
+      unawaited(_runOptionalStartupTasks());
     }
   }
   @override void dispose(){
@@ -1016,7 +1038,83 @@ class _MyAppState extends State<MyApp> with WidgetsBindingObserver {
   );
   @override Widget build(BuildContext context)=>MaterialApp(debugShowCheckedModeBanner:false,title:appName,
     theme:makeTheme(Brightness.light),darkTheme:makeTheme(Brightness.dark),themeMode:mode,
-    home:HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground,remoteLogoUrl:remoteLogoUrl,remoteBackgroundUrl:remoteBackgroundUrl,remoteTagline:remoteTagline,remoteSupportUrl:remoteSupportUrl,remoteWebsiteUrl:remoteWebsiteUrl,remoteOwner:remoteOwner));
+    home:_startupReady
+      ?HomePage(dark:mode==ThemeMode.dark,toggle:toggle,seedColor:seedColor,changeSeed:changeSeed,appName:appName,changeAppName:changeAppName,logoPath:logoPath,changeLogo:changeLogo,backgroundPath:backgroundPath,changeBackground:changeBackground,clearBackground:clearBackground,remoteLogoUrl:remoteLogoUrl,remoteBackgroundUrl:remoteBackgroundUrl,remoteTagline:remoteTagline,remoteSupportUrl:remoteSupportUrl,remoteWebsiteUrl:remoteWebsiteUrl,remoteOwner:remoteOwner)
+      :_StartupGate(error:_startupError,busy:_startupBusy,onRetry:()=>unawaited(_initializeStartup())));
+}
+
+class _StartupGate extends StatelessWidget {
+  const _StartupGate({required this.error,required this.busy,required this.onRetry});
+  final String? error;
+  final bool busy;
+  final VoidCallback onRetry;
+  @override Widget build(BuildContext context){
+    final colors=Theme.of(context).colorScheme;
+    return Directionality(
+      textDirection:ui.TextDirection.rtl,
+      child:Scaffold(
+        body:DecoratedBox(
+          decoration:BoxDecoration(
+            gradient:LinearGradient(
+              begin:Alignment.topRight,end:Alignment.bottomLeft,
+              colors:[colors.surface,colors.surfaceContainerHighest.withOpacity(.65)],
+            ),
+          ),
+          child:Center(
+            child:ConstrainedBox(
+              constraints:const BoxConstraints(maxWidth:420),
+              child:Padding(
+                padding:const EdgeInsets.all(24),
+                child:Card(
+                  elevation:8,
+                  shape:RoundedRectangleBorder(borderRadius:BorderRadius.circular(28)),
+                  child:Padding(
+                    padding:const EdgeInsets.all(28),
+                    child:Column(
+                      mainAxisSize:MainAxisSize.min,
+                      children:[
+                        Container(
+                          width:76,height:76,
+                          decoration:BoxDecoration(
+                            color:colors.primaryContainer,
+                            borderRadius:BorderRadius.circular(24),
+                          ),
+                          child:Icon(Icons.inventory_2_rounded,color:colors.primary,size:38),
+                        ),
+                        const SizedBox(height:18),
+                        Text('APP LOL',style:Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight:FontWeight.w900)),
+                        const SizedBox(height:8),
+                        Text(
+                          error==null?'بنجهّز بيانات البرنامج…':'تعذّر تجهيز قاعدة بيانات البرنامج',
+                          textAlign:TextAlign.center,
+                          style:Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight:FontWeight.w800),
+                        ),
+                        const SizedBox(height:10),
+                        Text(
+                          error==null?'لحظات ونفتح لك لوحة التحكم.':'بياناتك لم يتم حذفها. حاول إعادة المحاولة، ولو استمرت المشكلة احتفظ بنسخة احتياطية قبل أي إجراء.',
+                          textAlign:TextAlign.center,
+                          style:Theme.of(context).textTheme.bodyMedium?.copyWith(color:colors.onSurfaceVariant),
+                        ),
+                        if(error!=null)...[
+                          const SizedBox(height:12),
+                          SelectableText(error!,textAlign:TextAlign.center,style:Theme.of(context).textTheme.bodySmall?.copyWith(color:colors.error)),
+                          const SizedBox(height:16),
+                          FilledButton.icon(onPressed:busy?null:onRetry,icon:const Icon(Icons.refresh_rounded),label:const Text('إعادة المحاولة')),
+                        ]else ...[
+                          const SizedBox(height:22),
+                          const SizedBox(width:30,height:30,child:CircularProgressIndicator(strokeWidth:3)),
+                        ],
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class HomePage extends StatefulWidget {
