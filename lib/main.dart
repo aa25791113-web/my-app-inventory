@@ -1599,7 +1599,37 @@ class _ShiftLedgerPageState extends State<ShiftLedgerPage>{
  Future<void> load()async{setState(()=>loading=true);try{final a=await StoreDb.instance.activeShift();final h=await StoreDb.instance.shiftHistory(from:from,to:to);if(mounted)setState((){active=a;history=h;});}finally{if(mounted)setState(()=>loading=false);}}
  Future<void> start()async{final c=TextEditingController(text:'0');final ok=await showDialog<bool>(context:context,builder:(x)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('بدء شيفت جديد'),content:TextField(controller:c,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'رصيد بداية الدرج النقدي')),actions:[TextButton(onPressed:()=>Navigator.pop(x,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(x,true),child:const Text('بدء الشيفت'))])));if(ok==true){try{await StoreDb.instance.startShift(openingCash:double.tryParse(c.text)??0);await load();}catch(e){if(mounted)toast(context,e.toString().replaceFirst('Exception: ',''));}}c.dispose();}
  Future<void> finish()async{final id=active?['id'] as int?;if(id==null)return;final ok=await showDialog<bool>(context:context,builder:(x)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إنهاء الشيفت'),content:const Text('سيتم حفظ الجرد اليومي وإغلاق الشيفت.'),actions:[TextButton(onPressed:()=>Navigator.pop(x,false),child:const Text('رجوع')),FilledButton(onPressed:()=>Navigator.pop(x,true),child:const Text('إنهاء وحفظ'))])));if(ok==true){await StoreDb.instance.endShift(id);await load();await report(id);}}
- Future<void> report(int id)async{final r=await StoreDb.instance.shiftReport(id);if(!mounted)return;final sales=Map<String,Object?>.from(r['sales'] as Map);final pays=(r['payments'] as List).cast<Map<String,Object?>>();final items=(r['items'] as List).cast<Map<String,Object?>>();final customers=(r['customers'] as List).cast<Map<String,Object?>>();await showDialog<void>(context:context,builder:(x)=>Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:700,maxHeight:680),child:Column(children:[const Padding(padding:EdgeInsets.all(16),child:Text('تقرير الجرد اليومي',style:TextStyle(fontSize:20,fontWeight:FontWeight.w900))),Expanded(child:ListView(padding:const EdgeInsets.all(14),children:[Text('الفواتير: ${sales['count']}  •  المبيعات: ${money((sales['total'] as num).toDouble())}',style:const TextStyle(fontWeight:FontWeight.w900)),Text('المتبقي على العملاء: ${money((sales['due'] as num).toDouble())}'),const Divider(),const Text('التحصيل حسب وسيلة الدفع',style:TextStyle(fontWeight:FontWeight.w900)),...pays.map((p)=>ListTile(title:Text('${p['payment_method']}'),trailing:Text(money((p['amount'] as num).toDouble())))),const Divider(),const Text('العملاء والمتبقي عليهم',style:TextStyle(fontWeight:FontWeight.w900)),...customers.map((c)=>ListTile(title:Text('${c['customer_name']}'),subtitle:Text('${c['customer_phone']}'),trailing:Text(money((c['due'] as num).toDouble()))),const Divider(),const Text('الأصناف والموردون',style:TextStyle(fontWeight:FontWeight.w900)),...items.map((i)=>ListTile(title:Text('${i['product_name']} × ${i['qty']}'),subtitle:Text('المورد: ${i['supplier_name']} • العميل: ${i['customer_name']}'),trailing:Text(money((i['total'] as num).toDouble())))])),Padding(padding:const EdgeInsets.all(12),child:FilledButton(onPressed:()=>Navigator.pop(x),child:const Text('إغلاق')))])))));}
+ Future<void> report(int id) async {
+   final r=await StoreDb.instance.shiftReport(id);
+   if(!mounted)return;
+   final sales=Map<String,Object?>.from(r['sales'] as Map);
+   final pays=(r['payments'] as List).cast<Map<String,Object?>>();
+   final items=(r['items'] as List).cast<Map<String,Object?>>();
+   final customers=(r['customers'] as List).cast<Map<String,Object?>>();
+   await showDialog<void>(context:context,builder:(ctx){
+     return Directionality(textDirection:ui.TextDirection.rtl,child:Dialog(
+       child:ConstrainedBox(constraints:const BoxConstraints(maxWidth:700,maxHeight:680),
+         child:Column(children:[
+           const Padding(padding:EdgeInsets.all(16),child:Text('تقرير الجرد اليومي',style:TextStyle(fontSize:20,fontWeight:FontWeight.w900))),
+           Expanded(child:ListView(padding:const EdgeInsets.all(14),children:[
+             Text('الفواتير: ${sales['count']} • المبيعات: ${money((sales['total'] as num).toDouble())}',style:const TextStyle(fontWeight:FontWeight.w900)),
+             Text('المتبقي على العملاء: ${money((sales['due'] as num).toDouble())}'),
+             const Divider(),
+             const Text('التحصيل حسب وسيلة الدفع',style:TextStyle(fontWeight:FontWeight.w900)),
+             ...pays.map((p)=>ListTile(title:Text('${p['payment_method']}'),trailing:Text(money((p['amount'] as num).toDouble())))),
+             const Divider(),
+             const Text('العملاء والمتبقي عليهم',style:TextStyle(fontWeight:FontWeight.w900)),
+             ...customers.map((c)=>ListTile(title:Text('${c['customer_name']}'),subtitle:Text('${c['customer_phone']}'),trailing:Text(money((c['due'] as num).toDouble())))),
+             const Divider(),
+             const Text('الأصناف والموردون',style:TextStyle(fontWeight:FontWeight.w900)),
+             ...items.map((i)=>ListTile(title:Text('${i['product_name']} × ${i['qty']}'),subtitle:Text('المورد: ${i['supplier_name']} • العميل: ${i['customer_name']}'),trailing:Text(money((i['total'] as num).toDouble())))),
+           ])),
+           Padding(padding:const EdgeInsets.all(12),child:FilledButton(onPressed:()=>Navigator.pop(ctx),child:const Text('إغلاق'))),
+         ]),
+       ),
+     ));
+   });
+ }
  @override Widget build(BuildContext context){final cs=Theme.of(context).colorScheme;return Directionality(textDirection:ui.TextDirection.rtl,child:ListView(padding:const EdgeInsets.all(16),children:[Container(padding:const EdgeInsets.all(18),decoration:BoxDecoration(gradient:LinearGradient(colors:[cs.primary,cs.tertiary]),borderRadius:BorderRadius.circular(20)),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[const Text('الشيفت والجرد اليومي',style:TextStyle(color:Colors.white,fontSize:21,fontWeight:FontWeight.w900)),const SizedBox(height:8),Text(active==null?'لا يوجد شيفت مفتوح':'بدأ: ${active!['started_at']}',style:const TextStyle(color:Colors.white70)),const SizedBox(height:12),FilledButton.icon(onPressed:active==null?start:finish,icon:Icon(active==null?Icons.play_arrow:Icons.stop_circle_outlined),label:Text(active==null?'بدء الشيفت':'إنهاء الشيفت وحفظ الجرد'))])),const SizedBox(height:18),const Text('سجل الجرد اليومي',style:TextStyle(fontWeight:FontWeight.w900,fontSize:18)),Row(children:[Expanded(child:TextField(decoration:const InputDecoration(labelText:'من YYYY-MM-DD'),onChanged:(v)=>from=v)),const SizedBox(width:8),Expanded(child:TextField(decoration:const InputDecoration(labelText:'إلى YYYY-MM-DD'),onChanged:(v)=>to=v)),IconButton(onPressed:load,icon:const Icon(Icons.search))]),if(loading)const Center(child:CircularProgressIndicator()),if(!loading&&history.isEmpty)const Padding(padding:EdgeInsets.all(24),child:Text('لا توجد سجلات جرد في الفترة المحددة.',textAlign:TextAlign.center)),...history.map((h)=>Card(child:ListTile(leading:const Icon(Icons.receipt_long),title:Text('جرد الشيفت #${h['id']}'),subtitle:Text('${h['started_at']}\n${(h['ended_at']??'').toString().isEmpty?'مفتوح':'انتهى: ${h['ended_at']}'}'),isThreeLine:true,trailing:const Icon(Icons.chevron_left),onTap:()=>report(h['id'] as int))))]));}
 }
 
@@ -1784,7 +1814,39 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
     fieldViewBuilder:(context,controller,focusNode,onSubmitted)=>TextField(controller:controller,focusNode:focusNode,onChanged:onChanged,onSubmitted:(_)=>onSubmitted(),decoration:InputDecoration(labelText:label,prefixIcon:const Icon(Icons.search_rounded),suffixIcon:controller.text.isEmpty?null:IconButton(icon:const Icon(Icons.close_rounded),onPressed:(){controller.clear();onChanged?.call('');focusNode.requestFocus();}))),
     optionsViewBuilder:(context,onSelect,options){final values=options.toList();return Align(alignment:Alignment.topRight,child:Material(elevation:8,color:Theme.of(context).colorScheme.surface,borderRadius:BorderRadius.circular(14),child:ConstrainedBox(constraints:const BoxConstraints(maxHeight:240,minWidth:260),child:ListView.separated(padding:const EdgeInsets.all(7),shrinkWrap:true,itemCount:values.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(context,index)=>ListTile(dense:true,leading:const Icon(Icons.search_rounded,size:18),title:Text(values[index],maxLines:1,overflow:TextOverflow.ellipsis),onTap:()=>onSelect(values[index]))))));},
   );
-  Future<Map<String,Object?>?> _pickFromList(String title,List<Map<String,Object?>> records)async{String query='';return showModalBottomSheet<Map<String,Object?>>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:StatefulBuilder(builder:(ctx,setSheet)=>SafeArea(child:Padding(padding:EdgeInsets.only(bottom:MediaQuery.of(ctx).viewInsets.bottom),child:SizedBox(height:MediaQuery.of(ctx).size.height*.72,child:Column(children:[Padding(padding:const EdgeInsets.all(14),child:Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18))),Padding(padding:const EdgeInsets.symmetric(horizontal:14),child:TextField(autofocus:true,decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'اكتب الاسم أو جزء منه'),onChanged:(v)=>setSheet(()=>query=v))),Expanded(child:Builder(builder:(ctx){final q=query.trim().toLowerCase();final found=records.where((r)=>(r['name']??'').toString().toLowerCase().contains(q)).toList();if(found.isEmpty)return const Center(child:Text('لا توجد نتائج مطابقة'));return ListView.separated(itemCount:found.length,separatorBuilder:(_,__)=>const Divider(height:1),itemBuilder:(ctx,i)=>ListTile(title:Text((found[i]['name']??'').toString()),subtitle:Text((found[i]['phone']??found[i]['sku']??'').toString()),onTap:()=>Navigator.pop(ctx,found[i])));} ))]))))));}
+  Future<Map<String,Object?>?> _pickFromList(String title,List<Map<String,Object?>> records) async {
+    String query='';
+    return showModalBottomSheet<Map<String,Object?>>(
+      context:context,isScrollControlled:true,showDragHandle:true,
+      builder:(ctx)=>Directionality(
+        textDirection:ui.TextDirection.rtl,
+        child:StatefulBuilder(builder:(ctx,setSheet){
+          final q=query.trim().toLowerCase();
+          final found=records.where((r)=>(r['name']??'').toString().toLowerCase().contains(q)).toList();
+          return SafeArea(child:Padding(
+            padding:EdgeInsets.only(bottom:MediaQuery.of(ctx).viewInsets.bottom),
+            child:SizedBox(height:MediaQuery.of(ctx).size.height*.72,
+              child:Column(children:[
+                Padding(padding:const EdgeInsets.all(14),child:Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:18))),
+                Padding(padding:const EdgeInsets.symmetric(horizontal:14),child:TextField(
+                  autofocus:true,decoration:const InputDecoration(prefixIcon:Icon(Icons.search),hintText:'اكتب الاسم أو جزء منه'),
+                  onChanged:(v)=>setSheet(()=>query=v),
+                )),
+                Expanded(child:found.isEmpty?const Center(child:Text('لا توجد نتائج مطابقة')):ListView.separated(
+                  itemCount:found.length,separatorBuilder:(_,__)=>const Divider(height:1),
+                  itemBuilder:(ctx,i)=>ListTile(
+                    title:Text((found[i]['name']??'').toString()),
+                    subtitle:Text((found[i]['phone']??found[i]['sku']??'').toString()),
+                    onTap:()=>Navigator.pop(ctx,found[i]),
+                  ),
+                )),
+              ]),
+            ),
+          ));
+        }),
+      ),
+    );
+  }
   Future<void> addCustomerFromInvoice()async{final name=TextEditingController(text:customerName.text),phone=TextEditingController(text:customerPhone.text);final ok=await showDialog<bool>(context:context,builder:(ctx)=>Directionality(textDirection:ui.TextDirection.rtl,child:AlertDialog(title:const Text('إضافة عميل جديد'),content:Column(mainAxisSize:MainAxisSize.min,children:[TextField(controller:name,decoration:const InputDecoration(labelText:'اسم العميل')),const SizedBox(height:9),TextField(controller:phone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف (اختياري)'))]),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('إلغاء')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('إضافة واختيار'))])));if(ok==true&&name.text.trim().isNotEmpty){try{final duplicate=widget.customers.where((c)=>c['name'].toString().trim().toLowerCase()==name.text.trim().toLowerCase()||(phone.text.trim().isNotEmpty&&c['phone'].toString()==phone.text.trim())).toList();if(duplicate.isNotEmpty){setState((){customerId=duplicate.first['id'] as int?;customerName.text=duplicate.first['name'].toString();customerPhone.text=(duplicate.first['phone']??'').toString();});toast(context,'العميل موجود بالفعل وتم اختياره.');}else{await StoreDb.instance.saveParty('customers',{'name':name.text.trim(),'phone':phone.text.trim(),'email':'','address':'','notes':'أُضيف من شاشة الفاتورة','balance':0},null);final all=await StoreDb.instance.parties('customers');final created=all.firstWhere((c)=>c['name'].toString()==name.text.trim());widget.customers.add(created);setState((){customerId=created['id'] as int?;customerName.text=created['name'].toString();customerPhone.text=(created['phone']??'').toString();});}}catch(e){if(mounted)toast(context,e.toString());}}name.dispose();phone.dispose();}
   Widget _sectionTitle(String title,IconData icon)=>Padding(padding:const EdgeInsets.only(bottom:9),child:Row(children:[Icon(icon,size:18,color:Theme.of(context).colorScheme.primary),const SizedBox(width:8),Text(title,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:14))]));
   Widget _moneyBox(String label,String value,{bool strong=false,Color? color})=>Expanded(child:Container(padding:const EdgeInsets.symmetric(horizontal:9,vertical:10),decoration:BoxDecoration(color:strong?Theme.of(context).colorScheme.primaryContainer:Theme.of(context).colorScheme.surfaceContainerLow,borderRadius:BorderRadius.circular(13),border:Border.all(color:Theme.of(context).colorScheme.outlineVariant.withOpacity(.45))),child:Column(crossAxisAlignment:CrossAxisAlignment.start,children:[Text(label,style:TextStyle(fontSize:10,color:Theme.of(context).colorScheme.onSurfaceVariant)),const SizedBox(height:5),Text(value,maxLines:1,overflow:TextOverflow.ellipsis,style:TextStyle(fontSize:strong?15:12,fontWeight:FontWeight.w900,color:color??Theme.of(context).colorScheme.onSurface))])));
@@ -1798,7 +1860,34 @@ class _InvoiceEditorState extends State<InvoiceEditor>{
       ])),
       Expanded(child:SingleChildScrollView(padding:const EdgeInsets.all(16),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
         if(widget.invoice==null)...[_sectionTitle('بيانات العميل',Icons.person_outline_rounded),Row(children:[
-          Expanded(flex:3,child:_searchField(options:widget.customers.map((x)=>x['name'].toString()).toList(),initialValue:customerName.text,label:'ابحث عن العميل أو اكتب اسمه',onChanged:(v){customerName.text=v;customerId=null;},onSelected:(name){final found=widget.customers.where((x)=>x['name'].toString()==name).toList();setState((){customerName.text=name;if(found.isNotEmpty){customerId=found.first['id'] as int?;customerPhone.text=(found.first['phone']??'').toString();}})})),const SizedBox(width:5),IconButton(tooltip:'عرض كل العملاء',onPressed:()async{final c=await _pickFromList('اختيار عميل',widget.customers);if(c!=null)setState((){customerId=c['id'] as int?;customerName.text=c['name'].toString();customerPhone.text=(c['phone']??'').toString();});},icon:const Icon(Icons.people_alt_outlined)),
+          Expanded(flex:3,child:_searchField(
+            options:widget.customers.map((x)=>x['name'].toString()).toList(),
+            initialValue:customerName.text,label:'ابحث عن العميل أو اكتب اسمه',
+            onChanged:(v){customerName.text=v;customerId=null;},
+            onSelected:(name){
+              final found=widget.customers.where((x)=>x['name'].toString()==name).toList();
+              setState((){
+                customerName.text=name;
+                if(found.isNotEmpty){
+                  customerId=found.first['id'] as int?;
+                  customerPhone.text=(found.first['phone']??'').toString();
+                }
+              });
+            },
+          )),
+          const SizedBox(width:5),
+          IconButton(
+            tooltip:'عرض كل العملاء',
+            onPressed:()async{
+              final c=await _pickFromList('اختيار عميل',widget.customers);
+              if(c!=null)setState((){
+                customerId=c['id'] as int?;
+                customerName.text=c['name'].toString();
+                customerPhone.text=(c['phone']??'').toString();
+              });
+            },
+            icon:const Icon(Icons.people_alt_outlined),
+          ),
           const SizedBox(width:5),Expanded(flex:2,child:TextField(controller:customerPhone,keyboardType:TextInputType.phone,decoration:const InputDecoration(labelText:'رقم الهاتف',prefixIcon:Icon(Icons.phone_outlined)))),
         ]),Align(alignment:Alignment.centerRight,child:TextButton.icon(onPressed:addCustomerFromInvoice,icon:const Icon(Icons.person_add_alt_1),label:const Text('إضافة عميل جديد من الفاتورة'))),const SizedBox(height:12)],
         Row(children:[Expanded(child:_sectionTitle('أصناف الفاتورة',Icons.shopping_bag_outlined)),FilledButton.icon(onPressed:available.isEmpty?null:addItem,icon:const Icon(Icons.add_rounded),label:const Text('إضافة صنف'))]),
