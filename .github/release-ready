@@ -8,3 +8,5 @@ Final integrated Shorebird release 3.9.5+46 — includes detailed bulk invoice l
 APP LOL 4.0.0+47 — new Shorebird base APK with refreshed identity, five invoice templates and four report templates.
 
 APP LOL 4.0.1+48 — invoice and report redesign, customer selection and validation fixes, improved card spacing, and Shift in bottom navigation. Publish full Shorebird Android APK.
+
+APP LOL 4.0.2+49 — fix invoice customer creation and split payment validation; add five distinct invoice designs; improve app theme, payment marks, shift navigation and offline assistant.
